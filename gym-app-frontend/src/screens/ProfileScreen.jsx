@@ -1,30 +1,61 @@
-// frontend/screens/ProfileScreen.js
-
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, ScrollView } from 'react-native';
-import axios from 'axios';
+import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
+import ProfileHeader from '../components/profile/ProfileHeader';
+
+import ActivitiesTab from '../components/profile/ActivitiesTab';
+import WorkoutPlansTab from '../components/profile/WorkoutPlansTab';
+import PRsTab from '../components/profile/PRsTab';
+
+import { getUserByUsername } from '../api/usersApi';
+import { getPostsByUserId } from '../api/postsApi';
+import { getWorkoutPlansByUserId } from '../api/workoutPlansApi';
+
+import { Colors } from '../constants/colors';
 
 const ProfileScreen = ({ route }) => {
-  const { username } = route.params; // Passed in navigation
+  const { username, isOwnProfile } = route.params;
+
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  const [posts, setPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+
+  const [workoutPlans, setWorkoutPlans] = useState([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+
+  const [selectedTab, setSelectedTab] = useState('Activities');
 
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchProfileData = async () => {
       try {
-        const response = await axios.get(`http://localhost:4000/api/users/${username}`);
-        setUser(response.data);
+        // Fetch user
+        const user = await getUserByUsername(username);
+        setUser(user);
+        setLoadingUser(false);
+
+        // Fetch posts
+        const postsData = await getPostsByUserId(user.id);
+        setPosts(postsData);
+        setLoadingPosts(false);
+
+        // Fetch workout plans
+        const plansData = await getWorkoutPlansByUserId(user.id);
+        setWorkoutPlans(plansData);
+        setLoadingPlans(false);
+
       } catch (error) {
-        console.error('Failed to fetch user:', error);
-      } finally {
-        setLoading(false);
+        console.error('Failed to fetch profile data:', error);
+        setLoadingUser(false);
+        setLoadingPosts(false);
+        setLoadingPlans(false);
       }
     };
 
-    fetchUserProfile();
+    fetchProfileData();
   }, [username]);
 
-  if (loading) {
+  if (loadingUser) {
     return <ActivityIndicator style={{ flex: 1 }} size="large" />;
   }
 
@@ -36,63 +67,99 @@ const ProfileScreen = ({ route }) => {
     );
   }
 
+  const renderTabContent = () => {
+    switch (selectedTab) {
+      case 'Activities':
+        return <ActivitiesTab posts={posts} loading={loadingPosts} />;
+      case 'Workout Plans':
+        return <WorkoutPlansTab workoutPlans={workoutPlans} loading={loadingPlans} />;
+      case 'PRs':
+        return <PRsTab userId={user.id} />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.username}>@{user.username}</Text>
-      <Text style={styles.name}>{user.name}</Text>
+    <View style={styles.topBlock}>
+      <ProfileHeader
+        username={user.username}
+        name={user.name}
+        bio={user.profile.bio}
+        workouts={user.workoutCount}
+        followedBy={user.followerCount}
+        following={user.followingCount}
+        isOwnProfile={isOwnProfile}
+        isFollowing={false}
+        isPrivate={user.profile.isPrivate}
+      />
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Bio:</Text>
-        <Text style={styles.value}>{user.Profile?.bio || 'No bio set.'}</Text>
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={selectedTab === 'Activities' ? styles.activeTab : styles.inactiveTab}
+          onPress={() => setSelectedTab('Activities')}
+        >
+          <Text style={selectedTab === 'Activities' ? styles.activeTabText : styles.inactiveTabText}>Activities</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={selectedTab === 'Workout Plans' ? styles.activeTab : styles.inactiveTab}
+          onPress={() => setSelectedTab('Workout Plans')}
+        >
+          <Text style={selectedTab === 'Workout Plans' ? styles.activeTabText : styles.inactiveTabText}>Workout Plans</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={selectedTab === 'PRs' ? styles.activeTab : styles.inactiveTab}
+          onPress={() => setSelectedTab('PRs')}
+        >
+          <Text style={selectedTab === 'PRs' ? styles.activeTabText : styles.inactiveTabText}>PRs</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Private Profile:</Text>
-        <Text style={styles.value}>{user.Profile?.isPrivate ? 'Yes' : 'No'}</Text>
+      {/* Tab Content */}
+      <View contentContainerStyle={styles.tabContentContainer}>
+        {renderTabContent()}
       </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Followers:</Text>
-        <Text style={styles.value}>{user.followedBy?.length || 0}</Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Following:</Text>
-        <Text style={styles.value}>{user.following?.length || 0}</Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Joined:</Text>
-        <Text style={styles.value}>{new Date(user.createdAt).toLocaleDateString()}</Text>
-      </View>
-    </ScrollView>
+    </View>
   );
 };
 
 export default ProfileScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
+  topBlock: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    paddingTop: 50,
   },
-  username: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: Colors.light.tabIconDefault,
   },
-  name: {
-    fontSize: 20,
-    color: 'gray',
-    marginBottom: 20,
+  activeTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderColor: Colors.light.text,
   },
-  section: {
-    marginBottom: 15,
+  inactiveTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  label: {
-    fontWeight: '600',
-    fontSize: 16,
+  activeTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.text,
   },
-  value: {
-    fontSize: 16,
+  inactiveTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
+  },
+  tabContentContainer: {
+    padding: 16,
   },
 });

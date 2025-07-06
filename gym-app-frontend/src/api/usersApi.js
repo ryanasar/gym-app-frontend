@@ -1,10 +1,9 @@
-// src/api/userApi.js
-
 import axios from 'axios';
+import { BACKEND_API_URL } from '@env';
 
-export const getUserProfile = async (username) => {
+export const getUserByUsername = async (username) => {
   try {
-    const response = await axios.get(`${process.env.BACKENED_API_URL}/${username}`);
+    const response = await axios.get(`${BACKEND_API_URL}/users/${username}`);
     return response.data;
   } catch (error) {
     console.error('Failed to fetch user profile:', error);
