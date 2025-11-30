@@ -24,7 +24,7 @@ const WorkoutPlan = ({ plan }) => {
       </View>
 
       {/* Plan Info */}
-      <Text style={[styles.title, { color: Colors[colorScheme].text }]}>Workout Plan #{id}</Text>
+      <Text style={[styles.title, { color: Colors[colorScheme].text }]}>Split #{id}</Text>
       <Text style={[styles.numDays, { color: Colors[colorScheme].text }]}>Number of Days: {numDays}</Text>
 
       {/* Workout Days */}
@@ -42,10 +42,15 @@ const WorkoutPlan = ({ plan }) => {
                     <View style={styles.exerciseList}>
                       {day.workout.exercises.map((exercise) => (
                         <View key={exercise.id} style={styles.exerciseItem}>
-                          <Text style={[styles.exerciseName, { color: Colors[colorScheme].text }]}>{exercise.name}</Text>
+                          <Text style={[styles.exerciseName, { color: Colors[colorScheme].text }]}>{exercise.template?.name || exercise.name}</Text>
                           <Text style={[styles.exerciseDetails, { color: Colors[colorScheme].secondaryText }]}>
                             Sets: {exercise.sets || '-'} | Reps: {exercise.reps || '-'} | Weight: {exercise.weight || '-'} lbs
                           </Text>
+                          {exercise.template?.equipment && (
+                            <Text style={[styles.exerciseEquipment, { color: Colors[colorScheme].secondaryText }]}>
+                              Equipment: {exercise.template.equipment}
+                            </Text>
+                          )}
                         </View>
                       ))}
                     </View>
@@ -62,8 +67,8 @@ const WorkoutPlan = ({ plan }) => {
 
       {/* Likes and Comments */}
       <View style={styles.statsSection}>
-        <Text style={[styles.stat, { color: Colors[colorScheme].secondaryText }]}>{likes.length} Likes</Text>
-        <Text style={[styles.stat, { color: Colors[colorScheme].secondaryText }]}>{comments.length} Comments</Text>
+        <Text style={[styles.stat, { color: Colors[colorScheme].secondaryText }]}>{likes?.length || 0} Likes</Text>
+        <Text style={[styles.stat, { color: Colors[colorScheme].secondaryText }]}>{comments?.length || 0} Comments</Text>
       </View>
     </View>
   );
@@ -132,6 +137,11 @@ const styles = StyleSheet.create({
   },
   exerciseDetails: {
     fontSize: 12,
+  },
+  exerciseEquipment: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   workoutNotes: {
     marginTop: 4,

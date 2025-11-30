@@ -14,3 +14,7 @@ async function signUp(email: string, password: string) {
   console.log("User signed up:", data);
   return data;
 }
+
+export default function SignUpPage() {
+  return null;
+}

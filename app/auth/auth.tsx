@@ -2,6 +2,8 @@ import * as React from "react";
 import * as WebBrowser from "expo-web-browser";
 import { supabase } from "../../supabase";
 import { BACKEND_API_URL, GOOGLE_CLIENT_ID } from "@/constants";
+import { getOrCreateUserBySupabaseId, getUserProfile, getUserWorkoutPlans, getUserPosts } from "../api/usersApi";
+import { getWorkoutsByUserId } from "../api/workoutsApi";
 import {
   AuthError,
   AuthRequestConfig,
@@ -30,8 +32,13 @@ export type AuthUser = {
 const AuthContext = React.createContext({
   user: null as any | null,
   authUser: null as AuthUser | null,
+  profile: null as any | null,
+  workoutPlans: null as any | null,
+  workouts: null as any | null,
+  posts: null as any | null,
   setUser: (user: any | null) => {},
   setAuthUser: (authUser: AuthUser | null) => {},
+  refreshWorkouts: () => Promise.resolve(),
   signIn: () => {},
   signOut: () => {},
   isLoading: false,
@@ -53,33 +60,15 @@ const discovery = {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<any | null>(null);
   const [authUser, setAuthUser] = React.useState<AuthUser | null>(null);
+  const [profile, setProfile] = React.useState<any | null>(null);
+  const [workoutPlans, setWorkoutPlans] = React.useState<any | null>(null);
+  const [workouts, setWorkouts] = React.useState<any | null>(null);
+  const [posts, setPosts] = React.useState<any | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<AuthError | null>(null);
 
   const [request, response, promptAsync] = useAuthRequest(config, discovery);
 
-  const loadUserDataBySupabaseId = async (authUserData: AuthUser) => {
-    try {
-      const response = await fetch(
-        `${BACKEND_API_URL}/users/auth/${authUserData.supabaseID}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: authUserData.email }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch or create user");
-      }
-
-      const userData = await response.json();
-      setUser(userData);
-
-    } catch (error) {
-      console.error("Failed to load or create user by Supabase ID:", error);
-    }
-  };
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -96,7 +85,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setAuthUser(authUserData);
 
         if (authUserData.supabaseID) {
-          loadUserDataBySupabaseId(authUserData);
+          getOrCreateUserBySupabaseId(authUserData.supabaseID, authUserData.email)
+            .then((userData) => {
+              setUser(userData);
+            })
+            .catch((error) => {
+              // Handle error silently
+            });
         }
 
       } else {
@@ -122,7 +117,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setAuthUser(authUserData);
 
         if (authUserData.supabaseID) {
-          loadUserDataBySupabaseId(authUserData);
+          getOrCreateUserBySupabaseId(authUserData.supabaseID, authUserData.email)
+            .then((userData) => {
+              setUser(userData);
+            })
+            .catch((error) => {
+              // Handle error silently
+            });
         }
       } else {
         setAuthUser(null);
@@ -138,13 +139,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     handleResponse();
   }, [response]);
 
+  // Fetch related data when user is set
+  React.useEffect(() => {
+    if (user?.id) {
+      // Fetch profile, workout plans, workouts, and posts
+      Promise.all([
+        getUserProfile(user.id).catch(() => null),
+        getUserWorkoutPlans(user.id).catch(() => null),
+        getWorkoutsByUserId(user.id).catch(() => null),
+        getUserPosts(user.id).catch(() => null)
+      ]).then(([profileData, workoutPlansData, workoutsData, postsData]) => {
+        setProfile(profileData);
+        setWorkoutPlans(workoutPlansData);
+        setWorkouts(workoutsData);
+        setPosts(postsData);
+      }).catch((error) => {
+        // Handle error silently
+      });
+    } else {
+      // Clear data when user is null
+      setProfile(null);
+      setWorkoutPlans(null);
+      setWorkouts(null);
+      setPosts(null);
+    }
+  }, [user]);
+
   const handleResponse = async () => {
     if (response?.type === "success") {
       setIsLoading(true);
       try {
         const { code } = response.params;
 
-        const tokenResponse = await fetch(`${BACKEND_API_URL}/api/auth/token`, {
+        const tokenResponse = await fetch(`${BACKEND_API_URL}/auth/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code }),
@@ -154,15 +181,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (tokenResponse.ok && tokenData.user) {
           setAuthUser(tokenData.user);
-          
+
           if (tokenData.user.supabaseID) {
-            await loadUserDataBySupabaseId(tokenData.user);
+            const userData = await getOrCreateUserBySupabaseId(tokenData.user.supabaseID, tokenData.user.email);
+            setUser(userData);
           }
         } else {
           throw new Error(tokenData.error || "Failed to sign in");
         }
       } catch (e) {
-        console.error("Token exchange error:", e);
+        // Handle error silently
         setError(
           new AuthError({
             error: "token_exchange_error",
@@ -173,7 +201,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setIsLoading(false);
       }
     } else if (response?.type === "error") {
-      console.error("Auth error:", response.error);
+      // Handle error silently
       setError(response.error as AuthError);
     }
   };
@@ -182,12 +210,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       setIsLoading(true);
       if (!request) {
-        console.log("No request object available");
+        // Handle error silently
         return;
       }
       await promptAsync();
     } catch (e) {
-      console.error("Sign in error:", e);
+      // Handle error silently
       setError(
         new AuthError({
           error: "sign_in_error",
@@ -206,25 +234,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       
       if (error) {
-        console.error("Supabase signOut error:", error);
+        // Handle error silently
       }
       
       // Clear all auth state
       setAuthUser(null);
       setUser(null);
+      setProfile(null);
+      setWorkoutPlans(null);
+      setWorkouts(null);
+      setPosts(null);
       setError(null);
       
       // Navigate to login screen (outside of tabs)
       router.replace('/(auth)/login');
       
     } catch (e) {
-      console.error("Sign out error:", e);
+      // Handle error silently
       // Even if there's an error, clear the local state
       setAuthUser(null);
       setUser(null);
+      setProfile(null);
+      setWorkoutPlans(null);
+      setWorkouts(null);
+      setPosts(null);
       setError(null);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const refreshWorkouts = async () => {
+    if (user?.id) {
+      try {
+        const workoutsData = await getWorkoutsByUserId(user.id);
+        setWorkouts(workoutsData);
+      } catch (error) {
+        // Handle error silently
+      }
     }
   };
 
@@ -233,8 +280,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         user,
         authUser,
+        profile,
+        workoutPlans,
+        workouts,
+        posts,
         setUser,
         setAuthUser,
+        refreshWorkouts,
         signIn,
         signOut,
         isLoading,
@@ -253,3 +305,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+export default AuthProvider;

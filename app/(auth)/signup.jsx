@@ -26,7 +26,6 @@ export default function SignUpScreen() {
     if (error) {
       Alert.alert('Sign Up Error', error.message);
     } else {
-      console.log('Signed up:', data);
       Alert.alert('Success', 'Check your email to confirm your account.');
       router.back();
     }

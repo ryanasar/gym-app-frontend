@@ -22,3 +22,7 @@ export async function GET(request: Request) {
     (platform === "web" ? FRONTENT_REDIRECT_URL : APP_SCHEME) + "?" + outgoingParams.toString()
   );
 }
+
+export default function CallbackPage() {
+  return null;
+}

@@ -17,20 +17,26 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
 
 export default function LoginScreen() {
-  const { user, setAuthUser, signIn } = useAuth();
+  const { user, signIn } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      Alert.alert('Login Error', error.message);
-    } else {
-      router.navigate('/')
-      setAuthUser(data.user)
+    setError('');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        console.error('Supabase auth error:', error);
+        setError(`Error signing in: ${error.message}`);
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (networkError) {
+      console.error('Network error during login:', networkError);
+      setError(`Network error: ${networkError.message}`);
     }
   };
 
@@ -66,6 +72,10 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
         />
+
+        {error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : null}
 
         <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
           <Text style={styles.primaryButtonText}>Login</Text>
@@ -188,5 +198,11 @@ const styles = StyleSheet.create({
   signupLink: {
     color: Colors.light.primary,
     fontWeight: '600',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
   },
 });

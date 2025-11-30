@@ -1,43 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 
 import { useAuth } from '../auth/auth';
 import { Colors } from '../constants/colors';
 
-import MyWorkoutPlanTab from '../components/workout/MyWorkoutPlanTab';
+import MyWorkoutPlansTab from '../components/workout/MyWorkoutPlanTab';
 import MyWorkoutsTab from '../components/workout/MyWorkoutsTab';
 
 const WorkoutScreen = () => {
-  const { user, workoutPlans, } = useAuth();
-
-  console.log(user)
-
-  const [selectedTab, setSelectedTab] = useState('My Workout Plan');
+  const { workoutPlans, workouts } = useAuth();
+  const [selectedTab, setSelectedTab] = useState('My Workouts');
 
   const renderTabContent = () => {
     switch (selectedTab) {
-      case 'My Workout Plan':
-        return <MyWorkoutPlanTab workoutPlan={workoutPlans} />;
+      case 'My Splits':
+        return <MyWorkoutPlansTab workoutPlans={workoutPlans} />;
       case 'My Workouts':
-        return <MyWorkoutsTab workoutPlan={workoutPlans[0]} />;
+        return <MyWorkoutsTab workouts={workouts} />;
       default:
         return null;
     }
   };
 
   return (
-    <View>
-      <ScrollView>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>Workouts</Text>
+      </View>
+
+      <View style={styles.contentView}>
         {/* Tabs */}
         <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={selectedTab === 'My Workout Plan' ? styles.activeTab : styles.inactiveTab}
-            onPress={() => setSelectedTab('My Workout Plan')}
-          >
-            <Text style={selectedTab === 'My Workout Plan' ? styles.activeTabText : styles.inactiveTabText}>
-              My Workout Plan
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={selectedTab === 'My Workouts' ? styles.activeTab : styles.inactiveTab}
             onPress={() => setSelectedTab('My Workouts')}
@@ -46,11 +40,21 @@ const WorkoutScreen = () => {
               My Workouts
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={selectedTab === 'My Splits' ? styles.activeTab : styles.inactiveTab}
+            onPress={() => setSelectedTab('My Splits')}
+          >
+            <Text style={selectedTab === 'My Splits' ? styles.activeTabText : styles.inactiveTabText}>
+              My Splits
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Tab Content */}
-        {renderTabContent()}
-      </ScrollView>
+        <View style={styles.tabContentContainer}>
+          {renderTabContent()}
+        </View>
+      </View>
     </View>
   );
 };
@@ -58,49 +62,66 @@ const WorkoutScreen = () => {
 export default WorkoutScreen;
 
 const styles = StyleSheet.create({
-  topBlock: {
+  container: {
     flex: 1,
     backgroundColor: Colors.light.background,
-    paddingTop: 50,
   },
   headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: Colors.light.text,
+  },
+  contentView: {
+    flex: 1,
   },
   tabsContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderColor: Colors.light.tabIconDefault,
+    borderBottomColor: Colors.light.borderLight,
+    backgroundColor: Colors.light.cardBackground,
+    marginBottom: 8,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   activeTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderColor: Colors.light.text,
+    paddingVertical: 16,
+    borderBottomWidth: 3,
+    borderBottomColor: Colors.light.primary,
   },
   inactiveTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   activeTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
   inactiveTabText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
-    color: Colors.light.icon,
+    color: Colors.light.secondaryText,
   },
   tabContentContainer: {
-    padding: 16,
+    flex: 1,
+    paddingHorizontal: 16,
   },
   text: {
     fontSize: 14,

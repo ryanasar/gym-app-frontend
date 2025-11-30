@@ -14,3 +14,7 @@ async function signIn(email: string, password: string) {
   console.log("User signed in:", data);
   return data;
 }
+
+export default function SignInPage() {
+  return null;
+}

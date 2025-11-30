@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
+import SettingsDropdown from './SettingsDropdown';
 
 const ProfileHeader = ({
   username,
@@ -12,17 +13,25 @@ const ProfileHeader = ({
   isOwnProfile,
   isFollowing,
   isPrivate,
+  onSignOut,
 }) => {
   const colorScheme = 'light'; // or dynamically from context/theme
 
   return (
     <View style={[styles.container, { backgroundColor: Colors[colorScheme].background }]}>
+      {/* Settings Dropdown - Top Right */}
+      {isOwnProfile && (
+        <View style={styles.settingsContainer}>
+          <SettingsDropdown onSignOut={onSignOut} colorScheme={colorScheme} />
+        </View>
+      )}
+
       {/* Profile Section */}
       <View style={styles.profileSection}>
         {/* Profile Picture */}
         <View style={styles.profilePicture}>
-          <View style={[styles.profileInitialContainer, { backgroundColor: Colors[colorScheme].tabIconDefault }]}>
-            <Text style={[styles.profileInitial, { color: Colors[colorScheme].text }]}>
+          <View style={[styles.profileInitialContainer, { backgroundColor: Colors[colorScheme].primary }]}>
+            <Text style={[styles.profileInitial, { color: Colors[colorScheme].onPrimary }]}>
               {name ? name.charAt(0).toUpperCase() : "?"}
             </Text>
           </View>
@@ -102,83 +111,122 @@ const ProfileHeader = ({
 export default ProfileHeader;
 
 const styles = StyleSheet.create({
-  container: {},
+  container: {
+    backgroundColor: Colors.light.cardBackground,
+    marginBottom: 8,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    position: 'relative',
+  },
+  settingsContainer: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 1,
+  },
   profileSection: {
     flexDirection: 'row',
-    padding: 16,
+    padding: 20,
   },
   profilePicture: {
-    marginRight: 16,
+    marginRight: 20,
   },
   profileInitialContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   profileInitial: {
-    fontSize: 40,
-    fontWeight: 'bold',
+    fontSize: 34,
+    fontWeight: '700',
   },
   profileInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   username: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginRight: 8,
-    marginBottom: 6,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   actionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    gap: 8,
+    marginBottom: 16,
   },
   editButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginRight: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.light.borderLight,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   editButtonText: {
     fontSize: 14,
+    fontWeight: '600',
   },
   iconButton: {
-    padding: 8,
-    borderRadius: 6,
-    marginRight: 4,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: Colors.light.borderLight,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   followButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginRight: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   followButtonText: {
     fontSize: 14,
+    fontWeight: '600',
   },
   statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 12,
+    justifyContent: 'space-between',
+    marginTop: 4,
   },
   statItem: {
     alignItems: 'center',
+    flex: 1,
   },
   statNumber: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '500',
   },
   bioContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderLight,
+    marginTop: 4,
+    paddingTop: 16,
   },
   bio: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
   },
 });

@@ -62,3 +62,7 @@ export const deleteWorkoutPlan = async (planId) => {
     throw error;
   }
 };
+
+export default function WorkoutPlansApiPage() {
+  return null;
+}

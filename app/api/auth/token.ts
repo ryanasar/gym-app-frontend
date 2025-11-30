@@ -78,6 +78,7 @@ export async function POST(request: Request) {
       family_name: decodedToken.family_name as string,
       email_verified: decodedToken.email_verified as boolean,
       provider: "google",
+      supabaseID: decodedToken.sub as string, // Use Google's sub as supabaseID
     };
 
     const payload = {
@@ -104,4 +105,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+export default function TokenPage() {
+  return null;
 }

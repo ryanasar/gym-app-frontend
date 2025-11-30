@@ -51,4 +51,8 @@ import {
     
     return Response.redirect(GOOGLE_AUTH_URL + "?" + params.toString());
   }
+
+export default function AuthorizePage() {
+  return null;
+}
   

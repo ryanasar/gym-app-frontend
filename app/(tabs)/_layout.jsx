@@ -15,7 +15,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopWidth: 1,
@@ -31,23 +31,10 @@ export default function TabsLayout() {
           fontWeight: '500',
           marginTop: 4,
           color: colors.text,
+          textAlign: 'center',
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Following",
-          tabBarIcon: ({ color, size }) => (
-            <Image
-              source={followingIcon}
-              style={{ width: size, height: size, tintColor: color }}
-              resizeMode="contain"
-            />
-          ),
-        }}
-      />
-    
       <Tabs.Screen
         name="workout"
         options={{
@@ -55,6 +42,20 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => (
             <Image
               source={workoutIcon}
+              style={{ width: size, height: size, tintColor: color }}
+              resizeMode="contain"
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Following",
+          tabBarIcon: ({ color, size }) => (
+            <Image
+              source={followingIcon}
               style={{ width: size, height: size, tintColor: color }}
               resizeMode="contain"
             />

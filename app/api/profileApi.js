@@ -99,3 +99,7 @@ export const getProfileSafely = async (identifier, type = 'userId') => {
     throw error;
   }
 };
+
+export default function ProfileApiPage() {
+  return null;
+}

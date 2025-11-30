@@ -49,7 +49,6 @@ export default function ProfileSetup() {
     }
 
     try {
-      console.log(user)
       const updatedUser = await updateUserProfile(user.supabaseId, {
         name: formData.name.trim(),
         username: formData.username.trim().toLowerCase(),

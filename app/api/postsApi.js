@@ -21,3 +21,7 @@ export const getPostsByUserIds = async (userIds) => {
     throw error;
   }
 };
+
+export default function PostsApiPage() {
+  return null;
+}

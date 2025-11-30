@@ -11,7 +11,6 @@ const ProfileScreen = () => {
   const [selectedTab, setSelectedTab] = useState('Activities');
   const { user, profile, workoutPlans, posts, signOut } = useAuth();
 
-
   if (!user) {
     return (
       <View style={styles.container}>
@@ -34,7 +33,7 @@ const ProfileScreen = () => {
     switch (selectedTab) {
       case 'Activities':
         return <ActivitiesTab posts={posts} />;
-      case 'Workout Plans':
+      case 'Splits':
         return <WorkoutPlansTab workoutPlans={workoutPlans} />;
       case 'PRs':
         return <PRsTab userId={user.id} />;
@@ -44,10 +43,13 @@ const ProfileScreen = () => {
   };
 
   return (
-    <View >
-      <TouchableOpacity onPress={signOut}>
-          <Text>Sign Out</Text>
-        </TouchableOpacity> 
+    <View style={styles.container}>
+
+      {/* Header */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>Profile</Text>
+      </View>
+
       <ProfileHeader
         profile={profile}
         username={username}
@@ -59,6 +61,7 @@ const ProfileScreen = () => {
         isOwnProfile={isOwnProfile}
         isFollowing={isFollowing}
         isPrivate={isPrivate}
+        onSignOut={signOut}
       />
       {/* Tabs */}
       <View style={styles.tabsContainer}>
@@ -69,10 +72,10 @@ const ProfileScreen = () => {
           <Text style={selectedTab === 'Activities' ? styles.activeTabText : styles.inactiveTabText}>Activities</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={selectedTab === 'Workout Plans' ? styles.activeTab : styles.inactiveTab}
-          onPress={() => setSelectedTab('Workout Plans')}
+          style={selectedTab === 'Splits' ? styles.activeTab : styles.inactiveTab}
+          onPress={() => setSelectedTab('Splits')}
         >
-          <Text style={selectedTab === 'Workout Plans' ? styles.activeTabText : styles.inactiveTabText}>Workout Plans</Text>
+          <Text style={selectedTab === 'Splits' ? styles.activeTabText : styles.inactiveTabText}>Splits</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={selectedTab === 'PRs' ? styles.activeTab : styles.inactiveTab}
@@ -95,39 +98,59 @@ export default ProfileScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: Colors.light.background,
+  },
+  headerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: Colors.light.text,
   },
   tabsContainer: {
     flexDirection: 'row',
-    borderBottomColor: Colors.light.secondaryText,
+    borderBottomColor: Colors.light.borderLight,
     borderBottomWidth: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   activeTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderColor: Colors.light.text,
+    paddingVertical: 16,
+    borderBottomWidth: 3,
+    borderBottomColor: Colors.light.primary,
   },
   inactiveTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   activeTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
   inactiveTabText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
     color: Colors.light.secondaryText,
   },
   tabContentContainer: {
-    padding: 0,
+    flex: 1,
+    paddingHorizontal: 0,
   },
 });
