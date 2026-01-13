@@ -7,7 +7,7 @@ const WorkoutPlansTab = ({ workoutPlans }) => {
     if (!workoutPlans || workoutPlans.length === 0) {
       return (
         <View style={styles.center}>
-            <Text>No workout plans</Text>
+            <Text>No splits</Text>
         </View>
     );
     }

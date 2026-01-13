@@ -25,8 +25,8 @@ export default function OnboardingComplete() {
       const updatedUser = await completeUserOnboarding(user.supabaseId);
       setUser(updatedUser);
 
-      // Navigate to main app
-      router.replace('/(tabs)');
+      // Navigate to workout screen
+      router.replace('/(tabs)/workout');
     } catch (error) {
       console.error('Error completing onboarding:', error);
       Alert.alert('Error', 'Failed to complete setup. Please try again.');

@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import ProfileHeader from '../components/profile/ProfileHeader';
-import ActivitiesTab from '../components/profile/ActivitiesTab';
-import WorkoutPlansTab from '../components/profile/WorkoutPlansTab';
-import PRsTab from '../components/profile/PRsTab';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../auth/auth';
+import { useWorkout } from '../contexts/WorkoutContext';
+import ActivitiesTab from '../components/profile/PostsTab';
+import ProfileHeader from '../components/profile/ProfileHeader';
+import ProgressTab from '../components/profile/ProgressTab';
+import WorkoutPlansTab from '../components/profile/WorkoutPlansTab';
+import FollowListModal from '../components/profile/FollowListModal';
+import EditProfileModal from '../components/profile/EditProfileModal';
 import { Colors } from '../constants/colors';
 
 const ProfileScreen = () => {
-  const [selectedTab, setSelectedTab] = useState('Activities');
-  const { user, profile, workoutPlans, posts, signOut } = useAuth();
+  const [selectedTab, setSelectedTab] = useState('Progress');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState('followers');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [progressKey, setProgressKey] = useState(0);
+  const { user, profile, posts, signOut, refreshPosts, refreshProfile } = useAuth();
+  const { lastWorkoutCompleted } = useWorkout();
+
+  // Force ProgressTab to refresh when workout completion changes
+  useEffect(() => {
+    if (lastWorkoutCompleted) {
+      setProgressKey(prev => prev + 1);
+    }
+  }, [lastWorkoutCompleted]);
 
   if (!user) {
     return (
@@ -24,22 +39,55 @@ const ProfileScreen = () => {
   const bio = profile?.bio;
   const followedBy = profile?.user?._count?.followedBy;
   const following = profile?.user?._count?.following;
-  const workouts = profile?.user?._count?.workouts;
+  const postsCount = posts?.length || 0;
   const isOwnProfile = true;
   const isFollowing = false;
   const isPrivate = profile?.isPrivate;
 
-  const renderTabContent = () => {
-    switch (selectedTab) {
-      case 'Activities':
-        return <ActivitiesTab posts={posts} />;
-      case 'Splits':
-        return <WorkoutPlansTab workoutPlans={workoutPlans} />;
-      case 'PRs':
-        return <PRsTab userId={user.id} />;
-      default:
-        return null;
+  const handleOpenFollowersModal = () => {
+    setModalType('followers');
+    setModalVisible(true);
+  };
+
+  const handleOpenFollowingModal = () => {
+    setModalType('following');
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+  };
+
+  const handleOpenEditModal = () => {
+    setEditModalVisible(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModalVisible(false);
+  };
+
+  const handleProfileUpdated = (updatedProfile) => {
+    // Refresh the profile data
+    if (refreshProfile) {
+      refreshProfile();
     }
+  };
+
+  // Render all tabs but only show the selected one to prevent unmounting/remounting
+  const renderAllTabs = () => {
+    return (
+      <>
+        <View style={selectedTab === 'Progress' ? styles.tabVisible : styles.tabHidden}>
+          <ProgressTab key={progressKey} userId={user.id} />
+        </View>
+        <View style={selectedTab === 'Posts' ? styles.tabVisible : styles.tabHidden}>
+          <ActivitiesTab posts={posts} currentUserId={user.id} onRefresh={refreshPosts} />
+        </View>
+        <View style={selectedTab === 'Splits' ? styles.tabVisible : styles.tabHidden}>
+          <WorkoutPlansTab userId={user.id} />
+        </View>
+      </>
+    );
   };
 
   return (
@@ -57,38 +105,61 @@ const ProfileScreen = () => {
         bio={bio}
         followedBy={followedBy}
         following={following}
-        workouts={workouts}
+        workouts={postsCount}
         isOwnProfile={isOwnProfile}
         isFollowing={isFollowing}
         isPrivate={isPrivate}
         onSignOut={signOut}
+        onFollowersPress={handleOpenFollowersModal}
+        onFollowingPress={handleOpenFollowingModal}
+        onEditPress={handleOpenEditModal}
       />
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
-          style={selectedTab === 'Activities' ? styles.activeTab : styles.inactiveTab}
-          onPress={() => setSelectedTab('Activities')}
+          style={styles.tab}
+          onPress={() => setSelectedTab('Progress')}
         >
-          <Text style={selectedTab === 'Activities' ? styles.activeTabText : styles.inactiveTabText}>Activities</Text>
+          <Text style={selectedTab === 'Progress' ? styles.activeTabText : styles.inactiveTabText}>Progress</Text>
+          {selectedTab === 'Progress' && <View style={styles.activeTabIndicator} />}
         </TouchableOpacity>
         <TouchableOpacity
-          style={selectedTab === 'Splits' ? styles.activeTab : styles.inactiveTab}
+          style={styles.tab}
+          onPress={() => setSelectedTab('Posts')}
+        >
+          <Text style={selectedTab === 'Posts' ? styles.activeTabText : styles.inactiveTabText}>Posts</Text>
+          {selectedTab === 'Posts' && <View style={styles.activeTabIndicator} />}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.tab}
           onPress={() => setSelectedTab('Splits')}
         >
           <Text style={selectedTab === 'Splits' ? styles.activeTabText : styles.inactiveTabText}>Splits</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={selectedTab === 'PRs' ? styles.activeTab : styles.inactiveTab}
-          onPress={() => setSelectedTab('PRs')}
-        >
-          <Text style={selectedTab === 'PRs' ? styles.activeTabText : styles.inactiveTabText}>PRs</Text>
+          {selectedTab === 'Splits' && <View style={styles.activeTabIndicator} />}
         </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
       <View style={styles.tabContentContainer}>
-        {renderTabContent()}
+        {renderAllTabs()}
       </View>
+
+      {/* Follow List Modal */}
+      <FollowListModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        username={username}
+        type={modalType}
+      />
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        visible={editModalVisible}
+        onClose={handleCloseEditModal}
+        userId={user?.id}
+        currentBio={bio}
+        onProfileUpdated={handleProfileUpdated}
+      />
     </View>
   );
 };
@@ -118,30 +189,24 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    borderBottomColor: Colors.light.borderLight,
-    borderBottomWidth: 1,
     backgroundColor: Colors.light.cardBackground,
+    paddingHorizontal: 24,
+    paddingTop: 12,
     shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  activeTab: {
+  tab: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 16,
-    borderBottomWidth: 3,
-    borderBottomColor: Colors.light.primary,
-  },
-  inactiveTab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
+    position: 'relative',
   },
   activeTabText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.light.primary,
   },
   inactiveTabText: {
@@ -149,8 +214,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.light.secondaryText,
   },
+  activeTabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    height: 3,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 1.5,
+    width: '70%',
+  },
   tabContentContainer: {
     flex: 1,
-    paddingHorizontal: 0,
+    paddingTop: 16,
+    backgroundColor: Colors.light.background,
+  },
+  tabVisible: {
+    flex: 1,
+  },
+  tabHidden: {
+    display: 'none',
   },
 });

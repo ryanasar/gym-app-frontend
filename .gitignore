@@ -36,6 +36,5 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-constants.*
 
-gymapp/constants.ts
+.env

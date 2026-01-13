@@ -1,0 +1,451 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const WorkoutContext = createContext();
+
+export const useWorkout = () => {
+  const context = useContext(WorkoutContext);
+  if (!context) {
+    throw new Error('useWorkout must be used within a WorkoutProvider');
+  }
+  return context;
+};
+
+export const WorkoutProvider = ({ children }) => {
+  // Mock data for active split with detailed workout structure
+  const [activeSplit, setActiveSplit] = useState({
+    id: 1,
+    name: "Push Pull Legs",
+    totalDays: 6,
+    emoji: "💪",
+    description: "6-day push/pull/legs split",
+    workoutDays: [
+      {
+        dayIndex: 0,
+        name: "Push Day",
+        type: "push",
+        exercises: [
+          { name: "Bench Press", sets: "4", reps: "8-10", restTime: "2-3 min" },
+          { name: "Incline Dumbbell Press", sets: "3", reps: "10-12", restTime: "2 min" },
+          { name: "Overhead Press", sets: "3", reps: "8-10", restTime: "2-3 min" },
+          { name: "Lateral Raises", sets: "3", reps: "12-15", restTime: "1 min" },
+          { name: "Tricep Dips", sets: "3", reps: "10-12", restTime: "1-2 min" }
+        ]
+      },
+      {
+        dayIndex: 1,
+        name: "Pull Day",
+        type: "pull",
+        exercises: [
+          { name: "Pull-ups", sets: "4", reps: "6-8", restTime: "2-3 min" },
+          { name: "Barbell Rows", sets: "4", reps: "8-10", restTime: "2-3 min" },
+          { name: "Lat Pulldowns", sets: "3", reps: "10-12", restTime: "2 min" },
+          { name: "Face Pulls", sets: "3", reps: "12-15", restTime: "1 min" },
+          { name: "Barbell Curls", sets: "3", reps: "10-12", restTime: "1-2 min" }
+        ]
+      },
+      {
+        dayIndex: 2,
+        name: "Legs Day",
+        type: "legs",
+        exercises: [
+          { name: "Squats", sets: "4", reps: "8-10", restTime: "3 min" },
+          { name: "Romanian Deadlifts", sets: "3", reps: "10-12", restTime: "2-3 min" },
+          { name: "Leg Press", sets: "3", reps: "12-15", restTime: "2 min" },
+          { name: "Walking Lunges", sets: "3", reps: "10 each leg", restTime: "1-2 min" },
+          { name: "Calf Raises", sets: "4", reps: "15-20", restTime: "1 min" }
+        ]
+      },
+      {
+        dayIndex: 3,
+        name: "Push Day",
+        type: "push",
+        exercises: [
+          { name: "Incline Barbell Press", sets: "4", reps: "8-10", restTime: "2-3 min" },
+          { name: "Dumbbell Flyes", sets: "3", reps: "10-12", restTime: "2 min" },
+          { name: "Dumbbell Shoulder Press", sets: "3", reps: "8-10", restTime: "2-3 min" },
+          { name: "Cable Lateral Raises", sets: "3", reps: "12-15", restTime: "1 min" },
+          { name: "Overhead Tricep Extension", sets: "3", reps: "10-12", restTime: "1-2 min" }
+        ]
+      },
+      {
+        dayIndex: 4,
+        name: "Pull Day",
+        type: "pull",
+        exercises: [
+          { name: "T-Bar Rows", sets: "4", reps: "8-10", restTime: "2-3 min" },
+          { name: "Wide Grip Pulldowns", sets: "4", reps: "10-12", restTime: "2 min" },
+          { name: "Cable Rows", sets: "3", reps: "10-12", restTime: "2 min" },
+          { name: "Reverse Flyes", sets: "3", reps: "12-15", restTime: "1 min" },
+          { name: "Hammer Curls", sets: "3", reps: "10-12", restTime: "1-2 min" }
+        ]
+      },
+      {
+        dayIndex: 5,
+        name: "Legs Day",
+        type: "legs",
+        exercises: [
+          { name: "Deadlifts", sets: "4", reps: "6-8", restTime: "3-4 min" },
+          { name: "Bulgarian Split Squats", sets: "3", reps: "10 each leg", restTime: "2 min" },
+          { name: "Leg Curls", sets: "3", reps: "12-15", restTime: "1-2 min" },
+          { name: "Leg Extensions", sets: "3", reps: "12-15", restTime: "1-2 min" },
+          { name: "Seated Calf Raises", sets: "4", reps: "15-20", restTime: "1 min" }
+        ]
+      }
+    ]
+  });
+
+  // Track current week and day
+  const [currentWeek, setCurrentWeek] = useState(3); // Week 3 as example
+  const [currentDayIndex, setCurrentDayIndex] = useState(0); // Current day in the split
+
+  // Track workout completion for triggering progress updates
+  const [lastWorkoutCompleted, setLastWorkoutCompleted] = useState(null);
+
+  // Track last completion date for auto-progression
+  const [lastCompletionDate, setLastCompletionDate] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Cache today's workout completion status
+  const [todaysWorkoutCompleted, setTodaysWorkoutCompleted] = useState(false);
+  const [completedSessionId, setCompletedSessionId] = useState(null);
+
+  // Initialize workout progress from storage
+  useEffect(() => {
+    const initializeWorkoutProgress = async () => {
+      try {
+        // Load saved progress
+        const savedWeek = await AsyncStorage.getItem('currentWeek');
+        const savedDayIndex = await AsyncStorage.getItem('currentDayIndex');
+        const savedCompletionDate = await AsyncStorage.getItem('lastCompletionDate');
+        const savedLastCheckDate = await AsyncStorage.getItem('lastCheckDate');
+        const savedActiveSplit = await AsyncStorage.getItem('activeSplit');
+
+        let loadedSplit = null;
+        if (savedActiveSplit) {
+          try {
+            loadedSplit = JSON.parse(savedActiveSplit);
+            setActiveSplit(loadedSplit);
+          } catch (e) {
+            console.error('Failed to parse saved active split:', e);
+          }
+        }
+
+        // Use loaded split or default activeSplit for calculations
+        const splitToUse = loadedSplit || activeSplit;
+
+        let currentWeekValue = savedWeek ? parseInt(savedWeek) : currentWeek;
+        let currentDayValue = savedDayIndex ? parseInt(savedDayIndex) : currentDayIndex;
+
+        setCurrentWeek(currentWeekValue);
+        setCurrentDayIndex(currentDayValue);
+        if (savedCompletionDate) setLastCompletionDate(savedCompletionDate);
+
+        // Check if we need to advance to next day
+        const today = new Date().toISOString().split('T')[0];
+
+        // Determine what date to check against
+        let dateToCheck = savedLastCheckDate;
+
+        // If no lastCheckDate exists, use lastCompletionDate as reference
+        if (!dateToCheck && savedCompletionDate) {
+          dateToCheck = savedCompletionDate;
+          console.log('First time with new code - using lastCompletionDate as reference:', dateToCheck);
+        }
+
+        // Advance day based on calendar days
+        if (dateToCheck && dateToCheck < today) {
+          // Calculate how many days have passed since last check/completion
+          const daysSinceLastCheck = calculateDaysBetween(dateToCheck, today);
+
+          // Advance by the number of days that have passed
+          console.log(`Date changed! Advancing ${daysSinceLastCheck} day(s) in split from day ${currentDayValue + 1}`);
+
+          for (let i = 0; i < daysSinceLastCheck; i++) {
+            const nextDayIndex = (currentDayValue + 1) % splitToUse.totalDays;
+            currentDayValue = nextDayIndex;
+
+            // If we've completed a full cycle, advance the week
+            if (nextDayIndex === 0) {
+              currentWeekValue = currentWeekValue + 1;
+            }
+          }
+
+          console.log(`Advanced to day ${currentDayValue + 1}, week ${currentWeekValue}`);
+
+          // Update state and storage
+          setCurrentDayIndex(currentDayValue);
+          setCurrentWeek(currentWeekValue);
+          await AsyncStorage.setItem('currentDayIndex', currentDayValue.toString());
+          await AsyncStorage.setItem('currentWeek', currentWeekValue.toString());
+
+          // Clear today's workout completion status since it's a new day
+          setTodaysWorkoutCompleted(false);
+          setCompletedSessionId(null);
+          await AsyncStorage.removeItem('completedSessionId');
+        } else if (!dateToCheck) {
+          // First time ever - no dates saved
+          console.log('First time initialization - no previous dates found');
+        } else {
+          console.log('Same day - no advancement needed');
+        }
+
+        // Save today as the last check date
+        await AsyncStorage.setItem('lastCheckDate', today);
+
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize workout progress:', error);
+        setIsInitialized(true);
+      }
+    };
+
+    initializeWorkoutProgress();
+  }, []);
+
+  // Helper to calculate days between two dates
+  const calculateDaysBetween = (date1, date2) => {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    const diffTime = Math.abs(d2 - d1);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  // Check for date changes even while app is open
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const checkDateChange = async () => {
+      try {
+        const savedLastCheckDate = await AsyncStorage.getItem('lastCheckDate');
+        const today = new Date().toISOString().split('T')[0];
+
+        // If the date has changed since last check
+        if (savedLastCheckDate && savedLastCheckDate < today) {
+          const daysSinceLastCheck = calculateDaysBetween(savedLastCheckDate, today);
+
+          // Advance the split by the number of days that passed
+          console.log(`Date changed! Advancing ${daysSinceLastCheck} day(s) in split`);
+          for (let i = 0; i < daysSinceLastCheck; i++) {
+            await advanceToNextDay();
+          }
+
+          // Clear completion status for the new day
+          setTodaysWorkoutCompleted(false);
+          setCompletedSessionId(null);
+          await AsyncStorage.removeItem('completedSessionId');
+
+          // Update last check date
+          await AsyncStorage.setItem('lastCheckDate', today);
+        }
+      } catch (error) {
+        console.error('Error checking date change:', error);
+      }
+    };
+
+    // Check immediately
+    checkDateChange();
+
+    // Set up interval to check every minute
+    const interval = setInterval(checkDateChange, 60000);
+
+    return () => clearInterval(interval);
+  }, [isInitialized, currentDayIndex]);
+
+  // Calculate today's workout
+  const getTodaysWorkout = () => {
+    if (!activeSplit || !activeSplit.workoutDays) return null;
+
+    const todaysDayIndex = currentDayIndex % activeSplit.totalDays;
+    const todaysWorkoutDay = activeSplit.workoutDays[todaysDayIndex];
+
+    if (!todaysWorkoutDay) return null;
+
+    // Handle rest days
+    if (todaysWorkoutDay.isRest) {
+      return {
+        title: `Rest Day — Week ${currentWeek} Day ${todaysDayIndex + 1}`,
+        dayName: 'Rest Day',
+        type: 'rest',
+        isRest: true,
+        exercises: [],
+        weekNumber: currentWeek,
+        dayNumber: todaysDayIndex + 1,
+        totalDays: activeSplit.totalDays,
+        splitId: activeSplit.id
+      };
+    }
+
+    // Handle both backend format (workoutName, workoutType) and mock format (name, type)
+    const workoutName = todaysWorkoutDay.workoutName || todaysWorkoutDay.name;
+    const workoutType = todaysWorkoutDay.workoutType || todaysWorkoutDay.type;
+
+    return {
+      title: `${workoutName} — Week ${currentWeek} Day ${todaysDayIndex + 1}`,
+      dayName: workoutName,
+      type: workoutType,
+      exercises: todaysWorkoutDay.exercises || [],
+      weekNumber: currentWeek,
+      dayNumber: todaysDayIndex + 1,
+      totalDays: activeSplit.totalDays,
+      splitId: activeSplit.id,
+      emoji: todaysWorkoutDay.emoji
+    };
+  };
+
+  // Advance to next workout day
+  const advanceToNextDay = async (splitToUse = null) => {
+    const split = splitToUse || activeSplit;
+    if (!split || !split.totalDays) {
+      console.error('Cannot advance day - no active split');
+      return;
+    }
+
+    const nextDayIndex = (currentDayIndex + 1) % split.totalDays;
+    setCurrentDayIndex(nextDayIndex);
+
+    // If we've completed a full cycle, advance the week
+    let newWeek = currentWeek;
+    if (nextDayIndex === 0) {
+      newWeek = currentWeek + 1;
+      setCurrentWeek(newWeek);
+    }
+
+    console.log(`Advanced to day ${nextDayIndex + 1}, week ${newWeek}`);
+
+    // Save to storage
+    try {
+      await AsyncStorage.setItem('currentDayIndex', nextDayIndex.toString());
+      await AsyncStorage.setItem('currentWeek', newWeek.toString());
+    } catch (error) {
+      console.error('Failed to save workout progress:', error);
+    }
+  };
+
+  // Set specific day (useful for manual navigation)
+  const setCurrentDay = async (dayIndex, weekNumber = currentWeek) => {
+    setCurrentDayIndex(dayIndex);
+    setCurrentWeek(weekNumber);
+
+    // Save to storage
+    try {
+      await AsyncStorage.setItem('currentDayIndex', dayIndex.toString());
+      await AsyncStorage.setItem('currentWeek', weekNumber.toString());
+    } catch (error) {
+      console.error('Failed to save workout progress:', error);
+    }
+  };
+
+  // Change active split (resets progress to day 1, week 1)
+  const changeActiveSplit = async (newSplit) => {
+    setActiveSplit(newSplit);
+    setCurrentDayIndex(0); // Reset to first day
+    setCurrentWeek(1); // Reset to week 1
+
+    // Save to storage
+    try {
+      await AsyncStorage.setItem('activeSplit', JSON.stringify(newSplit));
+      await AsyncStorage.setItem('currentDayIndex', '0');
+      await AsyncStorage.setItem('currentWeek', '1');
+      await AsyncStorage.removeItem('lastCompletionDate'); // Clear last completion
+    } catch (error) {
+      console.error('Failed to reset workout progress:', error);
+    }
+  };
+
+  // Update active split data without resetting progress (useful for edits)
+  const updateActiveSplit = async (updatedSplit) => {
+    setActiveSplit(updatedSplit);
+
+    // Save to storage
+    try {
+      await AsyncStorage.setItem('activeSplit', JSON.stringify(updatedSplit));
+    } catch (error) {
+      console.error('Failed to update active split:', error);
+    }
+  };
+
+  // Mark workout as completed (triggers progress updates and saves completion date)
+  const markWorkoutCompleted = async (workoutSessionId) => {
+    const today = new Date().toISOString().split('T')[0];
+
+    setLastWorkoutCompleted({
+      sessionId: workoutSessionId,
+      timestamp: new Date().toISOString(),
+    });
+
+    setLastCompletionDate(today);
+    setTodaysWorkoutCompleted(workoutSessionId !== null);
+    setCompletedSessionId(workoutSessionId);
+
+    // Save completion date, session ID, and update lastCheckDate to storage
+    try {
+      await AsyncStorage.setItem('lastCompletionDate', today);
+      await AsyncStorage.setItem('lastCheckDate', today);
+      if (workoutSessionId) {
+        await AsyncStorage.setItem('completedSessionId', workoutSessionId.toString());
+      } else {
+        await AsyncStorage.removeItem('completedSessionId');
+      }
+      console.log('Workout completed and lastCheckDate updated to:', today);
+    } catch (error) {
+      console.error('Failed to save completion date:', error);
+    }
+  };
+
+  // Check if today's workout is completed (for initial load)
+  const checkTodaysWorkoutStatus = async (userId) => {
+    if (!userId) return;
+
+    try {
+      const savedCompletionDate = await AsyncStorage.getItem('lastCompletionDate');
+      const savedSessionId = await AsyncStorage.getItem('completedSessionId');
+      const savedLastCheckDate = await AsyncStorage.getItem('lastCheckDate');
+      const today = new Date().toISOString().split('T')[0];
+
+      // Only consider workout completed if:
+      // 1. Completion date matches today
+      // 2. Last check date is also today (ensuring we haven't advanced to a new day)
+      // 3. Session ID exists
+      if (savedCompletionDate === today && savedLastCheckDate === today && savedSessionId) {
+        setTodaysWorkoutCompleted(true);
+        setCompletedSessionId(parseInt(savedSessionId));
+        return true;
+      } else {
+        setTodaysWorkoutCompleted(false);
+        setCompletedSessionId(null);
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to check workout status:', error);
+      return false;
+    }
+  };
+
+  const value = {
+    activeSplit,
+    setActiveSplit,
+    currentWeek,
+    currentDayIndex,
+    getTodaysWorkout,
+    advanceToNextDay,
+    setCurrentDay,
+    changeActiveSplit,
+    updateActiveSplit,
+    todaysWorkout: getTodaysWorkout(),
+    lastWorkoutCompleted,
+    markWorkoutCompleted,
+    todaysWorkoutCompleted,
+    completedSessionId,
+    checkTodaysWorkoutStatus,
+  };
+
+  return (
+    <WorkoutContext.Provider value={value}>
+      {children}
+    </WorkoutContext.Provider>
+  );
+};
+
+export default WorkoutProvider;

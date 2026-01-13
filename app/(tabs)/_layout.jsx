@@ -1,12 +1,8 @@
 import { Tabs } from "expo-router";
-import { Image, useColorScheme } from "react-native";
+import { useColorScheme } from "react-native";
 import { Colors } from '../constants/colors'
 import { useAuth } from '../auth/auth'
-
-import followingIcon from "../../assets/images/users.png";
-import workoutIcon from "../../assets/images/dumbbell.png";
-import exploreIcon from "../../assets/images/search.png";
-import profileIcon from "../../assets/images/square-user.png";
+import { Ionicons } from '@expo/vector-icons';
 
 export default function TabsLayout() {
   const colorScheme = useColorScheme();
@@ -14,6 +10,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="workout"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -39,11 +36,25 @@ export default function TabsLayout() {
         name="workout"
         options={{
           title: "Workout",
-          tabBarIcon: ({ color, size }) => (
-            <Image
-              source={workoutIcon}
-              style={{ width: size, height: size, tintColor: color }}
-              resizeMode="contain"
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "barbell" : "barbell-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="program"
+        options={{
+          title: "My Program",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "clipboard" : "clipboard-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -53,37 +64,39 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Following",
-          tabBarIcon: ({ color, size }) => (
-            <Image
-              source={followingIcon}
-              style={{ width: size, height: size, tintColor: color }}
-              resizeMode="contain"
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "people" : "people-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
       />
+
       <Tabs.Screen
         name="explore"
         options={{
           title: "Explore",
-          tabBarIcon: ({ color, size }) => (
-            <Image
-              source={exploreIcon}
-              style={{ width: size, height: size, tintColor: color }}
-              resizeMode="contain"
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "search" : "search-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Image
-              source={profileIcon}
-              style={{ width: size, height: size, tintColor: color }}
-              resizeMode="contain"
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}

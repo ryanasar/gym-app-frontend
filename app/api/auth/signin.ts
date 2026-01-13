@@ -11,7 +11,6 @@ async function signIn(email: string, password: string) {
     throw error;
   }
 
-  console.log("User signed in:", data);
   return data;
 }
 

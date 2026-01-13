@@ -17,26 +17,41 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
 
 export default function LoginScreen() {
-  const { user, signIn } = useAuth();
+  const { user, signIn, isLoading } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  // Redirect when user becomes available after login
+  React.useEffect(() => {
+    if (user && !isLoading) {
+      // User is authenticated and data is loaded
+      if (user.hasCompletedOnboarding) {
+        router.replace('/(tabs)/workout');
+      } else {
+        router.replace('/(onboarding)');
+      }
+    }
+  }, [user, isLoading]);
+
   const handleLogin = async () => {
     setError('');
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+
       if (error) {
         console.error('Supabase auth error:', error);
-        setError(`Error signing in: ${error.message}`);
-      } else {
-        router.replace('/(tabs)');
+        setError(error.message || 'Failed to sign in');
       }
+      // No need to manually navigate - auth state change will handle it
     } catch (networkError) {
       console.error('Network error during login:', networkError);
-      setError(`Network error: ${networkError.message}`);
+      setError('Network error. Please try again.');
     }
   };
 
@@ -81,6 +96,7 @@ export default function LoginScreen() {
           <Text style={styles.primaryButtonText}>Login</Text>
         </TouchableOpacity>
 
+        {/* Hidden for now
         <View style={styles.dividerContainer}>
           <View style={styles.divider} />
           <Text style={styles.dividerText}>OR</Text>
@@ -88,13 +104,14 @@ export default function LoginScreen() {
         </View>
 
         <TouchableOpacity style={styles.googleButton} onPress={signIn}>
-          <Image 
-            source={require('../../assets/images/google.png')} 
-            style={styles.googleIcon} 
+          <Image
+            source={require('../../assets/images/google.png')}
+            style={styles.googleIcon}
             resizeMode="contain"
           />
           <Text style={styles.googleButtonText}>Sign in with Google</Text>
         </TouchableOpacity>
+        */}
 
         <TouchableOpacity onPress={handleSignupNavigate}>
           <Text style={styles.signupText}>

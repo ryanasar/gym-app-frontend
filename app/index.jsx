@@ -1,14 +1,19 @@
 import { useAuth } from './auth/auth';
 import { Redirect } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Image } from 'react-native';
 
 export default function Index() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#6366F1' }}>
+        <Image
+          source={require('../assets/images/icon.png')}
+          style={{ width: 200, height: 200, marginBottom: 20 }}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );
   }
@@ -23,6 +28,6 @@ export default function Index() {
     return <Redirect href="/(onboarding)" />;
   }
 
-  // Logged in and completed onboarding - go to main app
-  return <Redirect href="/(tabs)" />;
+  // Logged in and completed onboarding - go to workout screen
+  return <Redirect href="/(tabs)/workout" />;
 }

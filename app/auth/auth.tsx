@@ -39,6 +39,8 @@ const AuthContext = React.createContext({
   setUser: (user: any | null) => {},
   setAuthUser: (authUser: AuthUser | null) => {},
   refreshWorkouts: () => Promise.resolve(),
+  refreshPosts: () => Promise.resolve(),
+  refreshProfile: () => Promise.resolve(),
   signIn: () => {},
   signOut: () => {},
   isLoading: false,
@@ -71,37 +73,66 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const authUserData: AuthUser = {
-          id: session.user.id,
-          email: session.user.email || '',
-          provider: 'supabase',
-          email_verified: session.user.email_confirmed_at ? true : false,
-          supabaseID: session.user.id,
-        };
-
-
-        setAuthUser(authUserData);
-
-        if (authUserData.supabaseID) {
-          getOrCreateUserBySupabaseId(authUserData.supabaseID, authUserData.email)
-            .then((userData) => {
-              setUser(userData);
-            })
-            .catch((error) => {
-              // Handle error silently
-            });
+    // Initialize session on mount
+    const initializeAuth = async () => {
+      try {
+        // Clear any old SecureStore data (migration from SecureStore to AsyncStorage)
+        // This is a one-time cleanup
+        try {
+          const SecureStore = await import('expo-secure-store');
+          await SecureStore.deleteItemAsync('supabase.auth.token');
+        } catch (e) {
+          // Ignore if SecureStore cleanup fails
         }
 
-      } else {
-        setAuthUser(null);
-        setUser(null);
-      }
-      setIsLoading(false);
-    });
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (error) {
+          console.error('Error getting session:', error);
+          setIsLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          const authUserData: AuthUser = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name,
+            picture: session.user.user_metadata?.avatar_url,
+            provider: 'supabase',
+            email_verified: session.user.email_confirmed_at ? true : false,
+            username: session.user.user_metadata?.username,
+            supabaseID: session.user.id,
+          };
+
+          setAuthUser(authUserData);
+
+          if (authUserData.supabaseID) {
+            try {
+              const userData = await getOrCreateUserBySupabaseId(authUserData.supabaseID, authUserData.email);
+              setUser(userData);
+            } catch (error) {
+              console.error('Error fetching user data:', error);
+              // Continue anyway - auth is valid even if backend user fetch fails
+            }
+          }
+        } else {
+          setAuthUser(null);
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state changed:', _event);
+
       if (session?.user) {
         const authUserData: AuthUser = {
           id: session.user.id,
@@ -117,22 +148,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setAuthUser(authUserData);
 
         if (authUserData.supabaseID) {
-          getOrCreateUserBySupabaseId(authUserData.supabaseID, authUserData.email)
-            .then((userData) => {
-              setUser(userData);
-            })
-            .catch((error) => {
-              // Handle error silently
-            });
+          try {
+            const userData = await getOrCreateUserBySupabaseId(authUserData.supabaseID, authUserData.email);
+            setUser(userData);
+          } catch (error) {
+            console.error('Error fetching user data on auth change:', error);
+          }
         }
       } else {
         setAuthUser(null);
         setUser(null);
       }
-      setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   React.useEffect(() => {
@@ -142,7 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Fetch related data when user is set
   React.useEffect(() => {
     if (user?.id) {
-      // Fetch profile, workout plans, workouts, and posts
+      // Fetch profile, splits, workouts, and posts
       Promise.all([
         getUserProfile(user.id).catch(() => null),
         getUserWorkoutPlans(user.id).catch(() => null),
@@ -275,6 +306,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const refreshPosts = async () => {
+    if (user?.id) {
+      try {
+        const postsData = await getUserPosts(user.id);
+        setPosts(postsData);
+      } catch (error) {
+        // Handle error silently
+      }
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user?.id) {
+      try {
+        const profileData = await getUserProfile(user.id);
+        setProfile(profileData);
+      } catch (error) {
+        // Handle error silently
+      }
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -287,6 +340,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser,
         setAuthUser,
         refreshWorkouts,
+        refreshPosts,
+        refreshProfile,
         signIn,
         signOut,
         isLoading,
