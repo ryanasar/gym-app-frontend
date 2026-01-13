@@ -24,6 +24,62 @@ export const WorkoutProvider = ({ children }) => {
   const [completedSessionId, setCompletedSessionId] = useState(null);
   const [exerciseDatabase, setExerciseDatabase] = useState({});
 
+  // Helper function to validate and fix exerciseIds in split
+  const validateAndFixSplitExercises = (split, exerciseMap) => {
+    // Create a name-to-id map for fallback matching
+    const nameToIdMap = {};
+    Object.values(exerciseMap).forEach(ex => {
+      nameToIdMap[ex.name.toLowerCase()] = ex.id;
+    });
+
+    let needsUpdate = false;
+    const updatedDays = split.days?.map(day => {
+      if (day.isRest || !day.exercises) return day;
+
+      const validatedExercises = day.exercises.map(ex => {
+        const exerciseId = parseInt(ex.exerciseId) || ex.exerciseId;
+
+        // Ensure targetSets and targetReps have valid values
+        const targetSets = parseInt(ex.targetSets) || parseInt(ex.sets) || 3;
+        const targetReps = parseInt(ex.targetReps) || parseInt(ex.reps) || 10;
+
+        // Check if values were missing and need fixing
+        if (!ex.targetSets || !ex.targetReps) {
+          needsUpdate = true;
+        }
+
+        // Check if this exerciseId exists in local database
+        if (exerciseMap[exerciseId]) {
+          return { ...ex, exerciseId, targetSets, targetReps };
+        }
+
+        // Exercise ID not found - try to match by name
+        if (ex.name) {
+          const matchedId = nameToIdMap[ex.name.toLowerCase()];
+          if (matchedId) {
+            needsUpdate = true;
+            return { ...ex, exerciseId: parseInt(matchedId), targetSets, targetReps };
+          }
+        }
+
+        // Could not match - keep original but flag for update
+        needsUpdate = true;
+        return { ...ex, exerciseId, targetSets, targetReps };
+      }).filter(ex => {
+        // Filter out exercises that couldn't be matched and don't exist
+        const id = parseInt(ex.exerciseId) || ex.exerciseId;
+        return exerciseMap[id];
+      });
+
+      return { ...day, exercises: validatedExercises };
+    });
+
+    if (needsUpdate) {
+      return { ...split, days: updatedDays, needsSave: true };
+    }
+    return split;
+  };
+
   // Initialize app with storage layer
   useEffect(() => {
     const initializeWorkoutContext = async () => {
@@ -54,42 +110,62 @@ export const WorkoutProvider = ({ children }) => {
                 emoji: day.emoji,
                 isRest: day.isRest || false,
                 exercises: (day.exercises || [])
-                  .map(ex => ({
-                    exerciseId: ex.id?.toString() || ex.exerciseId || ex.name,
-                    targetSets: parseInt(ex.sets || ex.targetSets) || 3,
-                    targetReps: parseInt(ex.reps || ex.targetReps) || 10,
-                  }))
+                  .map(ex => {
+                    // Normalize exerciseId to a number to match local database
+                    const rawId = ex.id || ex.exerciseId || ex.name;
+                    const exerciseId = parseInt(rawId) || rawId;
+                    return {
+                      exerciseId: exerciseId,
+                      targetSets: parseInt(ex.sets || ex.targetSets) || 3,
+                      targetReps: parseInt(ex.reps || ex.targetReps) || 10,
+                    };
+                  })
                   .filter(ex => ex.exerciseId && ex.exerciseId !== 'undefined'), // Filter out invalid exercises
               })),
             };
             delete migratedSplit.workoutDays;
-            await storage.saveSplit(migratedSplit);
-            setActiveSplit(migratedSplit);
+
+            // Validate and fix exercise IDs
+            const validatedSplit = validateAndFixSplitExercises(migratedSplit, exerciseMap);
+            if (validatedSplit.needsSave) {
+              await storage.saveSplit(validatedSplit);
+            } else {
+              await storage.saveSplit(migratedSplit);
+            }
+            setActiveSplit(validatedSplit);
           } else {
+            // Validate exercise IDs match local database
+            const validatedSplit = validateAndFixSplitExercises(appState.split, exerciseMap);
+
+            if (validatedSplit.needsSave) {
+              await storage.saveSplit(validatedSplit);
+            }
+
             // Check if the split is corrupted (has invalid exercises)
-            const hasCorruptedExercises = appState.split.days?.some(day =>
+            const hasCorruptedExercises = validatedSplit.days?.some(day =>
               day.exercises?.some(ex => !ex.exerciseId || ex.exerciseId === 'undefined' || ex.targetSets === undefined)
             );
 
-            if (hasCorruptedExercises && appState.split.userId) {
-              console.warn('[WorkoutContext] Detected corrupted split data, attempting to reload from backend...');
+            if (hasCorruptedExercises && validatedSplit.userId) {
               try {
                 const { reloadSplitFromBackend } = await import('../utils/clearLocalSplit');
-                const reloadedSplit = await reloadSplitFromBackend(appState.split.id, appState.split.userId);
+                const reloadedSplit = await reloadSplitFromBackend(validatedSplit.id, validatedSplit.userId);
 
                 if (reloadedSplit) {
-                  setActiveSplit(reloadedSplit);
-                  console.log('[WorkoutContext] Successfully reloaded corrupted split from backend');
+                  // Validate the reloaded split too
+                  const revalidatedSplit = validateAndFixSplitExercises(reloadedSplit, exerciseMap);
+                  if (revalidatedSplit.needsSave) {
+                    await storage.saveSplit(revalidatedSplit);
+                  }
+                  setActiveSplit(revalidatedSplit);
                 } else {
-                  console.error('[WorkoutContext] Failed to reload split, using corrupted version');
-                  setActiveSplit(appState.split);
+                  setActiveSplit(validatedSplit);
                 }
               } catch (error) {
-                console.error('[WorkoutContext] Error reloading split:', error);
-                setActiveSplit(appState.split);
+                setActiveSplit(validatedSplit);
               }
             } else {
-              setActiveSplit(appState.split);
+              setActiveSplit(validatedSplit);
             }
           }
         } else {
@@ -121,7 +197,6 @@ export const WorkoutProvider = ({ children }) => {
           const hadFutureDateBug = dateToCheck && dateToCheck > today;
 
           if (hadFutureDateBug) {
-            console.log('[WorkoutContext] Detected future date (UTC issue), resetting to today');
             dateToCheck = today;
             await AsyncStorage.setItem('lastCheckDate', today);
 
@@ -137,7 +212,6 @@ export const WorkoutProvider = ({ children }) => {
                 currentDayValue = currentDayValue - 1;
                 setCurrentDayIndex(currentDayValue);
                 await AsyncStorage.setItem('currentDayIndex', currentDayValue.toString());
-                console.log('[WorkoutContext] Rolled back day index due to UTC bug');
               } else if (currentDayValue === 0 && currentWeekValue > 1) {
                 // If we're on day 0, go back to last day of previous week
                 const totalDays = appState.split?.totalDays || 6;
@@ -147,7 +221,6 @@ export const WorkoutProvider = ({ children }) => {
                 setCurrentWeek(currentWeekValue);
                 await AsyncStorage.setItem('currentDayIndex', currentDayValue.toString());
                 await AsyncStorage.setItem('currentWeek', currentWeekValue.toString());
-                console.log('[WorkoutContext] Rolled back to previous week due to UTC bug');
               }
             }
           }
@@ -360,7 +433,6 @@ export const WorkoutProvider = ({ children }) => {
         try {
           const { updateSplit } = await import('../api/splitsApi');
           await updateSplit(activeSplit.id, { started: false });
-          console.log('[WorkoutContext] Reset previous split started status:', activeSplit.id);
         } catch (error) {
           console.error('[WorkoutContext] Failed to reset previous split started status:', error);
           // Continue anyway - this is not critical

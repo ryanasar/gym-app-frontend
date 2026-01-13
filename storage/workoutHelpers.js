@@ -23,12 +23,10 @@ export function buildWorkoutFromSplit(split, dayIndex) {
   const day = split.days[dayIndex];
 
   if (!day || day.isRest) {
-    console.log('[WorkoutHelpers] Day is rest or not found:', { dayIndex, isRest: day?.isRest });
     return [];
   }
 
   if (!day.exercises || day.exercises.length === 0) {
-    console.warn('[WorkoutHelpers] Day has no exercises:', { dayIndex, dayName: day.name });
     return [];
   }
 
@@ -36,16 +34,11 @@ export function buildWorkoutFromSplit(split, dayIndex) {
     const targetSets = splitExercise.targetSets || 0;
     const targetReps = splitExercise.targetReps || 0;
 
-    if (targetSets === 0) {
-      console.warn('[WorkoutHelpers] Exercise has 0 target sets:', {
-        exerciseId: splitExercise.exerciseId,
-        targetSets: splitExercise.targetSets,
-        targetReps: splitExercise.targetReps
-      });
-    }
+    // Ensure exerciseId is a number to match the local database
+    const exerciseId = parseInt(splitExercise.exerciseId) || splitExercise.exerciseId;
 
     return {
-      exerciseId: splitExercise.exerciseId,
+      exerciseId: exerciseId,
       sets: Array.from({ length: targetSets }, (_, i) => ({
         setIndex: i,
         reps: targetReps,
@@ -53,12 +46,6 @@ export function buildWorkoutFromSplit(split, dayIndex) {
         completed: false,
       })),
     };
-  });
-
-  console.log('[WorkoutHelpers] Built workout:', {
-    dayIndex,
-    exerciseCount: exercises.length,
-    totalSets: exercises.reduce((sum, ex) => sum + ex.sets.length, 0)
   });
 
   return exercises;
@@ -88,13 +75,62 @@ export async function startWorkout(splitId, dayIndex) {
     return existingWorkout;
   }
 
+  // Validate day exists and has exercises
+  const day = split.days?.[dayIndex];
+  if (!day) {
+    throw new Error(`Day ${dayIndex} not found in split`);
+  }
+
+  if (day.isRest) {
+    throw new Error('Cannot start workout on a rest day');
+  }
+
+  // Validate exercises have required fields and fix if needed
+  let needsUpdate = false;
+  const validatedExercises = (day.exercises || []).map(ex => {
+    const targetSets = parseInt(ex.targetSets) || parseInt(ex.sets) || 3;
+    const targetReps = parseInt(ex.targetReps) || parseInt(ex.reps) || 10;
+
+    if (targetSets !== ex.targetSets || targetReps !== ex.targetReps) {
+      needsUpdate = true;
+    }
+
+    return {
+      ...ex,
+      exerciseId: parseInt(ex.exerciseId) || ex.exerciseId,
+      targetSets,
+      targetReps
+    };
+  });
+
+  // If we fixed the data, update the split in memory and save it
+  let workingSplit = split;
+  if (needsUpdate) {
+    const updatedDays = [...split.days];
+    updatedDays[dayIndex] = { ...day, exercises: validatedExercises };
+    workingSplit = { ...split, days: updatedDays };
+    await storage.saveSplit(workingSplit);
+  }
+
   // Build the workout session
+  const exercises = buildWorkoutFromSplit(workingSplit, dayIndex);
+
+  // Validate the built workout has exercises with sets
+  if (exercises.length === 0) {
+    throw new Error('No exercises found for this workout day');
+  }
+
+  const hasInvalidExercises = exercises.some(ex => !ex.sets || ex.sets.length === 0);
+  if (hasInvalidExercises) {
+    throw new Error('Failed to build workout - exercises missing sets. Please check your split configuration.');
+  }
+
   const workout = {
     id: generateWorkoutId(),
     splitId,
     dayIndex,
     startedAt: Date.now(),
-    exercises: buildWorkoutFromSplit(split, dayIndex),
+    exercises,
     pendingSync: true,
   };
 
@@ -119,8 +155,21 @@ export async function updateWorkoutSet(workoutId, exerciseId, setIndex, data) {
     throw new Error('No matching active workout found');
   }
 
-  // Find the exercise
-  const exercise = workout.exercises.find(e => e.exerciseId === exerciseId);
+  // Find the exercise - try multiple matching strategies
+  // Convert exerciseId to both string and number for flexible matching
+  const exerciseIdStr = String(exerciseId);
+  const exerciseIdNum = parseInt(exerciseId);
+
+  const exercise = workout.exercises.find(e => {
+    const eIdStr = String(e.exerciseId);
+    const eIdNum = parseInt(e.exerciseId);
+
+    // Match if either string or numeric form matches
+    return e.exerciseId === exerciseId ||
+           eIdStr === exerciseIdStr ||
+           (exerciseIdNum && eIdNum === exerciseIdNum);
+  });
+
   if (!exercise) {
     throw new Error(`Exercise ${exerciseId} not found in workout`);
   }

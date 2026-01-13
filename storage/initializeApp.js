@@ -35,13 +35,10 @@ function convertExercisesToStorageFormat() {
  * @returns {Promise<void>}
  */
 async function initializeExerciseDatabase() {
-  const existingExercises = await storage.getExercises();
-
-  // If no exercises in storage, load from bundled database
-  if (!existingExercises || existingExercises.length === 0) {
-    const exercises = convertExercisesToStorageFormat();
-    await storage.saveExercises(exercises);
-  }
+  // Always load from bundled database to ensure consistency
+  // This ensures the app uses the local exerciseDatabase.js instead of backend data
+  const exercises = convertExercisesToStorageFormat();
+  await storage.saveExercises(exercises);
 }
 
 /**

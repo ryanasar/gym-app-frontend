@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
@@ -20,6 +20,7 @@ const WorkoutSessionScreen = () => {
   const [currentSetIndex, setCurrentSetIndex] = useState(0);
   const [exercises, setExercises] = useState([]);
   const [workoutSessionId, setWorkoutSessionId] = useState(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   // Animation refs
   const slideXAnim = useRef(new Animated.Value(0)).current; // Horizontal for sets
@@ -37,56 +38,69 @@ const WorkoutSessionScreen = () => {
         const activeWorkout = await getActiveWorkout();
 
         if (activeWorkout) {
-          // Restore the workout state from storage
-          setWorkoutSessionId(activeWorkout.id);
+          // Validate that the active workout has properly structured exercises with sets
+          const hasInvalidExercises = activeWorkout.exercises.some(ex =>
+            !ex.sets || !Array.isArray(ex.sets) || ex.sets.length === 0
+          );
 
-          // Load exercise database to get exercise names
-          const exercises = await storage.getExercises();
-          const exerciseMap = {};
-          exercises.forEach(ex => {
-            exerciseMap[ex.id] = ex;
-          });
+          if (hasInvalidExercises) {
+            await cancelWorkout(activeWorkout.id);
+            // Fall through to create new workout
+          } else {
+            // Restore the workout state from storage
+            setWorkoutSessionId(activeWorkout.id);
 
-          // Convert storage format to UI format
-          const restoredExercises = activeWorkout.exercises.map((exercise) => {
-            const completed = exercise.sets.filter(s => s.completed).length;
-            const exerciseData = exerciseMap[exercise.exerciseId];
-            return {
-              name: exerciseData?.name || exercise.exerciseId,
-              id: exercise.exerciseId,
-              completedSets: completed,
-              totalSets: exercise.sets.length,
-              sessionSets: exercise.sets.map((set) => ({
-                setNumber: set.setIndex + 1,
-                weight: set.weight?.toString() || '0',
-                reps: set.reps?.toString() || '0',
-                completed: set.completed
-              }))
-            };
-          });
+            // Load exercise database to get exercise names
+            const exercises = await storage.getExercises();
+            const exerciseMap = {};
+            exercises.forEach(ex => {
+              exerciseMap[ex.id] = ex;
+              // Also map by string version for flexibility
+              exerciseMap[String(ex.id)] = ex;
+            });
 
-          setExercises(restoredExercises);
+            // Convert storage format to UI format
+            const restoredExercises = activeWorkout.exercises.map((exercise) => {
+              const completed = exercise.sets.filter(s => s.completed).length;
+              const exerciseData = exerciseMap[exercise.exerciseId] || exerciseMap[String(exercise.exerciseId)];
 
-          // Find current position (first incomplete set)
-          let foundCurrent = false;
-          for (let i = 0; i < restoredExercises.length; i++) {
-            const ex = restoredExercises[i];
-            const firstIncompleteSet = ex.sessionSets.findIndex(s => !s.completed);
-            if (firstIncompleteSet !== -1) {
-              setCurrentExerciseIndex(i);
-              setCurrentSetIndex(firstIncompleteSet);
-              foundCurrent = true;
-              break;
+              return {
+                name: exerciseData?.name || `Exercise ${exercise.exerciseId}`,
+                id: exercise.exerciseId,
+                completedSets: completed,
+                totalSets: exercise.sets.length,
+                sessionSets: exercise.sets.map((set) => ({
+                  setNumber: set.setIndex + 1,
+                  weight: set.weight?.toString() || '0',
+                  reps: set.reps?.toString() || '0',
+                  completed: set.completed
+                }))
+              };
+            });
+
+            setExercises(restoredExercises);
+
+            // Find current position (first incomplete set)
+            let foundCurrent = false;
+            for (let i = 0; i < restoredExercises.length; i++) {
+              const ex = restoredExercises[i];
+              const firstIncompleteSet = ex.sessionSets.findIndex(s => !s.completed);
+              if (firstIncompleteSet !== -1) {
+                setCurrentExerciseIndex(i);
+                setCurrentSetIndex(firstIncompleteSet);
+                foundCurrent = true;
+                break;
+              }
             }
-          }
 
-          if (!foundCurrent) {
-            // All sets complete, set to last
-            setCurrentExerciseIndex(restoredExercises.length - 1);
-            setCurrentSetIndex(restoredExercises[restoredExercises.length - 1].sessionSets.length - 1);
-          }
+            if (!foundCurrent) {
+              // All sets complete, set to last
+              setCurrentExerciseIndex(restoredExercises.length - 1);
+              setCurrentSetIndex(restoredExercises[restoredExercises.length - 1].sessionSets.length - 1);
+            }
 
-          return;
+            return;
+          }
         }
 
         // No active workout, start new one
@@ -97,18 +111,32 @@ const WorkoutSessionScreen = () => {
           const newWorkout = await startWorkout(splitId, dayIndex);
           setWorkoutSessionId(newWorkout.id);
 
-          // Initialize exercises with sets tracking
-          const initializedExercises = workoutData.exercises.map((exercise) => ({
-            ...exercise,
-            completedSets: 0,
-            totalSets: parseInt(exercise.sets) || 3,
-            sessionSets: Array.from({ length: parseInt(exercise.sets) || 3 }, (_, index) => ({
-              setNumber: index + 1,
-              weight: exercise.weight || '0',
-              reps: exercise.reps || '0',
-              completed: false
-            }))
-          }));
+          // Load exercise database to get exercise names
+          const exercises = await storage.getExercises();
+          const exerciseMap = {};
+          exercises.forEach(ex => {
+            exerciseMap[ex.id] = ex;
+            exerciseMap[String(ex.id)] = ex;
+          });
+
+          // Use exercises from the workout storage (not from workoutData)
+          // This ensures we use the correct exerciseIds that match the storage
+          const initializedExercises = newWorkout.exercises.map((exercise) => {
+            const exerciseData = exerciseMap[exercise.exerciseId] || exerciseMap[String(exercise.exerciseId)];
+
+            return {
+              name: exerciseData?.name || `Exercise ${exercise.exerciseId}`,
+              id: exercise.exerciseId,
+              completedSets: 0,
+              totalSets: exercise.sets.length,
+              sessionSets: exercise.sets.map((set) => ({
+                setNumber: set.setIndex + 1,
+                weight: set.weight?.toString() || '0',
+                reps: set.reps?.toString() || '0',
+                completed: false
+              }))
+            };
+          });
 
           setExercises(initializedExercises);
         }
@@ -153,9 +181,11 @@ const WorkoutSessionScreen = () => {
 
     try {
       const exercise = exercises[exerciseIndex];
+      // Use numeric exerciseId to match the workout storage format
+      const exerciseId = parseInt(exercise.id) || exercise.id || exercise.name;
       await updateWorkoutSet(
         workoutSessionId,
-        exercise.id || exercise.name,
+        exerciseId,
         setIndex,
         {
           reps: parseInt(setData.reps) || 0,
@@ -165,6 +195,51 @@ const WorkoutSessionScreen = () => {
       );
     } catch (error) {
       console.error('[Session] Error saving set to storage:', error);
+    }
+  };
+
+  const handleAddSet = async () => {
+    setShowOptionsMenu(false);
+
+    // Add a new set to the current exercise in the UI
+    setExercises(prev => {
+      const updated = [...prev];
+      const newSetNumber = updated[currentExerciseIndex].sessionSets.length + 1;
+      const lastSet = updated[currentExerciseIndex].sessionSets[updated[currentExerciseIndex].sessionSets.length - 1];
+
+      // Create new set with same weight/reps as last set
+      updated[currentExerciseIndex].sessionSets.push({
+        setNumber: newSetNumber,
+        weight: lastSet?.weight || '0',
+        reps: lastSet?.reps || '0',
+        completed: false
+      });
+
+      updated[currentExerciseIndex].totalSets += 1;
+
+      return updated;
+    });
+
+    // Also add the set to storage
+    try {
+      const activeWorkout = await storage.getActiveWorkout();
+      if (activeWorkout && activeWorkout.id === workoutSessionId) {
+        const exercise = activeWorkout.exercises[currentExerciseIndex];
+        const newSetIndex = exercise.sets.length;
+        const lastSet = exercise.sets[exercise.sets.length - 1];
+
+        // Add new set to storage
+        exercise.sets.push({
+          setIndex: newSetIndex,
+          reps: lastSet?.reps || 0,
+          weight: lastSet?.weight || 0,
+          completed: false
+        });
+
+        await storage.saveActiveWorkout(activeWorkout);
+      }
+    } catch (error) {
+      console.error('[Session] Error adding set to storage:', error);
     }
   };
 
@@ -350,9 +425,10 @@ const WorkoutSessionScreen = () => {
 
         // Save to storage immediately
         const exercise = exercises[currentExerciseIndex];
+        const exerciseId = parseInt(exercise.id) || exercise.id || exercise.name;
         await updateWorkoutSet(
           workoutSessionId,
-          exercise.id || exercise.name,
+          exerciseId,
           previousSetIndex,
           {
             reps: parseInt(exercise.sessionSets[previousSetIndex].reps) || 0,
@@ -421,9 +497,10 @@ const WorkoutSessionScreen = () => {
           });
 
           // Save to storage immediately
+          const prevExerciseId = parseInt(prevExercise.id) || prevExercise.id || prevExercise.name;
           updateWorkoutSet(
             workoutSessionId,
-            prevExercise.id || prevExercise.name,
+            prevExerciseId,
             targetSetIndex,
             {
               reps: parseInt(prevExercise.sessionSets[targetSetIndex].reps) || 0,
@@ -581,6 +658,15 @@ const WorkoutSessionScreen = () => {
                 </Text>
               </View>
             </View>
+
+            {/* Options Menu Button */}
+            <TouchableOpacity
+              style={styles.optionsButton}
+              onPress={() => setShowOptionsMenu(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color={Colors.light.text} />
+            </TouchableOpacity>
           </View>
 
           {/* Set Input Fields */}
@@ -715,6 +801,33 @@ const WorkoutSessionScreen = () => {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Options Menu Modal */}
+      <Modal
+        visible={showOptionsMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <TouchableOpacity activeOpacity={1}>
+            <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={handleAddSet}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle-outline" size={24} color={Colors.light.primary} />
+                <Text style={styles.modalOptionText}>Add Set</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -758,9 +871,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   completeButton: {
-    fontSize: 16,
-    color: '#4CAF50',
+    fontSize: 15,
+    color: Colors.light.onPrimary,
     fontWeight: '600',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
 
   // Progress
@@ -1069,5 +1187,54 @@ const styles = StyleSheet.create({
     color: Colors.light.onPrimary,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Options Menu
+  optionsButton: {
+    position: 'absolute',
+    right: -20,
+    top: -20,
+    padding: 8,
+    backgroundColor: Colors.light.borderLight + '80',
+    borderRadius: 8,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 16,
+    padding: 8,
+    minWidth: 200,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
   },
 });

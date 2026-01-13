@@ -1,5 +1,5 @@
 function getEnv(name: string, fallback = ""): string {
-  const value = process.env[name];
+  const value = process.env?.[name];
   if (!value) {
     console.warn(`Missing environment variable: ${name}`);
     return fallback;

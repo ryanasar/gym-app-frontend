@@ -7,7 +7,8 @@
     "icon": "./assets/images/icon.png",
     "scheme": "gymapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
+    "jsEngine": "jsc",
     "ios": {
       "bundleIdentifier": "com.ryanasar.gymapp",
       "supportsTablet": true,
@@ -28,8 +29,14 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "package": "com.ryanasar.gymapp"
     },
     "web": {
       "bundler": "metro",
