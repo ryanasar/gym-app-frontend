@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Image,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
@@ -18,6 +18,7 @@ import { createPost } from '../../api/postsApi';
 import { uploadImage } from '../../api/storageApi';
 import { useAuth } from '../../auth/auth';
 import { storage, calculateStreakFromLocal } from '../../../storage';
+import { preparePostImage } from '../../utils/imageUpload';
 
 const REST_ACTIVITIES = [
   { id: 'walk', label: 'Walk', icon: 'walk-outline' },
@@ -78,10 +79,11 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
     try {
       setIsPosting(true);
 
-      // Upload image if selected
+      // Upload image if selected (resize and compress first)
       let imageUrl = null;
       if (selectedImage) {
-        const uploadResult = await uploadImage(selectedImage, 'rest-days');
+        const preparedImage = await preparePostImage(selectedImage);
+        const uploadResult = await uploadImage(preparedImage.uri, 'rest-days');
         imageUrl = uploadResult.url;
       }
 
@@ -175,7 +177,12 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
             <Text style={styles.sectionTitle}>Photo (Optional)</Text>
             {selectedImage ? (
               <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={styles.imagePreview}
+                  contentFit="cover"
+                  transition={200}
+                />
                 <TouchableOpacity style={styles.removeImageButton} onPress={handleRemoveImage}>
                   <Ionicons name="close-circle" size={28} color="#FFFFFF" />
                 </TouchableOpacity>

@@ -36,45 +36,53 @@ export default function SignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Sign up to get started</Text>
+    <View style={styles.flex}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.formContainer}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Sign up to get started</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholderTextColor={Colors.light.placeholder}
-          value={email}
-          onChangeText={setEmail}
-        />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholderTextColor={Colors.light.placeholder}
+              value={email}
+              onChangeText={setEmail}
+            />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          autoCapitalize="none"
-          secureTextEntry
-          placeholderTextColor={Colors.light.placeholder}
-          value={password}
-          onChangeText={setPassword}
-        />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              autoCapitalize="none"
+              secureTextEntry
+              placeholderTextColor={Colors.light.placeholder}
+              value={password}
+              onChangeText={setPassword}
+            />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignup}>
-          <Text style={styles.primaryButtonText}>Sign Up</Text>
-        </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleSignup}>
+              <Text style={styles.primaryButtonText}>Sign Up</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleLoginNavigate}>
-          <Text style={styles.signupText}>
-            Already have an account? <Text style={styles.signupLink}>Log In</Text>
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity onPress={handleLoginNavigate}>
+              <Text style={styles.signupText}>
+                Already have an account? <Text style={styles.signupLink}>Log In</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -83,9 +91,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  container: {
+  scrollContent: {
     flexGrow: 1,
+  },
+  container: {
+    flex: 1,
     justifyContent: 'center',
+  },
+  formContainer: {
     padding: 24,
   },
   title: {

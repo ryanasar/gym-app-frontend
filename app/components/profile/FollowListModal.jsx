@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   SafeAreaView
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
@@ -50,11 +51,21 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
       onPress={() => handleUserPress(item.username)}
     >
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: Colors.light.primary }]}>
-          <Text style={styles.avatarText}>
-            {item.name ? item.name.charAt(0).toUpperCase() : '?'}
-          </Text>
-        </View>
+        {item.profile?.avatarUrl ? (
+          <Image
+            source={{ uri: item.profile.avatarUrl }}
+            style={styles.avatarImage}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: Colors.light.primary }]}>
+            <Text style={styles.avatarText}>
+              {item.name ? item.name.charAt(0).toUpperCase() : '?'}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.userInfo}>
@@ -166,6 +177,12 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.light.borderLight,
   },
   avatarText: {
     fontSize: 20,

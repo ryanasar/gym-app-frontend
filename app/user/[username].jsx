@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
 import { getUserByUsername, followUser, unfollowUser } from '../api/usersApi';
 import { getPostsByUserId } from '../api/postsApi';
+import { createFollowNotification, deleteFollowNotification } from '../api/notificationsApi';
 import { useAuth } from '../auth/auth';
 import { Ionicons } from '@expo/vector-icons';
 import ProfileHeader from '../components/profile/ProfileHeader';
@@ -85,9 +86,17 @@ export default function UserProfileScreen() {
       if (isFollowing) {
         await unfollowUser(username, currentUser.id);
         setIsFollowing(false);
+        // Delete the follow notification
+        if (user?.id) {
+          await deleteFollowNotification(currentUser.id, user.id);
+        }
       } else {
         await followUser(username, currentUser.id);
         setIsFollowing(true);
+        // Create a notification for the followed user
+        if (user?.id && user.id !== currentUser.id) {
+          await createFollowNotification(user.id, currentUser.id);
+        }
       }
 
       // Reload user data to update follower count (without full screen loading)
@@ -176,6 +185,7 @@ export default function UserProfileScreen() {
         username={user.username}
         name={user.name}
         bio={user.profile?.bio}
+        avatarUrl={user.profile?.avatarUrl}
         followedBy={user.followerCount}
         following={user.followingCount}
         workouts={posts?.length || 0}

@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/auth';
 import { useWorkout } from '../contexts/WorkoutContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import ActivitiesTab from '../components/profile/PostsTab';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import ProgressTab from '../components/profile/ProgressTab';
@@ -11,6 +15,7 @@ import EditProfileModal from '../components/profile/EditProfileModal';
 import { Colors } from '../constants/colors';
 
 const ProfileScreen = () => {
+  const router = useRouter();
   const [selectedTab, setSelectedTab] = useState('Progress');
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('followers');
@@ -18,6 +23,7 @@ const ProfileScreen = () => {
   const [progressKey, setProgressKey] = useState(0);
   const { user, profile, posts, signOut, refreshPosts, refreshProfile } = useAuth();
   const { lastWorkoutCompleted } = useWorkout();
+  const { unreadCount } = useNotifications();
 
   // Force ProgressTab to refresh when workout completion changes
   useEffect(() => {
@@ -25,6 +31,15 @@ const ProfileScreen = () => {
       setProgressKey(prev => prev + 1);
     }
   }, [lastWorkoutCompleted]);
+
+  // Refresh posts when tab comes into focus to sync like states
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id && posts?.length > 0) {
+        refreshPosts();
+      }
+    }, [user?.id])
+  );
 
   if (!user) {
     return (
@@ -37,6 +52,7 @@ const ProfileScreen = () => {
   const username = user.username;
   const name = user.name;
   const bio = profile?.bio;
+  const avatarUrl = profile?.avatarUrl;
   const followedBy = profile?.user?._count?.followedBy;
   const following = profile?.user?._count?.following;
   const postsCount = posts?.length || 0;
@@ -96,6 +112,19 @@ const ProfileScreen = () => {
       {/* Header */}
       <View style={styles.headerContainer}>
         <Text style={styles.title}>Profile</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/notifications')}
+          style={styles.notificationButton}
+        >
+          <Ionicons name="notifications-outline" size={24} color={Colors.light.text} />
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ProfileHeader
@@ -103,6 +132,7 @@ const ProfileScreen = () => {
         username={username}
         name={name}
         bio={bio}
+        avatarUrl={avatarUrl}
         followedBy={followedBy}
         following={following}
         workouts={postsCount}
@@ -158,6 +188,8 @@ const ProfileScreen = () => {
         onClose={handleCloseEditModal}
         userId={user?.id}
         currentBio={bio}
+        currentAvatarUrl={avatarUrl}
+        userName={name}
         onProfileUpdated={handleProfileUpdated}
       />
     </View>
@@ -172,6 +204,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 16,
@@ -186,6 +221,29 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: Colors.light.text,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: Colors.light.cardBackground,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
   },
   tabsContainer: {
     flexDirection: 'row',

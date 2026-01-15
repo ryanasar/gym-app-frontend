@@ -1,12 +1,14 @@
 import { Tabs } from "expo-router";
-import { useColorScheme } from "react-native";
+import { useColorScheme, View, Text, StyleSheet } from "react-native";
 import { Colors } from '../constants/colors'
 import { useAuth } from '../auth/auth'
 import { Ionicons } from '@expo/vector-icons';
+import { useNotifications } from '../contexts/NotificationContext';
 
 export default function TabsLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const { unreadCount } = useNotifications();
 
   return (
     <Tabs
@@ -49,7 +51,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="program"
         options={{
-          title: "My Program",
+          title: "Program",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "clipboard" : "clipboard-outline"}
@@ -93,14 +95,43 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "person" : "person-outline"}
-              size={24}
-              color={color}
-            />
+            <View>
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={24}
+                color={color}
+              />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});

@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,12 +13,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
 import { createPost, updatePost } from '../api/postsApi';
 import { uploadImage, deleteImage } from '../api/storageApi';
 import { storage } from '../../storage';
+import { preparePostImage } from '../utils/imageUpload';
 
 const CreatePostScreen = () => {
   const router = useRouter();
@@ -151,7 +152,9 @@ const CreatePostScreen = () => {
       // Upload image if one is selected and not already uploaded
       if (selectedImage && !uploadedImageUrl) {
         try {
-          const uploadResult = await uploadImage(selectedImage, 'posts');
+          // Resize and compress image before upload
+          const preparedImage = await preparePostImage(selectedImage);
+          const uploadResult = await uploadImage(preparedImage.uri, 'posts');
           imageUrl = uploadResult.url;
           imagePath = uploadResult.path;
           setUploadedImageUrl(imageUrl);
@@ -370,7 +373,12 @@ const CreatePostScreen = () => {
             <Text style={styles.sectionLabel}>Photo</Text>
             {selectedImage ? (
               <View style={styles.imageContainer}>
-                <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={styles.selectedImage}
+                  contentFit="cover"
+                  transition={200}
+                />
                 <TouchableOpacity
                   style={styles.removeImageButton}
                   onPress={() => setSelectedImage(null)}

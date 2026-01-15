@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  Alert, 
-  StyleSheet, 
-  TouchableOpacity, 
-  KeyboardAvoidingView, 
-  Platform, 
-  ScrollView,
-  Image 
+import {
+  View,
+  Text,
+  TextInput,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useAuth } from '../auth/auth';
 import { supabase } from '../../supabase';
 import { useRouter } from 'expo-router';
@@ -60,66 +60,74 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Log in to continue</Text>
+    <View style={styles.flex}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.formContainer}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Log in to continue</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholderTextColor={Colors.light.placeholder}
-          value={email}
-          onChangeText={setEmail}
-        />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholderTextColor={Colors.light.placeholder}
+              value={email}
+              onChangeText={setEmail}
+            />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          autoCapitalize="none"
-          secureTextEntry
-          placeholderTextColor={Colors.light.placeholder}
-          value={password}
-          onChangeText={setPassword}
-        />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              autoCapitalize="none"
+              secureTextEntry
+              placeholderTextColor={Colors.light.placeholder}
+              value={password}
+              onChangeText={setPassword}
+            />
 
-        {error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : null}
+            {error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-          <Text style={styles.primaryButtonText}>Login</Text>
-        </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+              <Text style={styles.primaryButtonText}>Login</Text>
+            </TouchableOpacity>
 
-        {/* Hidden for now
-        <View style={styles.dividerContainer}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.divider} />
-        </View>
+            {/* Hidden for now
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.divider} />
+            </View>
 
-        <TouchableOpacity style={styles.googleButton} onPress={signIn}>
-          <Image
-            source={require('../../assets/images/google.png')}
-            style={styles.googleIcon}
-            resizeMode="contain"
-          />
-          <Text style={styles.googleButtonText}>Sign in with Google</Text>
-        </TouchableOpacity>
-        */}
+            <TouchableOpacity style={styles.googleButton} onPress={signIn}>
+              <Image
+                source={require('../../assets/images/google.png')}
+                style={styles.googleIcon}
+                contentFit="contain"
+              />
+              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+            */}
 
-        <TouchableOpacity onPress={handleSignupNavigate}>
-          <Text style={styles.signupText}>
-            Don't have an account? <Text style={styles.signupLink}>Sign Up</Text>
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity onPress={handleSignupNavigate}>
+              <Text style={styles.signupText}>
+                Don't have an account? <Text style={styles.signupLink}>Sign Up</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -128,9 +136,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  container: {
+  scrollContent: {
     flexGrow: 1,
+  },
+  container: {
+    flex: 1,
     justifyContent: 'center',
+  },
+  formContainer: {
     padding: 24,
   },
   title: {

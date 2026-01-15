@@ -9,9 +9,9 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
-  Modal,
-  Image
+  Modal
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Colors } from '../constants/colors';
 import { getAllExerciseTemplates } from '../api/exerciseTemplatesApi';
@@ -244,7 +244,13 @@ const MakeWorkoutScreen = () => {
         onPress={() => addExercise(item)}
       >
         {item.image && (
-          <Image source={{ uri: item.image }} style={styles.exerciseImage} />
+          <Image
+            source={{ uri: item.image }}
+            style={styles.exerciseImage}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
         )}
 
         <View style={styles.exerciseContent}>

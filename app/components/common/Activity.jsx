@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Pressable, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { createComment, deletePost, likePost, unlikePost, getComments } from '../../api/postsApi';
+import { createLikeNotification, deleteLikeNotification, createCommentNotification } from '../../api/notificationsApi';
 import { Colors } from '../../constants/colors';
 
 const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
@@ -33,6 +35,14 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     likes?.some(like => like.userId === currentUserId) || false
   );
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  // Sync like/comment state when post prop changes (e.g., when navigating between tabs)
+  useEffect(() => {
+    const likedFromServer = likes?.some(like => like.userId === currentUserId) || false;
+    setIsLiked(likedFromServer);
+    setLocalLikeCount(_count?.likes || 0);
+    setLocalCommentCount(_count?.comments || 0);
+  }, [likes, _count?.likes, _count?.comments, currentUserId]);
 
   const isOwnPost = currentUserId && author?.id === currentUserId;
 
@@ -159,12 +169,26 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     try {
       if (wasLiked) {
         await unlikePost(id, currentUserId);
+        // Delete the like notification
+        await deleteLikeNotification(currentUserId, id);
       } else {
         await likePost(id, currentUserId);
+        // Create a notification for the post author (if not self)
+        if (author?.id && author.id !== currentUserId) {
+          await createLikeNotification(author.id, currentUserId, id);
+        }
       }
 
       if (onPostUpdated) {
-        onPostUpdated({ ...post, _count: { ...post._count, likes: wasLiked ? localLikeCount - 1 : localLikeCount + 1 } });
+        // Update both the likes array and count to keep state in sync
+        const updatedLikes = wasLiked
+          ? likes.filter(like => like.userId !== currentUserId)
+          : [...likes, { userId: currentUserId }];
+        onPostUpdated({
+          ...post,
+          likes: updatedLikes,
+          _count: { ...post._count, likes: wasLiked ? localLikeCount - 1 : localLikeCount + 1 }
+        });
       }
     } catch (error) {
       // Revert on error
@@ -214,6 +238,11 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
 
       // Add the new comment to the comments list
       setComments(prev => [newComment, ...prev]);
+
+      // Create a notification for the post author (if not self)
+      if (author?.id && author.id !== currentUserId && newComment?.id) {
+        await createCommentNotification(author.id, currentUserId, id, newComment.id);
+      }
 
       if (onPostUpdated) {
         onPostUpdated({ ...post, _count: { ...post._count, comments: localCommentCount + 1 } });
@@ -282,11 +311,21 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
           onPress={handleProfilePress}
           activeOpacity={0.7}
         >
-          <View style={styles.authorAvatar}>
-            <Text style={styles.avatarText}>
-              {(author?.name || author?.username || 'U').charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          {author?.profile?.avatarUrl ? (
+            <Image
+              source={{ uri: author.profile.avatarUrl }}
+              style={styles.authorAvatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={styles.authorAvatarPlaceholder}>
+              <Text style={styles.avatarText}>
+                {(author?.name || author?.username || 'U').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.authorTextContainer}>
             <View style={styles.nameTimestampRow}>
               <Text style={styles.authorName}>{author?.name || author?.username || 'Unknown User'}</Text>
@@ -357,7 +396,9 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
         <Image
           source={{ uri: imageUrl }}
           style={styles.postImage}
-          resizeMode="cover"
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
         />
       )}
 
@@ -461,11 +502,21 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
               ) : (
                 comments.map((comment, index) => (
                   <View key={comment.id || index} style={styles.commentItem}>
-                    <View style={styles.commentAvatar}>
-                      <Text style={styles.commentAvatarText}>
-                        {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
+                    {comment.author?.profile?.avatarUrl ? (
+                      <Image
+                        source={{ uri: comment.author.profile.avatarUrl }}
+                        style={styles.commentAvatarImage}
+                        contentFit="cover"
+                        transition={200}
+                        cachePolicy="memory-disk"
+                      />
+                    ) : (
+                      <View style={styles.commentAvatar}>
+                        <Text style={styles.commentAvatarText}>
+                          {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
                     <View style={styles.commentContent}>
                       <View style={styles.commentHeader}>
                         <Text style={styles.commentAuthor}>
@@ -553,6 +604,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   authorAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.light.borderLight,
+  },
+  authorAvatarPlaceholder: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -815,6 +872,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary + '25',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  commentAvatarImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: Colors.light.borderLight,
   },
   commentAvatarText: {
     color: Colors.light.primary,

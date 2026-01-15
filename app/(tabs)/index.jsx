@@ -148,6 +148,10 @@ export default function FollowingScreen() {
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
         contentContainerStyle={posts.length === 0 ? styles.emptyListContainer : styles.listContainer}
+        initialNumToRender={5}
+        windowSize={7}
+        removeClippedSubviews
+        maxToRenderPerBatch={5}
       />
     </View>
   );

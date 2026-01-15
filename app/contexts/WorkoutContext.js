@@ -37,7 +37,9 @@ export const WorkoutProvider = ({ children }) => {
       if (day.isRest || !day.exercises) return day;
 
       const validatedExercises = day.exercises.map(ex => {
-        const exerciseId = parseInt(ex.exerciseId) || ex.exerciseId;
+        // Normalize exerciseId - try both string and number versions
+        const exerciseIdStr = String(ex.exerciseId);
+        const exerciseIdNum = parseInt(ex.exerciseId);
 
         // Ensure targetSets and targetReps have valid values
         const targetSets = parseInt(ex.targetSets) || parseInt(ex.sets) || 3;
@@ -48,9 +50,9 @@ export const WorkoutProvider = ({ children }) => {
           needsUpdate = true;
         }
 
-        // Check if this exerciseId exists in local database
-        if (exerciseMap[exerciseId]) {
-          return { ...ex, exerciseId, targetSets, targetReps };
+        // Check if this exerciseId exists in local database (try both string and number)
+        if (exerciseMap[exerciseIdStr] || exerciseMap[exerciseIdNum]) {
+          return { ...ex, exerciseId: exerciseIdStr, targetSets, targetReps };
         }
 
         // Exercise ID not found - try to match by name
@@ -58,17 +60,18 @@ export const WorkoutProvider = ({ children }) => {
           const matchedId = nameToIdMap[ex.name.toLowerCase()];
           if (matchedId) {
             needsUpdate = true;
-            return { ...ex, exerciseId: parseInt(matchedId), targetSets, targetReps };
+            return { ...ex, exerciseId: String(matchedId), targetSets, targetReps };
           }
         }
 
         // Could not match - keep original but flag for update
         needsUpdate = true;
-        return { ...ex, exerciseId, targetSets, targetReps };
+        return { ...ex, exerciseId: exerciseIdStr, targetSets, targetReps };
       }).filter(ex => {
         // Filter out exercises that couldn't be matched and don't exist
-        const id = parseInt(ex.exerciseId) || ex.exerciseId;
-        return exerciseMap[id];
+        const idStr = String(ex.exerciseId);
+        const idNum = parseInt(ex.exerciseId);
+        return exerciseMap[idStr] || exerciseMap[idNum];
       });
 
       return { ...day, exercises: validatedExercises };
@@ -346,8 +349,8 @@ export const WorkoutProvider = ({ children }) => {
       };
     }
 
-    const workoutName = todaysWorkoutDay.name;
-    const workoutType = todaysWorkoutDay.type;
+    const workoutName = todaysWorkoutDay.name || todaysWorkoutDay.workoutName || `Day ${todaysDayIndex + 1}`;
+    const workoutType = todaysWorkoutDay.type || todaysWorkoutDay.workoutType;
 
     // Convert new storage format (exerciseId, targetSets, targetReps) to UI format (name, sets, reps)
     const exercises = (todaysWorkoutDay.exercises || []).map(exercise => {
@@ -358,12 +361,10 @@ export const WorkoutProvider = ({ children }) => {
 
       // New format: has exerciseId, targetSets, targetReps
       // Look up the exercise name from the exercise database
-      const exerciseData = exerciseDatabase[exercise.exerciseId];
-      const exerciseName = exerciseData?.name || exercise.exerciseId || 'Unknown Exercise';
-
-      // Debug log if we can't find the exercise
-      if (!exerciseData && exerciseDatabase && Object.keys(exerciseDatabase).length > 0) {
-      }
+      // Convert exerciseId to string for consistent lookup (database stores IDs as strings)
+      const exerciseIdStr = String(exercise.exerciseId);
+      const exerciseData = exerciseDatabase[exerciseIdStr] || exerciseDatabase[exercise.exerciseId];
+      const exerciseName = exerciseData?.name || `Exercise ${exercise.exerciseId}`;
 
       return {
         name: exerciseName,

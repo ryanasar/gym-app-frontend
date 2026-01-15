@@ -1,6 +1,7 @@
 import { useAuth } from './auth/auth';
 import { Redirect } from 'expo-router';
-import { View, ActivityIndicator, Image } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 
 export default function Index() {
   const { user, isLoading } = useAuth();
@@ -11,7 +12,8 @@ export default function Index() {
         <Image
           source={require('../assets/images/icon.png')}
           style={{ width: 200, height: 200, marginBottom: 20 }}
-          resizeMode="contain"
+          contentFit="contain"
+          transition={200}
         />
         <ActivityIndicator size="large" color="#FFFFFF" />
       </View>

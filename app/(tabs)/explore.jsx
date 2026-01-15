@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
@@ -82,11 +83,21 @@ export default function ExploreScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.userInfo}>
-                  <View style={styles.userAvatar}>
-                    <Text style={styles.userAvatarText}>
-                      {result.name?.[0]?.toUpperCase() || result.username?.[0]?.toUpperCase() || '?'}
-                    </Text>
-                  </View>
+                  {result.profile?.avatarUrl ? (
+                    <Image
+                      source={{ uri: result.profile.avatarUrl }}
+                      style={styles.userAvatarImage}
+                      contentFit="cover"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <View style={styles.userAvatar}>
+                      <Text style={styles.userAvatarText}>
+                        {result.name?.[0]?.toUpperCase() || result.username?.[0]?.toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.userDetails}>
                     <Text style={styles.userName}>{result.name || result.username}</Text>
                     <Text style={styles.userUsername}>@{result.username}</Text>
@@ -240,6 +251,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+  },
+  userAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+    backgroundColor: Colors.light.borderLight,
   },
   userAvatarText: {
     fontSize: 20,

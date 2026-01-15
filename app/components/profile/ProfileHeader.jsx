@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { Colors } from '../../constants/colors';
 import SettingsDropdown from './SettingsDropdown';
 
@@ -7,6 +8,7 @@ const ProfileHeader = ({
   username,
   name,
   bio,
+  avatarUrl,
   followedBy,
   following,
   workouts,
@@ -37,11 +39,21 @@ const ProfileHeader = ({
         <View style={styles.profileSection}>
           {/* Profile Picture */}
           <View style={styles.avatarContainer}>
-            <View style={[styles.profileInitialContainer, { backgroundColor: Colors[colorScheme].primary }]}>
-              <Text style={[styles.profileInitial, { color: Colors[colorScheme].onPrimary }]}>
-                {name ? name.charAt(0).toUpperCase() : "?"}
-              </Text>
-            </View>
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.profileImage}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <View style={[styles.profileInitialContainer, { backgroundColor: Colors[colorScheme].primary }]}>
+                <Text style={[styles.profileInitial, { color: Colors[colorScheme].onPrimary }]}>
+                  {name ? name.charAt(0).toUpperCase() : "?"}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Profile Info */}
@@ -154,6 +166,16 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  profileImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,

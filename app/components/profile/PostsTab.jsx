@@ -67,6 +67,10 @@ const ActivitiesTab = ({ posts, currentUserId, onRefresh }) => {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefreshPosts} />
       }
+      initialNumToRender={5}
+      windowSize={7}
+      removeClippedSubviews
+      maxToRenderPerBatch={5}
     />
   );
 };

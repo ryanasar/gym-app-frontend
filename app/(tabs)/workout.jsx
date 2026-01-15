@@ -27,6 +27,7 @@ const WorkoutScreen = () => {
     todaysWorkoutCompleted,
     completedSessionId: cachedSessionId,
     refreshTodaysWorkout,
+    isInitialized,
   } = useWorkout();
   const { updatePendingCount, manualSync } = useSync();
   const [refreshing, setRefreshing] = useState(false);
@@ -239,6 +240,20 @@ const WorkoutScreen = () => {
     }
   };
 
+  // Show loading state while context initializes
+  if (!isInitialized) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.title}>Today's Workout</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      </View>
+    );
+  }
+
   // Show Begin Split card if split exists but hasn't been started
   if (activeSplit && activeSplit.started === false) {
     return (
@@ -259,6 +274,20 @@ const WorkoutScreen = () => {
             onDaySelected={handleDaySelected}
           />
         </ScrollView>
+      </View>
+    );
+  }
+
+  // Handle case where no workout is available at all
+  if (!todaysWorkout) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.title}>Today's Workout</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
       </View>
     );
   }
@@ -781,10 +810,17 @@ const WorkoutScreen = () => {
             {/* Day List */}
             {(activeSplit?.days || activeSplit?.workoutDays)?.map((day, index) => {
               const isRest = day.isRest;
-              const dayName = isRest ? 'Rest Day' : (day.name || day.workoutName || `Day ${index + 1}`);
-              const exerciseCount = !isRest && day.exercises
-                ? (typeof day.exercises === 'string' ? JSON.parse(day.exercises).length : day.exercises.length)
-                : 0;
+              const dayName = isRest ? 'Rest Day' : (day.name || day.workoutName || day.dayName || `Day ${index + 1}`);
+              let exerciseCount = 0;
+              if (!isRest && day.exercises) {
+                try {
+                  exerciseCount = typeof day.exercises === 'string'
+                    ? JSON.parse(day.exercises).length
+                    : Array.isArray(day.exercises) ? day.exercises.length : 0;
+                } catch (e) {
+                  exerciseCount = 0;
+                }
+              }
 
               return (
                 <TouchableOpacity
@@ -861,9 +897,15 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   contentContainer: {
     padding: 16,
     flex: 1,
+    alignItems: 'stretch',
   },
 
   // Workout Card (using SplitReview styling)
@@ -878,7 +920,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     borderWidth: 2,
     borderColor: Colors.light.borderLight,
-    transition: 'all 0.3s ease',
+    width: '100%',
   },
   workoutCardCompleted: {
     borderColor: '#4CAF50',
