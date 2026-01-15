@@ -176,7 +176,7 @@ export default function UserProfileScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>@{username}</Text>
+        <Text style={styles.title}>{user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || `@${username}`}</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 

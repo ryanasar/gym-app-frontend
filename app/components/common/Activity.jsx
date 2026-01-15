@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Pressable } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Pressable, Modal, KeyboardAvoidingView, Platform, FlatList } from 'react-native';
 import { Image } from 'expo-image';
 import { createComment, deletePost, likePost, unlikePost, getComments } from '../../api/postsApi';
 import { createLikeNotification, deleteLikeNotification, createCommentNotification } from '../../api/notificationsApi';
@@ -24,8 +24,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     likes = [],
   } = post;
 
-  const [showCommentInput, setShowCommentInput] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [comments, setComments] = useState([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -65,15 +64,6 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     return acc + (Array.isArray(ex.sets) ? ex.sets.length : parseInt(ex.sets) || 0);
   }, 0) || 0;
 
-  // Debug log for troubleshooting
-  if (workoutSession && (!workoutData?.exercises || workoutData.exercises.length === 0)) {
-    console.log('[Activity] Post has workoutSession but no exercises:', {
-      postId: id,
-      hasWorkoutSession: !!workoutSession,
-      exercisesCount: workoutSession?.exercises?.length
-    });
-  }
-
   // Parse rest activities from description
   const restActivities = isRestDay && description ? (() => {
     const match = description.match(/Recovery:\s*(.+?)(?:\n|$)/);
@@ -88,7 +78,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     const muscles = new Set();
     workoutData.exercises.forEach(exercise => {
       // Map exercise names to muscle groups
-      const exerciseName = exercise.name.toLowerCase();
+      const exerciseName = (exercise.name || '').toLowerCase();
       if (exerciseName.includes('bench') || exerciseName.includes('press') || exerciseName.includes('chest')) {
         muscles.add('Chest');
       }
@@ -198,28 +188,25 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     }
   };
 
-  const fetchComments = async () => {
-    if (isLoadingComments) return;
-
-    setIsLoadingComments(true);
-    try {
-      const fetchedComments = await getComments(id);
-      setComments(fetchedComments);
-      setShowComments(true);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-      Alert.alert('Error', 'Failed to load comments');
-    } finally {
-      setIsLoadingComments(false);
+  const openCommentsModal = async () => {
+    setShowCommentsModal(true);
+    if (comments.length === 0) {
+      setIsLoadingComments(true);
+      try {
+        const fetchedComments = await getComments(id);
+        setComments(fetchedComments);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+        Alert.alert('Error', 'Failed to load comments');
+      } finally {
+        setIsLoadingComments(false);
+      }
     }
   };
 
-  const handleToggleComments = () => {
-    if (showComments) {
-      setShowComments(false);
-    } else {
-      fetchComments();
-    }
+  const closeCommentsModal = () => {
+    setShowCommentsModal(false);
+    setCommentText('');
   };
 
   const handleCommentSubmit = async () => {
@@ -234,7 +221,6 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
 
       setLocalCommentCount(prev => prev + 1);
       setCommentText('');
-      setShowCommentInput(false);
 
       // Add the new comment to the comments list
       setComments(prev => [newComment, ...prev]);
@@ -372,7 +358,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
       )}
 
       {/* Content Body */}
-      <View style={styles.contentBody}>
+      <View style={[styles.contentBody, !imageUrl && styles.contentBodyNoImage]}>
         {/* Type Label + Workout Name */}
         <Text style={styles.typeLabel}>{isRestDay ? 'REST DAY' : 'WORKOUT'}</Text>
         {isRestDay ? (
@@ -403,7 +389,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
       )}
 
       {/* Metadata Section */}
-      <View style={styles.metadataSection}>
+      <View style={[styles.metadataSection, !imageUrl && styles.metadataSectionNoImage]}>
         {/* Streak Badge */}
         {streak && streak > 1 && (
           <View style={styles.streakBadge}>
@@ -460,7 +446,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
 
         <TouchableOpacity
           style={styles.actionItem}
-          onPress={() => setShowCommentInput(!showCommentInput)}
+          onPress={openCommentsModal}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chatbubble-outline" size={18} color={Colors.light.secondaryText} />
@@ -471,10 +457,10 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
       </View>
 
       {/* View Comments Link */}
-      {localCommentCount > 0 && !showComments && (
+      {localCommentCount > 0 && (
         <TouchableOpacity
           style={styles.viewCommentsButton}
-          onPress={handleToggleComments}
+          onPress={openCommentsModal}
         >
           <Text style={styles.viewCommentsText}>
             View {localCommentCount === 1 ? 'comment' : `all ${localCommentCount} comments`}
@@ -482,88 +468,112 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
         </TouchableOpacity>
       )}
 
-      {/* Comments List */}
-      {showComments && (
-        <View style={styles.commentsSection}>
+      {/* Comments Modal */}
+      <Modal
+        visible={showCommentsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeCommentsModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Comments</Text>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={closeCommentsModal}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={24} color={Colors.light.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Comments List */}
           {isLoadingComments ? (
-            <View style={styles.commentsLoading}>
-              <ActivityIndicator size="small" color={Colors.light.primary} />
+            <View style={styles.modalLoading}>
+              <ActivityIndicator size="large" color={Colors.light.primary} />
             </View>
           ) : (
-            <>
-              <View style={styles.commentsSectionHeader}>
-                <Text style={styles.commentsSectionTitle}>Comments</Text>
-                <TouchableOpacity onPress={handleToggleComments}>
-                  <Text style={styles.hideCommentsText}>Hide</Text>
-                </TouchableOpacity>
-              </View>
-              {comments.length === 0 ? (
-                <Text style={styles.noCommentsText}>No comments yet</Text>
-              ) : (
-                comments.map((comment, index) => (
-                  <View key={comment.id || index} style={styles.commentItem}>
-                    {comment.author?.profile?.avatarUrl ? (
-                      <Image
-                        source={{ uri: comment.author.profile.avatarUrl }}
-                        style={styles.commentAvatarImage}
-                        contentFit="cover"
-                        transition={200}
-                        cachePolicy="memory-disk"
-                      />
-                    ) : (
-                      <View style={styles.commentAvatar}>
-                        <Text style={styles.commentAvatarText}>
-                          {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={styles.commentContent}>
-                      <View style={styles.commentHeader}>
-                        <Text style={styles.commentAuthor}>
-                          {comment.author?.name || comment.author?.username || 'Unknown User'}
-                        </Text>
-                        <Text style={styles.commentTimestamp}>
-                          {formatDate(comment.timestamp)}
-                        </Text>
-                      </View>
-                      <Text style={styles.commentText}>{comment.content}</Text>
+            <FlatList
+              data={comments}
+              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+              renderItem={({ item: comment }) => (
+                <View style={styles.modalCommentItem}>
+                  {comment.author?.profile?.avatarUrl ? (
+                    <Image
+                      source={{ uri: comment.author.profile.avatarUrl }}
+                      style={styles.modalCommentAvatar}
+                      contentFit="cover"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <View style={styles.modalCommentAvatarPlaceholder}>
+                      <Text style={styles.modalCommentAvatarText}>
+                        {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
+                      </Text>
                     </View>
+                  )}
+                  <View style={styles.modalCommentContent}>
+                    <View style={styles.modalCommentHeader}>
+                      <Text style={styles.modalCommentAuthor}>
+                        {comment.author?.name || comment.author?.username || 'Unknown User'}
+                      </Text>
+                      <Text style={styles.modalCommentTimestamp}>
+                        {formatDate(comment.timestamp)}
+                      </Text>
+                    </View>
+                    <Text style={styles.modalCommentText}>{comment.content}</Text>
                   </View>
-                ))
+                </View>
               )}
-            </>
-          )}
-        </View>
-      )}
-
-      {/* Inline Comment Input */}
-      {showCommentInput && (
-        <View style={styles.commentInputContainer}>
-          <TextInput
-            style={styles.commentInput}
-            placeholder="Write a comment..."
-            placeholderTextColor={Colors.light.secondaryText}
-            value={commentText}
-            onChangeText={setCommentText}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[
-              styles.commentSubmitButton,
-              (!commentText.trim() || isSubmittingComment) && styles.commentSubmitButtonDisabled
-            ]}
-            onPress={handleCommentSubmit}
-            disabled={!commentText.trim() || isSubmittingComment}
-          >
-            <Ionicons
-              name="send"
-              size={18}
-              color={commentText.trim() && !isSubmittingComment ? Colors.light.primary : Colors.light.secondaryText}
+              ListEmptyComponent={
+                <View style={styles.modalEmptyState}>
+                  <Text style={styles.modalEmptyText}>No comments yet</Text>
+                  <Text style={styles.modalEmptySubtext}>Be the first to comment!</Text>
+                </View>
+              }
+              contentContainerStyle={styles.modalCommentsList}
+              showsVerticalScrollIndicator={false}
             />
-          </TouchableOpacity>
-        </View>
-      )}
+          )}
+
+          {/* Comment Input */}
+          <View style={styles.modalInputContainer}>
+            <TextInput
+              style={styles.modalCommentInput}
+              placeholder="Write a comment..."
+              placeholderTextColor={Colors.light.secondaryText}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              maxLength={500}
+            />
+            <TouchableOpacity
+              style={[
+                styles.modalSendButton,
+                (!commentText.trim() || isSubmittingComment) && styles.modalSendButtonDisabled
+              ]}
+              onPress={handleCommentSubmit}
+              disabled={!commentText.trim() || isSubmittingComment}
+            >
+              {isSubmittingComment ? (
+                <ActivityIndicator size="small" color={Colors.light.primary} />
+              ) : (
+                <Ionicons
+                  name="send"
+                  size={20}
+                  color={commentText.trim() ? Colors.light.primary : Colors.light.secondaryText}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Pressable>
   );
 };
@@ -576,13 +586,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight + '80',
+    borderColor: Colors.light.border,
     overflow: 'hidden',
     shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   cardPressed: {
     opacity: 0.96,
@@ -687,6 +697,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 12,
   },
+  contentBodyNoImage: {
+    paddingBottom: 0,
+  },
   typeLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -721,6 +734,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     gap: 10,
+  },
+  metadataSectionNoImage: {
+    paddingTop: 6,
   },
 
   // Streak Badge
@@ -939,6 +955,139 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   commentSubmitButtonDisabled: {
+    opacity: 0.5,
+  },
+
+  // Comments Modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.borderLight,
+    backgroundColor: Colors.light.cardBackground,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    padding: 4,
+  },
+  modalLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCommentsList: {
+    padding: 16,
+    flexGrow: 1,
+  },
+  modalCommentItem: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  modalCommentAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.borderLight,
+  },
+  modalCommentAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCommentAvatarText: {
+    color: Colors.light.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalCommentContent: {
+    flex: 1,
+  },
+  modalCommentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  modalCommentAuthor: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  modalCommentTimestamp: {
+    fontSize: 12,
+    color: Colors.light.secondaryText,
+  },
+  modalCommentText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.light.text,
+  },
+  modalEmptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  modalEmptyText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 4,
+  },
+  modalEmptySubtext: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+  },
+  modalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 34,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderLight,
+    backgroundColor: Colors.light.cardBackground,
+  },
+  modalCommentInput: {
+    flex: 1,
+    backgroundColor: Colors.light.borderLight + '30',
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.light.text,
+    maxHeight: 120,
+    minHeight: 44,
+  },
+  modalSendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.light.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSendButtonDisabled: {
     opacity: 0.5,
   },
 });
