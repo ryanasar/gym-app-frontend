@@ -282,7 +282,6 @@ const styles = StyleSheet.create({
   },
   tabContentContainer: {
     flex: 1,
-    paddingTop: 16,
     backgroundColor: Colors.light.background,
   },
   tabVisible: {

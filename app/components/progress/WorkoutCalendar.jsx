@@ -70,77 +70,100 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Total workouts
-    const totalWorkouts = workoutsByDay.length;
+    // Filter out rest days for workout count
+    const actualWorkouts = workoutsByDay.filter(w => !w.isRestDay);
+    const totalWorkouts = actualWorkouts.length;
 
-    // Sort workout dates in descending order (most recent first)
-    const sortedDates = workoutsByDay
+    // All activity dates (including rest days) for checking gaps
+    const allActivityDates = workoutsByDay
       .map(w => {
-        // Parse as local date to avoid timezone issues
         const [year, month, day] = w.date.split('-').map(Number);
-        const date = new Date(year, month - 1, day, 0, 0, 0, 0);
-        return date;
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
       })
       .sort((a, b) => b - a);
 
-    // Calculate longest streak first (independent of current streak)
+    // Build sets for efficient lookup
+    const activityDateSet = new Set(workoutsByDay.map(w => w.date));
+    const workoutDateSet = new Set(actualWorkouts.map(w => w.date));
+
+    // Helper to format date as YYYY-MM-DD
+    const formatDate = (date) => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    // Calculate longest streak (consecutive days with activity, counting only workouts)
+    // Rest days preserve the streak but don't increment the count
     let longestStreak = 0;
-    let tempStreak = 0;
-    const sortedDatesAsc = [...sortedDates].sort((a, b) => a - b);
 
-    for (let i = 0; i < sortedDatesAsc.length; i++) {
-      if (i === 0) {
-        tempStreak = 1;
-      } else {
-        const prevDate = sortedDatesAsc[i - 1];
-        const currentDate = sortedDatesAsc[i];
-        const diffDays = Math.floor((currentDate - prevDate) / (1000 * 60 * 60 * 24));
+    if (allActivityDates.length > 0) {
+      // Sort ascending for finding consecutive spans
+      const sortedActivitiesAsc = [...allActivityDates].sort((a, b) => a - b);
 
-        if (diffDays === 1) {
-          tempStreak++;
-        } else if (diffDays === 0) {
-          continue;
+      let currentSpanWorkouts = 0;
+      let prevDate = null;
+
+      for (const activityDate of sortedActivitiesAsc) {
+        const dateStr = formatDate(activityDate);
+
+        if (prevDate === null) {
+          // First activity
+          currentSpanWorkouts = workoutDateSet.has(dateStr) ? 1 : 0;
         } else {
-          longestStreak = Math.max(longestStreak, tempStreak);
-          tempStreak = 1;
-        }
-      }
-    }
-    longestStreak = Math.max(longestStreak, tempStreak);
+          const dayDiff = Math.floor((activityDate - prevDate) / (1000 * 60 * 60 * 24));
 
-    // Calculate current streak (consecutive days from most recent workout backwards)
+          if (dayDiff === 1) {
+            // Consecutive day - continue the span
+            if (workoutDateSet.has(dateStr)) {
+              currentSpanWorkouts++;
+            }
+          } else if (dayDiff === 0) {
+            // Same day (shouldn't happen but handle it)
+            continue;
+          } else {
+            // Gap in activity - save best and start new span
+            longestStreak = Math.max(longestStreak, currentSpanWorkouts);
+            currentSpanWorkouts = workoutDateSet.has(dateStr) ? 1 : 0;
+          }
+        }
+        prevDate = activityDate;
+      }
+      // Don't forget to check the last span
+      longestStreak = Math.max(longestStreak, currentSpanWorkouts);
+    }
+
+    // Calculate current streak
     let currentStreak = 0;
 
-    if (sortedDates.length === 0) {
+    if (allActivityDates.length === 0) {
       return { totalWorkouts, longestStreak: 0, currentStreak: 0 };
     }
 
-    // Get the most recent workout date
-    const mostRecentWorkout = sortedDates[0];
-    const daysSinceLastWorkout = Math.floor((today - mostRecentWorkout) / (1000 * 60 * 60 * 24));
+    // Check if most recent activity (workout OR rest day) is within 1 day
+    const mostRecentActivity = allActivityDates[0];
+    const daysSinceLastActivity = Math.floor((today - mostRecentActivity) / (1000 * 60 * 60 * 24));
 
-    // Streak is broken only if there's at least one FULL day between last workout and today
-    // daysSinceLastWorkout = 0: worked out today, streak alive
-    // daysSinceLastWorkout = 1: worked out yesterday, today not over, streak alive
-    // daysSinceLastWorkout >= 2: at least one full day missed (e.g., worked out 2 days ago = yesterday was missed), streak broken
-    if (daysSinceLastWorkout >= 2) {
-      // At least one full day has passed without a workout - streak is broken
+    // Streak is broken if there's a 2+ day gap since any activity
+    if (daysSinceLastActivity >= 2) {
       return { totalWorkouts, longestStreak, currentStreak: 0 };
     }
 
-    // Count consecutive days backwards from the most recent workout
-    let checkDate = new Date(mostRecentWorkout);
+    // Count workouts in consecutive days (rest days preserve streak but don't count)
+    // Start from most recent activity and work backwards
+    let checkDate = new Date(mostRecentActivity);
 
-    for (let i = 0; i < sortedDates.length; i++) {
-      const workoutDate = sortedDates[i];
-      const diffDays = Math.floor((checkDate - workoutDate) / (1000 * 60 * 60 * 24));
+    while (true) {
+      const checkDateStr = formatDate(checkDate);
 
-      if (diffDays === 0) {
-        // Workout on the check date
-        currentStreak++;
+      if (activityDateSet.has(checkDateStr)) {
+        // There's activity on this day
+        if (workoutDateSet.has(checkDateStr)) {
+          // It's a workout day - count it
+          currentStreak++;
+        }
+        // Move to previous day (rest days don't break streak)
         checkDate.setDate(checkDate.getDate() - 1);
-      } else if (diffDays > 0) {
-        // Gap found - streak broken
+      } else {
+        // No activity on this day - streak broken
         break;
       }
     }

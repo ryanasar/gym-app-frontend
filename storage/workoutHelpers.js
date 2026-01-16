@@ -235,10 +235,10 @@ export async function calculateStreakFromLocal() {
 
     if (Object.keys(calendarData).length === 0) return 0;
 
-    // Get today's date string
+    // Get today's date string in local timezone (same format as calendarStorage)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     // Sort all dates in descending order (most recent first)
     const sortedDates = Object.keys(calendarData)

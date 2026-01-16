@@ -17,7 +17,7 @@ import { Colors } from '../../constants/colors';
 import { createPost } from '../../api/postsApi';
 import { uploadImage } from '../../api/storageApi';
 import { useAuth } from '../../auth/auth';
-import { storage, calculateStreakFromLocal } from '../../../storage';
+import { storage, calculateStreakFromLocal, markTodayCompleted } from '../../../storage';
 import { preparePostImage } from '../../utils/imageUpload';
 
 const REST_ACTIVITIES = [
@@ -38,23 +38,80 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
   const [selectedActivities, setSelectedActivities] = useState([]);
   const [isPosting, setIsPosting] = useState(false);
 
-  const handleImagePick = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const handleImagePick = () => {
+    Alert.alert(
+      'Add Photo',
+      'Choose how you want to add a photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: handleTakePhoto,
+        },
+        {
+          text: 'Choose from Library',
+          onPress: handleChooseFromLibrary,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photos to upload images.');
-      return;
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Camera permission is required to take photos. Please enable it in your device settings.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
     }
+  };
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
+  const handleChooseFromLibrary = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0].uri);
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Photo library permission is required to choose photos. Please enable it in your device settings.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error choosing from library:', error);
+      Alert.alert('Error', 'Failed to select photo. Please try again.');
     }
   };
 
@@ -123,6 +180,9 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
         activities: activityLabels,
         caption: caption,
       });
+
+      // Mark today as a rest day in the calendar (doesn't increase streak)
+      await markTodayCompleted(true);
 
       // Reset form
       setCaption('');

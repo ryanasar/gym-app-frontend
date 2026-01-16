@@ -9,7 +9,8 @@ import BeginSplitCard from '../components/workout/BeginSplitCard';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
-import { getActiveWorkout, storage, calculateStreakFromLocal } from '../../storage';
+import { getActiveWorkout, storage, calculateStreakFromLocal, unmarkTodayCompleted } from '../../storage';
+import { getCalendarData } from '../../storage/calendarStorage';
 import { clearLocalSplit, debugLocalSplit } from '../utils/clearLocalSplit';
 import { updateSplit } from '../api/splitsApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -76,13 +77,14 @@ const WorkoutScreen = () => {
     );
   };
 
-  const [isCompleted, setIsCompleted] = useState(todaysWorkoutCompleted);
-  const [completedSessionId, setCompletedSessionId] = useState(cachedSessionId);
+  // Use context state directly - no local isCompleted state to avoid sync issues
+  const isCompleted = todaysWorkoutCompleted;
+  const completedSessionId = cachedSessionId;
+
   const [currentStreak, setCurrentStreak] = useState(0);
   const [isToggling, setIsToggling] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [isExercisesExpanded, setIsExercisesExpanded] = useState(false);
-  const [hasCheckedStatus, setHasCheckedStatus] = useState(false);
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showChangeDayModal, setShowChangeDayModal] = useState(false);
@@ -137,49 +139,13 @@ const WorkoutScreen = () => {
     };
   }, [todaysWorkout]);
 
-  // Sync with context state on mount and when context updates
-  useEffect(() => {
-    setIsCompleted(todaysWorkoutCompleted);
-    setCompletedSessionId(cachedSessionId);
-  }, [todaysWorkoutCompleted, cachedSessionId]);
-
-  // Check status only once on initial mount or when workout changes
-  useEffect(() => {
-    const checkStatus = async () => {
-      if (todaysWorkout && activeSplit && !hasCheckedStatus) {
-        try {
-          // Check if today's workout is completed in local storage
-          const splitId = activeSplit.id;
-          const dayIndex = (todaysWorkout.dayNumber || 1) - 1;
-          const completedWorkout = await storage.getTodaysCompletedWorkout(splitId, dayIndex);
-
-          if (completedWorkout) {
-            setIsCompleted(true);
-            setCompletedSessionId(completedWorkout.id);
-            markWorkoutCompleted(completedWorkout.id);
-          }
-        } catch (error) {
-          console.error('[Workout Tab] Error checking workout status from local storage:', error);
-        }
-        setHasCheckedStatus(true);
-      }
-    };
-    checkStatus();
-  }, [todaysWorkout?.dayName, todaysWorkout?.dayNumber, activeSplit?.id]);
-
   // Handle returning from completed workout session
   useEffect(() => {
     if (params.completed === 'true') {
-      setIsCompleted(true);
       // Show celebration animation when returning from completed workout
       setShowCelebration(true);
-
-      // Update completed session ID if provided
-      if (params.sessionId) {
-        setCompletedSessionId(params.sessionId);
-      }
     }
-  }, [params.completed, params.sessionId]);
+  }, [params.completed]);
 
   // Check for active workout and auto-resume
   useEffect(() => {
@@ -213,9 +179,49 @@ const WorkoutScreen = () => {
   // Check if it's a rest day
   const isRestDay = todaysWorkout?.isRest || (todaysWorkout?.exercises && todaysWorkout.exercises.length === 0 && todaysWorkout?.dayName === 'Rest Day');
 
+  // Automatically mark rest days as completed (doesn't increase streak)
+  useEffect(() => {
+    const autoMarkRestDay = async () => {
+      if (isRestDay && todaysWorkout) {
+        try {
+          // Check if today is already marked as a rest day
+          const calendarData = await getCalendarData();
+          const now = new Date();
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const todayEntry = calendarData[todayStr];
+
+          // Only mark if not already marked as a rest day
+          if (!todayEntry?.isRestDay) {
+            // Mark today as a rest day via context (handles calendar + Progress refresh)
+            // isRestDay=true means it won't count toward streak
+            await markWorkoutCompleted('rest-day-auto', true);
+            console.log('[Workout Tab] Auto-marked rest day as completed');
+          }
+        } catch (error) {
+          console.error('[Workout Tab] Error auto-marking rest day:', error);
+        }
+      }
+    };
+
+    autoMarkRestDay();
+  }, [isRestDay, todaysWorkout]);
+
   // Handle split that exists but hasn't been started
   const handleDaySelected = async (dayIndex) => {
     try {
+      // Clear any existing completion for today when changing days
+      await unmarkTodayCompleted();
+
+      // Clear all completion state in storage and context
+      await AsyncStorage.multiRemove([
+        'completedSessionId',
+        'lastCompletionDate',
+        'lastCheckDate'
+      ]);
+
+      // Clear completion in context - this updates todaysWorkoutCompleted to false
+      await markWorkoutCompleted(null);
+
       // Update the split to mark it as started in backend
       if (activeSplit?.id) {
         await updateSplit(activeSplit.id, { started: true });
@@ -233,6 +239,7 @@ const WorkoutScreen = () => {
       setShowChangeDayModal(false);
 
       // Refresh to show the selected workout
+      // This will trigger auto-mark for rest days via the useEffect
       await refreshTodaysWorkout();
     } catch (error) {
       console.error('Error starting split:', error);
@@ -493,10 +500,8 @@ const WorkoutScreen = () => {
                   await storage.removeFromCompletedHistory(completedSessionId);
                 }
 
-                // Update local and context state
-                setIsCompleted(false);
-                setCompletedSessionId(null);
-                markWorkoutCompleted(null);
+                // Update context state (this updates todaysWorkoutCompleted)
+                await markWorkoutCompleted(null);
 
                 // Recalculate streak
                 try {
@@ -547,10 +552,8 @@ const WorkoutScreen = () => {
           // Complete the workout immediately
           await localCompleteWorkout(workout.id);
 
-          // Update local and context state
-          setCompletedSessionId(workout.id);
-          setIsCompleted(true);
-          markWorkoutCompleted(workout.id, isRestDay);
+          // Update context state (this updates todaysWorkoutCompleted)
+          await markWorkoutCompleted(workout.id, isRestDay);
 
           // Calculate and store current streak from local storage
           try {
@@ -566,7 +569,6 @@ const WorkoutScreen = () => {
           // Update pending count for sync
           await updatePendingCount();
         } else {
-          setIsCompleted(true);
           setShowCelebration(true);
         }
       } catch (error) {

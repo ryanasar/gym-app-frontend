@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
@@ -21,6 +21,19 @@ const WorkoutSessionScreen = () => {
   const [exercises, setExercises] = useState([]);
   const [workoutSessionId, setWorkoutSessionId] = useState(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [exerciseDatabase, setExerciseDatabase] = useState([]);
+
+  // Add Exercise Modal state
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [addExerciseSearch, setAddExerciseSearch] = useState('');
+  const [selectedNewExercise, setSelectedNewExercise] = useState(null);
+  const [newExerciseSets, setNewExerciseSets] = useState('3');
+  const [newExerciseReps, setNewExerciseReps] = useState('10');
+  const [newExerciseWeight, setNewExerciseWeight] = useState('');
+
+  // Swap Exercise Modal state
+  const [showSwapExerciseModal, setShowSwapExerciseModal] = useState(false);
+  const [swapExerciseSearch, setSwapExerciseSearch] = useState('');
 
   // Animation refs
   const slideXAnim = useRef(new Animated.Value(0)).current; // Horizontal for sets
@@ -30,6 +43,19 @@ const WorkoutSessionScreen = () => {
   // Input refs
   const weightInputRef = useRef(null);
   const repsInputRef = useRef(null);
+
+  // Load exercise database on mount
+  useEffect(() => {
+    const loadExerciseDatabase = async () => {
+      try {
+        const exercises = await storage.getExercises();
+        setExerciseDatabase(exercises || []);
+      } catch (error) {
+        console.error('[Session] Error loading exercise database:', error);
+      }
+    };
+    loadExerciseDatabase();
+  }, []);
 
   // Check for existing workout session and restore if exists
   useEffect(() => {
@@ -242,6 +268,224 @@ const WorkoutSessionScreen = () => {
       console.error('[Session] Error adding set to storage:', error);
     }
   };
+
+  const handleDeleteSet = async () => {
+    setShowOptionsMenu(false);
+
+    // Can't delete if only one set remains
+    if (currentExercise.totalSets <= 1) {
+      Alert.alert('Cannot Delete', 'Each exercise must have at least one set.');
+      return;
+    }
+
+    // Remove the current set from UI
+    setExercises(prev => {
+      const updated = [...prev];
+      const exercise = updated[currentExerciseIndex];
+
+      // Remove the set at current index
+      exercise.sessionSets.splice(currentSetIndex, 1);
+      exercise.totalSets -= 1;
+
+      // Renumber remaining sets
+      exercise.sessionSets.forEach((set, idx) => {
+        set.setNumber = idx + 1;
+      });
+
+      // Recalculate completed sets
+      exercise.completedSets = exercise.sessionSets.filter(s => s.completed).length;
+
+      return updated;
+    });
+
+    // Update storage
+    try {
+      const activeWorkout = await storage.getActiveWorkout();
+      if (activeWorkout && activeWorkout.id === workoutSessionId) {
+        const exercise = activeWorkout.exercises[currentExerciseIndex];
+
+        // Remove the set at current index
+        exercise.sets.splice(currentSetIndex, 1);
+
+        // Renumber remaining sets
+        exercise.sets.forEach((set, idx) => {
+          set.setIndex = idx;
+        });
+
+        await storage.saveActiveWorkout(activeWorkout);
+      }
+    } catch (error) {
+      console.error('[Session] Error deleting set from storage:', error);
+    }
+
+    // Adjust current set index if needed
+    if (currentSetIndex >= currentExercise.totalSets - 1) {
+      setCurrentSetIndex(Math.max(0, currentSetIndex - 1));
+    }
+  };
+
+  const handleDeleteExercise = async () => {
+    setShowOptionsMenu(false);
+
+    // Can't delete if only one exercise remains
+    if (exercises.length <= 1) {
+      Alert.alert('Cannot Delete', 'Your workout must have at least one exercise.');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Exercise',
+      `Are you sure you want to remove "${currentExercise.name}" from this workout?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            // Remove from UI
+            setExercises(prev => {
+              const updated = [...prev];
+              updated.splice(currentExerciseIndex, 1);
+              return updated;
+            });
+
+            // Update storage
+            try {
+              const activeWorkout = await storage.getActiveWorkout();
+              if (activeWorkout && activeWorkout.id === workoutSessionId) {
+                activeWorkout.exercises.splice(currentExerciseIndex, 1);
+                await storage.saveActiveWorkout(activeWorkout);
+              }
+            } catch (error) {
+              console.error('[Session] Error deleting exercise from storage:', error);
+            }
+
+            // Adjust current exercise index if needed
+            if (currentExerciseIndex >= exercises.length - 1) {
+              setCurrentExerciseIndex(Math.max(0, currentExerciseIndex - 1));
+            }
+            setCurrentSetIndex(0);
+          }
+        }
+      ]
+    );
+  };
+
+  const openAddExerciseModal = () => {
+    setShowOptionsMenu(false);
+    setAddExerciseSearch('');
+    setSelectedNewExercise(null);
+    setNewExerciseSets('3');
+    setNewExerciseReps('10');
+    setNewExerciseWeight('');
+    setShowAddExerciseModal(true);
+  };
+
+  const handleAddExercise = async () => {
+    if (!selectedNewExercise) {
+      Alert.alert('Select Exercise', 'Please select an exercise to add.');
+      return;
+    }
+
+    const sets = parseInt(newExerciseSets) || 3;
+    const reps = parseInt(newExerciseReps) || 10;
+    const weight = newExerciseWeight ? parseFloat(newExerciseWeight) : 0;
+
+    // Create new exercise for UI
+    const newExercise = {
+      name: selectedNewExercise.name,
+      id: selectedNewExercise.id,
+      completedSets: 0,
+      totalSets: sets,
+      sessionSets: Array.from({ length: sets }, (_, idx) => ({
+        setNumber: idx + 1,
+        weight: weight.toString(),
+        reps: reps.toString(),
+        completed: false
+      }))
+    };
+
+    // Add to UI after current exercise
+    setExercises(prev => {
+      const updated = [...prev];
+      updated.splice(currentExerciseIndex + 1, 0, newExercise);
+      return updated;
+    });
+
+    // Update storage
+    try {
+      const activeWorkout = await storage.getActiveWorkout();
+      if (activeWorkout && activeWorkout.id === workoutSessionId) {
+        const storageExercise = {
+          exerciseId: selectedNewExercise.id,
+          sets: Array.from({ length: sets }, (_, idx) => ({
+            setIndex: idx,
+            reps: reps,
+            weight: weight,
+            completed: false
+          }))
+        };
+
+        activeWorkout.exercises.splice(currentExerciseIndex + 1, 0, storageExercise);
+        await storage.saveActiveWorkout(activeWorkout);
+      }
+    } catch (error) {
+      console.error('[Session] Error adding exercise to storage:', error);
+    }
+
+    setShowAddExerciseModal(false);
+  };
+
+  const openSwapExerciseModal = () => {
+    setShowOptionsMenu(false);
+    setSwapExerciseSearch('');
+    setShowSwapExerciseModal(true);
+  };
+
+  const handleSwapExercise = async (newExercise) => {
+    // Close modal first to prevent any race conditions
+    setShowSwapExerciseModal(false);
+
+    // Swap exercise in UI - explicitly preserve all set data
+    setExercises(prev => {
+      const updated = [...prev];
+      const currentEx = updated[currentExerciseIndex];
+
+      // Deep clone the sessionSets to preserve completed state
+      const preservedSets = currentEx.sessionSets.map(set => ({ ...set }));
+
+      updated[currentExerciseIndex] = {
+        name: newExercise.name,
+        id: newExercise.id,
+        completedSets: currentEx.completedSets,
+        totalSets: currentEx.totalSets,
+        sessionSets: preservedSets
+      };
+      return updated;
+    });
+
+    // Update storage - only change the exerciseId, preserve all sets
+    try {
+      const activeWorkout = await storage.getActiveWorkout();
+      if (activeWorkout && activeWorkout.id === workoutSessionId) {
+        activeWorkout.exercises[currentExerciseIndex].exerciseId = newExercise.id;
+        await storage.saveActiveWorkout(activeWorkout);
+      }
+    } catch (error) {
+      console.error('[Session] Error swapping exercise in storage:', error);
+    }
+  };
+
+  // Filter exercises for search
+  const filteredExercisesForAdd = exerciseDatabase.filter(ex =>
+    ex.name.toLowerCase().includes(addExerciseSearch.toLowerCase()) &&
+    !exercises.some(e => e.id === ex.id)
+  );
+
+  const filteredExercisesForSwap = exerciseDatabase.filter(ex =>
+    ex.name.toLowerCase().includes(swapExerciseSearch.toLowerCase()) &&
+    ex.id !== currentExercise?.id
+  );
 
   const completeCurrentSet = async () => {
     // Mark set as complete
@@ -599,7 +843,7 @@ const WorkoutSessionScreen = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{workoutData.dayName}</Text>
         <TouchableOpacity onPress={handleWorkoutComplete} style={styles.headerRight}>
-          <Text style={styles.completeButton}>Complete</Text>
+          <Text style={styles.completeButton}>Finish</Text>
         </TouchableOpacity>
       </View>
 
@@ -824,9 +1068,225 @@ const WorkoutSessionScreen = () => {
                 <Ionicons name="add-circle-outline" size={24} color={Colors.light.primary} />
                 <Text style={styles.modalOptionText}>Add Set</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={handleDeleteSet}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="remove-circle-outline" size={24} color="#EF4444" />
+                <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete Current Set</Text>
+              </TouchableOpacity>
+
+              <View style={styles.modalDivider} />
+
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={openAddExerciseModal}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="fitness-outline" size={24} color={Colors.light.primary} />
+                <Text style={styles.modalOptionText}>Add Exercise</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={openSwapExerciseModal}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="swap-horizontal-outline" size={24} color={Colors.light.primary} />
+                <Text style={styles.modalOptionText}>Swap Exercise</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={handleDeleteExercise}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete Exercise</Text>
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Add Exercise Modal */}
+      <Modal
+        visible={showAddExerciseModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAddExerciseModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.fullScreenModal}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.fullScreenModalHeader}>
+            <TouchableOpacity onPress={() => setShowAddExerciseModal(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.fullScreenModalTitle}>Add Exercise</Text>
+            <TouchableOpacity onPress={handleAddExercise}>
+              <Text style={[styles.modalSaveText, !selectedNewExercise && styles.modalSaveTextDisabled]}>
+                Add
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={Colors.light.secondaryText} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search exercises..."
+              placeholderTextColor={Colors.light.secondaryText}
+              value={addExerciseSearch}
+              onChangeText={setAddExerciseSearch}
+              autoCapitalize="none"
+            />
+            {addExerciseSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setAddExerciseSearch('')}>
+                <Ionicons name="close-circle" size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {selectedNewExercise && (
+            <View style={styles.selectedExerciseConfig}>
+              <View style={styles.selectedExerciseBadge}>
+                <Text style={styles.selectedExerciseName}>{selectedNewExercise.name}</Text>
+                <TouchableOpacity onPress={() => setSelectedNewExercise(null)}>
+                  <Ionicons name="close-circle" size={20} color={Colors.light.secondaryText} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.exerciseConfigRow}>
+                <View style={styles.configInputGroup}>
+                  <Text style={styles.configLabel}>Sets</Text>
+                  <TextInput
+                    style={styles.configInput}
+                    value={newExerciseSets}
+                    onChangeText={setNewExerciseSets}
+                    keyboardType="numeric"
+                    placeholder="3"
+                    placeholderTextColor={Colors.light.secondaryText}
+                  />
+                </View>
+                <View style={styles.configInputGroup}>
+                  <Text style={styles.configLabel}>Reps</Text>
+                  <TextInput
+                    style={styles.configInput}
+                    value={newExerciseReps}
+                    onChangeText={setNewExerciseReps}
+                    keyboardType="numeric"
+                    placeholder="10"
+                    placeholderTextColor={Colors.light.secondaryText}
+                  />
+                </View>
+                <View style={styles.configInputGroup}>
+                  <Text style={styles.configLabel}>Weight (opt)</Text>
+                  <TextInput
+                    style={styles.configInput}
+                    value={newExerciseWeight}
+                    onChangeText={setNewExerciseWeight}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={Colors.light.secondaryText}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+
+          <ScrollView style={styles.exerciseList}>
+            {filteredExercisesForAdd.map(exercise => (
+              <TouchableOpacity
+                key={exercise.id}
+                style={[
+                  styles.exerciseListItem,
+                  selectedNewExercise?.id === exercise.id && styles.exerciseListItemSelected
+                ]}
+                onPress={() => setSelectedNewExercise(exercise)}
+              >
+                <Text style={styles.exerciseListItemName}>{exercise.name}</Text>
+                {exercise.primaryMuscles && (
+                  <Text style={styles.exerciseListItemMuscles}>
+                    {exercise.primaryMuscles.join(', ')}
+                  </Text>
+                )}
+                {selectedNewExercise?.id === exercise.id && (
+                  <Ionicons name="checkmark-circle" size={24} color={Colors.light.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+            {filteredExercisesForAdd.length === 0 && (
+              <Text style={styles.noExercisesText}>No exercises found</Text>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Swap Exercise Modal */}
+      <Modal
+        visible={showSwapExerciseModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSwapExerciseModal(false)}
+      >
+        <View style={styles.fullScreenModal}>
+          <View style={styles.fullScreenModalHeader}>
+            <TouchableOpacity onPress={() => setShowSwapExerciseModal(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.fullScreenModalTitle}>Swap Exercise</Text>
+            <View style={{ width: 50 }} />
+          </View>
+
+          <View style={styles.swapCurrentExercise}>
+            <Text style={styles.swapCurrentLabel}>Current:</Text>
+            <Text style={styles.swapCurrentName}>{currentExercise?.name}</Text>
+          </View>
+
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={Colors.light.secondaryText} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search exercises..."
+              placeholderTextColor={Colors.light.secondaryText}
+              value={swapExerciseSearch}
+              onChangeText={setSwapExerciseSearch}
+              autoCapitalize="none"
+            />
+            {swapExerciseSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setSwapExerciseSearch('')}>
+                <Ionicons name="close-circle" size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ScrollView style={styles.exerciseList}>
+            {filteredExercisesForSwap.map(exercise => (
+              <TouchableOpacity
+                key={exercise.id}
+                style={styles.exerciseListItem}
+                onPress={() => handleSwapExercise(exercise)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exerciseListItemName}>{exercise.name}</Text>
+                  {exercise.primaryMuscles && (
+                    <Text style={styles.exerciseListItemMuscles}>
+                      {exercise.primaryMuscles.join(', ')}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons name="swap-horizontal" size={20} color={Colors.light.primary} />
+              </TouchableOpacity>
+            ))}
+            {filteredExercisesForSwap.length === 0 && (
+              <Text style={styles.noExercisesText}>No exercises found</Text>
+            )}
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
@@ -860,7 +1320,7 @@ const styles = StyleSheet.create({
   },
   exitButton: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
+    color: Colors.light.error,
     fontWeight: '500',
   },
   headerTitle: {
@@ -872,12 +1332,8 @@ const styles = StyleSheet.create({
   },
   completeButton: {
     fontSize: 15,
-    color: Colors.light.onPrimary,
+    color: '#4CAF50',
     fontWeight: '600',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
     overflow: 'hidden',
   },
 
@@ -967,16 +1423,11 @@ const styles = StyleSheet.create({
     top: -20,
     zIndex: 10,
     padding: 6,
-    backgroundColor: Colors.light.borderLight + '80',
     borderRadius: 8,
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
     elevation: 3,
   },
   exerciseTitleContainer: {
@@ -987,6 +1438,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.light.text,
     textAlign: 'center',
+    marginTop: 10,
     marginBottom: 12,
     letterSpacing: -0.5,
   },
@@ -1195,16 +1647,11 @@ const styles = StyleSheet.create({
     right: -20,
     top: -20,
     padding: 8,
-    backgroundColor: Colors.light.borderLight + '80',
     borderRadius: 8,
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
     elevation: 3,
   },
   modalOverlay: {
@@ -1236,5 +1683,177 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: Colors.light.borderLight,
+    marginVertical: 8,
+    marginHorizontal: 8,
+  },
+
+  // Full Screen Modal (Add/Swap Exercise)
+  fullScreenModal: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  fullScreenModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    backgroundColor: Colors.light.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.borderLight,
+  },
+  fullScreenModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
+  },
+  modalSaveText: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    fontWeight: '600',
+  },
+  modalSaveTextDisabled: {
+    opacity: 0.4,
+  },
+
+  // Search
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.light.text,
+  },
+
+  // Selected Exercise Config
+  selectedExerciseConfig: {
+    backgroundColor: Colors.light.cardBackground,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.light.primary + '40',
+  },
+  selectedExerciseBadge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  selectedExerciseName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+    flex: 1,
+  },
+  exerciseConfigRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  configInputGroup: {
+    flex: 1,
+  },
+  configLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  configInput: {
+    backgroundColor: Colors.light.background,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    textAlign: 'center',
+  },
+
+  // Exercise List
+  exerciseList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  exerciseListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+  },
+  exerciseListItemSelected: {
+    borderColor: Colors.light.primary,
+    borderWidth: 2,
+    backgroundColor: Colors.light.primary + '08',
+  },
+  exerciseListItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    flex: 1,
+  },
+  exerciseListItemMuscles: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    marginTop: 2,
+  },
+  noExercisesText: {
+    textAlign: 'center',
+    color: Colors.light.secondaryText,
+    fontSize: 15,
+    marginTop: 40,
+  },
+
+  // Swap Exercise Current
+  swapCurrentExercise: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary + '10',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  swapCurrentLabel: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
+  },
+  swapCurrentName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    flex: 1,
   },
 });
