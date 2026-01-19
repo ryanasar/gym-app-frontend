@@ -17,7 +17,7 @@ import SplitReview from '../components/splitCreation/SplitReview';
 const CreateSplitScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { changeActiveSplit } = useWorkout();
+  const { activeSplit, updateActiveSplit, changeActiveSplit } = useWorkout();
   const { user } = useAuth();
   const { manualSync } = useSync();
   const [currentStep, setCurrentStep] = useState(1);
@@ -188,12 +188,14 @@ const CreateSplitScreen = () => {
             const exerciseId = ex.id?.toString() || ex.exerciseId || ex.name;
             const targetSets = parseInt(ex.sets || ex.targetSets) || 3;
             const targetReps = parseInt(ex.reps || ex.targetReps) || 10;
+            const restSeconds = parseInt(ex.restSeconds) || 0;
 
             return {
               ...ex,
               exerciseId,
               targetSets,
-              targetReps
+              targetReps,
+              restSeconds
             };
           })
         }))
@@ -203,6 +205,32 @@ const CreateSplitScreen = () => {
         // Update existing split
         const { updateSplit } = require('../api/splitsApi');
         await updateSplit(parseInt(editingSplitId), splitPayload);
+
+        // If this is the active split, update it locally so today's workout reflects changes
+        if (activeSplit && activeSplit.id === parseInt(editingSplitId)) {
+          const updatedActiveSplit = {
+            ...activeSplit,
+            name: splitData.name,
+            emoji: splitData.emoji,
+            description: splitData.description,
+            totalDays: splitData.totalDays,
+            days: splitData.workoutDays.map((day, index) => ({
+              dayIndex: index,
+              name: day.workoutName,
+              type: day.workoutType,
+              emoji: day.emoji,
+              isRest: day.isRest,
+              exercises: (day.exercises || []).map(ex => ({
+                ...ex,
+                exerciseId: ex.id?.toString() || ex.exerciseId,
+                targetSets: parseInt(ex.sets || ex.targetSets) || 3,
+                targetReps: parseInt(ex.reps || ex.targetReps) || 10,
+                restSeconds: parseInt(ex.restSeconds) || 0,
+              }))
+            }))
+          };
+          await updateActiveSplit(updatedActiveSplit);
+        }
 
         // Trigger automatic sync
         manualSync();
@@ -311,7 +339,13 @@ const CreateSplitScreen = () => {
           <Text style={styles.cancelButton}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{isEditMode ? 'Edit Split' : 'Create Split'}</Text>
-        <View style={styles.placeholder} />
+        {isEditMode ? (
+          <TouchableOpacity onPress={handleSave}>
+            <Text style={styles.saveButton}>Save</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.placeholder} />
+        )}
       </View>
 
       {/* Progress Indicator - Hide step 4 (Edit Day) as it's accessed via step 3 */}
@@ -407,6 +441,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.primary,
     fontWeight: '500',
+  },
+  saveButton: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
   title: {
     fontSize: 20,

@@ -2,6 +2,16 @@ import axios from 'axios';
 import { BACKEND_API_URL } from "@/constants";
 
 
+export const getPostById = async (postId) => {
+  try {
+    const response = await axios.get(`${BACKEND_API_URL}/posts/${postId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch post by id:', error);
+    throw error;
+  }
+};
+
 export const getPostsByUserId = async (userId) => {
   try {
     const response = await axios.get(`${BACKEND_API_URL}/posts/user/${userId}`);

@@ -15,14 +15,18 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
 import { createPost, updatePost } from '../api/postsApi';
 import { uploadImage, deleteImage } from '../api/storageApi';
 import { storage } from '../../storage';
 import { preparePostImage } from '../utils/imageUpload';
+import TagUsersModal from '../components/post/TagUsersModal';
+import { createTagNotification } from '../api/notificationsApi';
 
 const CreatePostScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, refreshPosts } = useAuth();
@@ -43,6 +47,7 @@ const CreatePostScreen = () => {
   const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
   const [uploadedImagePath, setUploadedImagePath] = useState(null);
   const [taggedUsers, setTaggedUsers] = useState([]);
+  const [showTagUsersModal, setShowTagUsersModal] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
   const handleImagePick = () => {
@@ -127,12 +132,15 @@ const CreatePostScreen = () => {
   };
 
   const handleTagUsers = () => {
-    // TODO: Implement user tagging
-    Alert.alert('Tag Users', 'User tagging will be implemented here');
+    setShowTagUsersModal(true);
+  };
+
+  const handleTagsUpdated = (users) => {
+    setTaggedUsers(users);
   };
 
   const handleRemoveTag = (userId) => {
-    setTaggedUsers(taggedUsers.filter((id) => id !== userId));
+    setTaggedUsers(taggedUsers.filter((user) => user.id !== userId));
   };
 
   const handlePost = async () => {
@@ -234,9 +242,19 @@ const CreatePostScreen = () => {
           workoutSessionId: databaseWorkoutSessionId,
           splitId: splitId ? parseInt(splitId) : null,
           streak: streak,
+          taggedUserIds: taggedUsers.map(u => u.id),
         };
 
-        await createPost(postData);
+        const createdPost = await createPost(postData);
+
+        // Send tag notifications to tagged users
+        if (createdPost?.id && taggedUsers.length > 0) {
+          await Promise.all(
+            taggedUsers.map(taggedUser =>
+              createTagNotification(taggedUser.id, user.id, createdPost.id)
+            )
+          );
+        }
 
         // Refresh posts to show the new post
         await refreshPosts();
@@ -291,22 +309,22 @@ const CreatePostScreen = () => {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
         <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={[styles.cancelText, { color: colors.secondaryText }]}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEditMode ? 'Edit Post' : 'Create Post'}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{isEditMode ? 'Edit Post' : 'Create Post'}</Text>
         <TouchableOpacity
           onPress={handlePost}
           style={[styles.headerButton, styles.postButton]}
           disabled={isPosting}
         >
-          <Text style={[styles.postText, isPosting && styles.postTextDisabled]}>
+          <Text style={[styles.postText, { color: colors.primary }, isPosting && { color: colors.placeholder }]}>
             {isPosting ? (isEditMode ? 'Saving...' : 'Posting...') : (isEditMode ? 'Save' : 'Post')}
           </Text>
         </TouchableOpacity>
@@ -320,30 +338,30 @@ const CreatePostScreen = () => {
         <View style={styles.content}>
           {/* Workout Summary Card */}
           {workoutData && (
-            <View style={styles.workoutCard}>
+            <View style={[styles.workoutCard, { backgroundColor: colors.accent + '15', borderColor: colors.accent }]}>
               <View style={styles.workoutCardHeader}>
-                <Text style={styles.workoutCardTitle}>Workout Completed</Text>
-                <View style={styles.completeBadge}>
+                <Text style={[styles.workoutCardTitle, { color: colors.accent }]}>Workout Completed</Text>
+                <View style={[styles.completeBadge, { backgroundColor: colors.accent }]}>
                   <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                 </View>
               </View>
 
-              <Text style={styles.workoutName}>{workoutData.dayName}</Text>
-              <Text style={styles.workoutDetails}>
+              <Text style={[styles.workoutName, { color: colors.text }]}>{workoutData.dayName}</Text>
+              <Text style={[styles.workoutDetails, { color: colors.secondaryText }]}>
                 Week {workoutData.weekNumber} • Day {workoutData.dayNumber}
               </Text>
 
-              <View style={styles.exercisesSummary}>
-                <Text style={styles.exercisesSummaryTitle}>
+              <View style={[styles.exercisesSummary, { backgroundColor: colors.cardBackground + '80' }]}>
+                <Text style={[styles.exercisesSummaryTitle, { color: colors.text }]}>
                   {workoutData.exercises?.length || 0} Exercises
                 </Text>
                 {workoutData.exercises?.slice(0, 3).map((exercise, index) => (
-                  <Text key={index} style={styles.exercisePreview}>
+                  <Text key={index} style={[styles.exercisePreview, { color: colors.secondaryText }]}>
                     • {exercise.name}
                   </Text>
                 ))}
                 {workoutData.exercises?.length > 3 && (
-                  <Text style={styles.exerciseMore}>
+                  <Text style={[styles.exerciseMore, { color: colors.primary }]}>
                     +{workoutData.exercises.length - 3} more
                   </Text>
                 )}
@@ -353,13 +371,13 @@ const CreatePostScreen = () => {
 
           {/* Description Input */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>
-              Description <Text style={styles.optionalText}>(optional)</Text>
+            <Text style={[styles.sectionLabel, { color: colors.text }]}>
+              Description <Text style={[styles.optionalText, { color: colors.placeholder }]}>(optional)</Text>
             </Text>
             <TextInput
-              style={styles.descriptionInput}
+              style={[styles.descriptionInput, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, color: colors.text }]}
               placeholder="How did your workout go? Share your thoughts..."
-              placeholderTextColor={Colors.light.placeholder}
+              placeholderTextColor={colors.placeholder}
               multiline
               numberOfLines={4}
               value={description}
@@ -370,7 +388,7 @@ const CreatePostScreen = () => {
 
           {/* Image Upload Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Photo</Text>
+            <Text style={[styles.sectionLabel, { color: colors.text }]}>Photo</Text>
             {selectedImage ? (
               <View style={styles.imageContainer}>
                 <Image
@@ -387,28 +405,28 @@ const CreatePostScreen = () => {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity style={styles.uploadButton} onPress={handleImagePick}>
+              <TouchableOpacity style={[styles.uploadButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]} onPress={handleImagePick}>
                 <Text style={styles.uploadIcon}>📷</Text>
-                <Text style={styles.uploadText}>Add Photo</Text>
-                <Text style={styles.uploadSubtext}>Show off your progress!</Text>
+                <Text style={[styles.uploadText, { color: colors.text }]}>Add Photo</Text>
+                <Text style={[styles.uploadSubtext, { color: colors.secondaryText }]}>Show off your progress!</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Tag Users Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Tag Workout Partners</Text>
-            <TouchableOpacity style={styles.tagButton} onPress={handleTagUsers}>
-              <Text style={styles.tagButtonText}>+ Tag Users</Text>
+            <Text style={[styles.sectionLabel, { color: colors.text }]}>Tag Workout Partners</Text>
+            <TouchableOpacity style={[styles.tagButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]} onPress={handleTagUsers}>
+              <Text style={[styles.tagButtonText, { color: colors.primary }]}>+ Tag Users</Text>
             </TouchableOpacity>
 
             {taggedUsers.length > 0 && (
               <View style={styles.taggedUsersContainer}>
-                {taggedUsers.map((user) => (
-                  <View key={user} style={styles.taggedUser}>
-                    <Text style={styles.taggedUserText}>@{user}</Text>
-                    <TouchableOpacity onPress={() => handleRemoveTag(user)}>
-                      <Text style={styles.removeTagText}>✕</Text>
+                {taggedUsers.map((taggedUser) => (
+                  <View key={taggedUser.id} style={[styles.taggedUser, { backgroundColor: colors.primary + '15' }]}>
+                    <Text style={[styles.taggedUserText, { color: colors.primary }]}>@{taggedUser.username}</Text>
+                    <TouchableOpacity onPress={() => handleRemoveTag(taggedUser.id)}>
+                      <Text style={[styles.removeTagText, { color: colors.primary }]}>✕</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -416,20 +434,17 @@ const CreatePostScreen = () => {
             )}
           </View>
 
-          {/* Additional Options */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Visibility</Text>
-            <View style={styles.visibilityOptions}>
-              <TouchableOpacity style={[styles.visibilityOption, styles.visibilityOptionActive]}>
-                <Text style={styles.visibilityOptionText}>🌍 Public</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.visibilityOption}>
-                <Text style={styles.visibilityOptionTextInactive}>👥 Friends Only</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
       </ScrollView>
+
+      {/* Tag Users Modal */}
+      <TagUsersModal
+        visible={showTagUsersModal}
+        onClose={() => setShowTagUsersModal(false)}
+        selectedUsers={taggedUsers}
+        onUsersSelected={handleTagsUpdated}
+        currentUserId={user?.id}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -669,35 +684,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.primary,
     fontWeight: '600',
-  },
-
-  // Visibility Options
-  visibilityOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  visibilityOption: {
-    flex: 1,
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  visibilityOptionActive: {
-    borderColor: Colors.light.primary,
-    borderWidth: 2,
-    backgroundColor: Colors.light.primary + '08',
-  },
-  visibilityOptionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  visibilityOptionTextInactive: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
 });

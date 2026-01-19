@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getWorkoutSessionsByUserId } from '../../api/workoutSessionsApi';
 import { Colors } from '../../constants/colors';
+import { getWorkoutSessionsByUserId } from '../../api/workoutSessionsApi';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { useWorkout } from '../../contexts/WorkoutContext';
 import { useAuth } from '../../auth/auth';
 import { getCalendarDataForDisplay, backfillCalendarFromBackend } from '../../../storage/calendarStorage';
 import WorkoutCalendar from '../progress/WorkoutCalendar';
 
 const ProgressTab = ({ userId }) => {
+  const colors = useThemeColors();
   const [loading, setLoading] = useState(true);
   const [workoutsByDay, setWorkoutsByDay] = useState([]);
   const { lastWorkoutCompleted, todaysWorkout } = useWorkout();
@@ -124,16 +126,16 @@ const ProgressTab = ({ userId }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
-        <Text style={styles.loadingText}>Loading progress data...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Loading progress data...</Text>
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >

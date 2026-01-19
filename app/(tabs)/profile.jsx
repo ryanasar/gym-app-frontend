@@ -12,9 +12,10 @@ import ProgressTab from '../components/profile/ProgressTab';
 import WorkoutPlansTab from '../components/profile/WorkoutPlansTab';
 import FollowListModal from '../components/profile/FollowListModal';
 import EditProfileModal from '../components/profile/EditProfileModal';
-import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const ProfileScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState('Progress');
   const [modalVisible, setModalVisible] = useState(false);
@@ -43,8 +44,8 @@ const ProfileScreen = () => {
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <Text>User not found.</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>User not found.</Text>
       </View>
     );
   }
@@ -107,18 +108,18 @@ const ProfileScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>Profile</Text>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
         <TouchableOpacity
           onPress={() => router.push('/notifications')}
           style={styles.notificationButton}
         >
-          <Ionicons name="notifications-outline" size={24} color={Colors.light.text} />
+          <Ionicons name="notifications-outline" size={24} color={colors.text} />
           {unreadCount > 0 && (
-            <View style={styles.notificationBadge}>
+            <View style={[styles.notificationBadge, { borderColor: colors.cardBackground }]}>
               <Text style={styles.notificationBadgeText}>
                 {unreadCount > 99 ? '99+' : unreadCount}
               </Text>
@@ -145,32 +146,32 @@ const ProfileScreen = () => {
         onEditPress={handleOpenEditModal}
       />
       {/* Tabs */}
-      <View style={styles.tabsContainer}>
+      <View style={[styles.tabsContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Progress')}
         >
-          <Text style={selectedTab === 'Progress' ? styles.activeTabText : styles.inactiveTabText}>Progress</Text>
-          {selectedTab === 'Progress' && <View style={styles.activeTabIndicator} />}
+          <Text style={selectedTab === 'Progress' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Progress</Text>
+          {selectedTab === 'Progress' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Posts')}
         >
-          <Text style={selectedTab === 'Posts' ? styles.activeTabText : styles.inactiveTabText}>Posts</Text>
-          {selectedTab === 'Posts' && <View style={styles.activeTabIndicator} />}
+          <Text style={selectedTab === 'Posts' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Posts</Text>
+          {selectedTab === 'Posts' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Splits')}
         >
-          <Text style={selectedTab === 'Splits' ? styles.activeTabText : styles.inactiveTabText}>Splits</Text>
-          {selectedTab === 'Splits' && <View style={styles.activeTabIndicator} />}
+          <Text style={selectedTab === 'Splits' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Splits</Text>
+          {selectedTab === 'Splits' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
-      <View style={styles.tabContentContainer}>
+      <View style={[styles.tabContentContainer, { backgroundColor: colors.background }]}>
         {renderAllTabs()}
       </View>
 
@@ -201,7 +202,6 @@ export default ProfileScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -210,8 +210,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -220,7 +218,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   notificationButton: {
     position: 'relative',
@@ -238,7 +235,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: Colors.light.cardBackground,
   },
   notificationBadgeText: {
     color: 'white',
@@ -247,10 +243,8 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.cardBackground,
     paddingHorizontal: 24,
     paddingTop: 12,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -265,29 +259,36 @@ const styles = StyleSheet.create({
   activeTabText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.light.primary,
   },
   inactiveTabText: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
   },
   activeTabIndicator: {
     position: 'absolute',
     bottom: 0,
     height: 3,
-    backgroundColor: Colors.light.primary,
     borderRadius: 1.5,
     width: '70%',
   },
   tabContentContainer: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    position: 'relative',
   },
   tabVisible: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   tabHidden: {
-    display: 'none',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    pointerEvents: 'none',
   },
 });

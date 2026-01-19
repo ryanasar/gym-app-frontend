@@ -1,11 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
+  const colors = useThemeColors();
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  // Generate calendar data for the last 28 days (4 weeks)
+  // Generate calendar data for 4 weeks aligned to actual weekdays
+  // Bottom row is the current week (Sunday-Saturday), today can be any day in it
   const generateCalendarData = () => {
     const days = [];
     const today = new Date();
@@ -20,10 +23,20 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
     };
 
     const todayStr = formatLocalDate(today);
+    const todayDayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
 
-    for (let i = 27; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
+    // Find the Saturday of the current week (end of week)
+    const endOfWeek = new Date(today);
+    endOfWeek.setDate(today.getDate() + (6 - todayDayOfWeek));
+
+    // Go back 4 weeks from end of current week to get start (28 days total)
+    // Start is the Sunday 3 weeks before the current week's Sunday
+    const startDate = new Date(endOfWeek);
+    startDate.setDate(endOfWeek.getDate() - 27); // 28 days total (0-27)
+
+    for (let i = 0; i < 28; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
       const dateStr = formatLocalDate(date);
 
       // Find workout data for this day (check if any workout exists)
@@ -38,6 +51,9 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                     (todaysWorkout.exercises?.length === 0 && todaysWorkout.dayName === 'Rest Day');
       }
 
+      // Check if this date is in the future
+      const isFuture = date > today;
+
       days.push({
         date: dateStr,
         hasWorkout,
@@ -46,6 +62,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
         month: date.getMonth(),
         dayOfWeek: date.getDay(),
         isToday,
+        isFuture,
       });
     }
 
@@ -178,23 +195,23 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
   const stats = calculateStats();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Workout Calendar</Text>
-        <Text style={styles.subtitle}>{getMonthLabels()} • Last 28 days</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Workout Calendar</Text>
+        <Text style={[styles.subtitle, { color: colors.secondaryText }]}>{getMonthLabels()} • Last 28 days</Text>
       </View>
 
-      <View style={styles.calendarContainer}>
-        {/* Weekday Headers */}
+      <View style={[styles.calendarContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.borderLight }]}>
+        {/* Weekday Headers - Sunday to Saturday */}
         <View style={styles.weekdayRow}>
-          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => (
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
             <View key={index} style={styles.weekdayCell}>
-              <Text style={styles.weekdayText}>{day}</Text>
+              <Text style={[styles.weekdayText, { color: colors.secondaryText }]}>{day}</Text>
             </View>
           ))}
         </View>
 
-        {/* Calendar grid - 28 days in rows of 7 (4 full weeks) */}
+        {/* Calendar grid - 4 weeks aligned to actual weekdays */}
         <View style={styles.calendarGrid}>
           {[0, 7, 14, 21].map((rowStart) => (
             <View key={rowStart} style={styles.calendarRow}>
@@ -203,19 +220,26 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                   key={day.date || `empty-${rowStart}-${index}`}
                   style={[
                     styles.day,
+                    { backgroundColor: colors.borderLight + '40', borderColor: 'transparent' },
+                    // Future days - more faded
+                    day.isFuture && { backgroundColor: colors.borderLight + '20' },
                     // Regular workout days
-                    day.hasWorkout && !day.isRestDay && styles.dayCompleted,
+                    day.hasWorkout && !day.isRestDay && { backgroundColor: colors.primary },
                     // Rest days (only if actually logged/completed)
-                    day.hasWorkout && day.isRestDay && styles.dayRestCompleted,
+                    day.hasWorkout && day.isRestDay && { backgroundColor: colors.accent + '40' },
                     // Today's border (applied last to override colors if needed)
-                    day.isToday && styles.dayToday,
+                    day.isToday && { borderWidth: 2, borderColor: colors.primary },
                   ]}
                 >
                   <Text
                     style={[
                       styles.dayNumber,
-                      day.hasWorkout && styles.dayNumberCompleted,
-                      day.isToday && styles.dayNumberToday,
+                      { color: colors.secondaryText },
+                      // Future days - more faded text
+                      day.isFuture && { color: colors.secondaryText + '50' },
+                      day.hasWorkout && { color: colors.onPrimary },
+                      day.hasWorkout && day.isRestDay && { color: colors.text },
+                      day.isToday && !day.hasWorkout && { color: colors.primary, fontWeight: '700' },
                     ]}
                   >
                     {day.day}
@@ -227,20 +251,20 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
         </View>
 
         {/* Stats Section */}
-        <View style={styles.statsContainer}>
+        <View style={[styles.statsContainer, { borderTopColor: colors.borderLight }]}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.totalWorkouts}</Text>
-            <Text style={styles.statLabel}>Total Workouts</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{stats.totalWorkouts}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Total Workouts</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.longestStreak}</Text>
-            <Text style={styles.statLabel}>Longest{'\n'}Streak</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{stats.longestStreak}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Longest{'\n'}Streak</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.currentStreak}</Text>
-            <Text style={styles.statLabel}>Current{'\n'}Streak</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{stats.currentStreak}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Current{'\n'}Streak</Text>
           </View>
         </View>
       </View>

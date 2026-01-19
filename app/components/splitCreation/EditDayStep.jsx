@@ -1,9 +1,177 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert } from 'react-native';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { exercises } from '../../data/exercises/exerciseDatabase';
 import ExerciseCard from '../exercises/ExerciseCard';
+import EmptyState from '../common/EmptyState';
+
+// Rest Timer Input Component with digit selection
+const RestTimerInput = ({ value, onChange }) => {
+  const [selectedDigit, setSelectedDigit] = useState(null); // 0=min, 1=sec1, 2=sec2
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef(null);
+
+  // Parse seconds to M:SS digits
+  const totalSeconds = parseInt(value) || 0;
+  const minutes = Math.min(Math.floor(totalSeconds / 60), 5);
+  const seconds = totalSeconds % 60;
+  const sec1 = Math.floor(seconds / 10);
+  const sec2 = seconds % 10;
+
+  const handleDigitPress = (digitIndex) => {
+    setSelectedDigit(digitIndex);
+    setInputValue('');
+    inputRef.current?.focus();
+  };
+
+  const handleKeyPress = (key) => {
+    if (selectedDigit === null) return;
+
+    const num = parseInt(key);
+    if (isNaN(num)) return;
+
+    let newMinutes = minutes;
+    let newSec1 = sec1;
+    let newSec2 = sec2;
+
+    if (selectedDigit === 0) {
+      // Minutes: 0-5
+      newMinutes = Math.min(num, 5);
+    } else if (selectedDigit === 1) {
+      // First second digit: 0-5
+      newSec1 = Math.min(num, 5);
+    } else if (selectedDigit === 2) {
+      // Second second digit: 0-9
+      newSec2 = num;
+    }
+
+    const newTotalSeconds = newMinutes * 60 + newSec1 * 10 + newSec2;
+    onChange(newTotalSeconds > 0 ? newTotalSeconds.toString() : '');
+
+    // Clear input and auto-advance to next digit
+    setInputValue('');
+    if (selectedDigit < 2) {
+      setSelectedDigit(selectedDigit + 1);
+    } else {
+      setSelectedDigit(null);
+      inputRef.current?.blur();
+    }
+  };
+
+  const handleBlur = () => {
+    setSelectedDigit(null);
+    setInputValue('');
+  };
+
+  return (
+    <View style={restTimerStyles.container}>
+      <TextInput
+        ref={inputRef}
+        style={restTimerStyles.hiddenInput}
+        keyboardType="number-pad"
+        maxLength={1}
+        onChangeText={(text) => {
+          if (text) {
+            handleKeyPress(text);
+          }
+          setInputValue('');
+        }}
+        onBlur={handleBlur}
+        value={inputValue}
+        caretHidden={true}
+      />
+      <TouchableOpacity
+        style={[
+          restTimerStyles.digit,
+          selectedDigit === 0 && restTimerStyles.digitSelected
+        ]}
+        onPress={() => handleDigitPress(0)}
+        activeOpacity={0.7}
+      >
+        <Text style={[
+          restTimerStyles.digitText,
+          selectedDigit === 0 && restTimerStyles.digitTextSelected
+        ]}>
+          {minutes}
+        </Text>
+      </TouchableOpacity>
+      <Text style={restTimerStyles.colon}>:</Text>
+      <TouchableOpacity
+        style={[
+          restTimerStyles.digit,
+          selectedDigit === 1 && restTimerStyles.digitSelected
+        ]}
+        onPress={() => handleDigitPress(1)}
+        activeOpacity={0.7}
+      >
+        <Text style={[
+          restTimerStyles.digitText,
+          selectedDigit === 1 && restTimerStyles.digitTextSelected
+        ]}>
+          {sec1}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          restTimerStyles.digit,
+          selectedDigit === 2 && restTimerStyles.digitSelected
+        ]}
+        onPress={() => handleDigitPress(2)}
+        activeOpacity={0.7}
+      >
+        <Text style={[
+          restTimerStyles.digitText,
+          selectedDigit === 2 && restTimerStyles.digitTextSelected
+        ]}>
+          {sec2}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const restTimerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.background,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    height: 36,
+  },
+  hiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    height: 0,
+    width: 0,
+  },
+  digit: {
+    paddingHorizontal: 2,
+    borderRadius: 3,
+    backgroundColor: 'transparent',
+  },
+  digitSelected: {
+    backgroundColor: Colors.light.primary,
+  },
+  digitText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.text,
+  },
+  digitTextSelected: {
+    color: Colors.light.onPrimary,
+  },
+  colon: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.text,
+  },
+});
 
 const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
@@ -68,6 +236,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
       sets: '',
       reps: '',
       weight: '',
+      restSeconds: '',
       notes: ''
     };
 
@@ -87,6 +256,10 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
     updatedExercises[exerciseIndex][field] = value;
     updateCurrentDay({ exercises: updatedExercises });
   };
+
+  const handleReorderExercises = useCallback(({ data }) => {
+    updateCurrentDay({ exercises: data });
+  }, [currentDay, updateCurrentDay]);
 
   const getFilteredExercises = () => {
     let filtered = [...exercises];
@@ -109,162 +282,254 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
     return filtered;
   };
 
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Day {editingDayIndex + 1}</Text>
-          <Text style={styles.subtitle}>Configure this workout day</Text>
+  const renderHeader = () => (
+    <>
+      <View style={styles.header}>
+        <Text style={styles.title}>Day {editingDayIndex + 1}</Text>
+        <Text style={styles.subtitle}>Configure this workout day</Text>
+      </View>
+
+      {/* Rest Day Toggle */}
+      <View style={styles.toggleSection}>
+        <TouchableOpacity
+          style={[styles.toggleOption, !currentDay.isRest && styles.toggleOptionActive]}
+          onPress={() => currentDay.isRest && toggleRestDay()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.toggleIcon}>💪</Text>
+          <Text style={[styles.toggleText, !currentDay.isRest && styles.toggleTextActive]}>
+            Workout
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.toggleOption, currentDay.isRest && styles.toggleOptionActive]}
+          onPress={() => !currentDay.isRest && toggleRestDay()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.toggleIcon}>😴</Text>
+          <Text style={[styles.toggleText, currentDay.isRest && styles.toggleTextActive]}>
+            Rest
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Workout Name */}
+      <View style={styles.inputSection}>
+        <Text style={styles.inputLabel}>Workout Name <Text style={styles.required}>*</Text></Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g., Push Day, Leg Day"
+          placeholderTextColor={Colors.light.secondaryText}
+          value={currentDay.workoutName}
+          onChangeText={(value) => updateCurrentDay({ workoutName: value })}
+          maxLength={50}
+        />
+      </View>
+
+      {/* Exercises Header */}
+      <View style={styles.exercisesSection}>
+        <View style={styles.exercisesHeader}>
+          <Text style={styles.sectionLabel}>Exercises</Text>
+          <View style={styles.exerciseCounter}>
+            <Text style={[
+              styles.exerciseCounterText,
+              (currentDay.exercises?.length >= 20) && styles.exerciseCounterTextLimit
+            ]}>
+              {currentDay.exercises?.length || 0}/20
+            </Text>
+          </View>
         </View>
 
-        {/* Rest Day Toggle */}
-        <View style={styles.toggleSection}>
-          <TouchableOpacity
-            style={[styles.toggleOption, !currentDay.isRest && styles.toggleOptionActive]}
-            onPress={() => currentDay.isRest && toggleRestDay()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.toggleIcon}>💪</Text>
-            <Text style={[styles.toggleText, !currentDay.isRest && styles.toggleTextActive]}>
-              Workout
-            </Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.addExerciseButton,
+            (currentDay.exercises?.length >= 20) && styles.addExerciseButtonDisabled
+          ]}
+          onPress={() => setExercisePickerVisible(true)}
+          disabled={currentDay.exercises?.length >= 20}
+        >
+          <Ionicons name="add-circle" size={20} color={currentDay.exercises?.length >= 20 ? Colors.light.secondaryText : Colors.light.onPrimary} />
+          <Text style={[
+            styles.addExerciseText,
+            (currentDay.exercises?.length >= 20) && styles.addExerciseTextDisabled
+          ]}>
+            Add Exercise
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 
-          <TouchableOpacity
-            style={[styles.toggleOption, currentDay.isRest && styles.toggleOptionActive]}
-            onPress={() => !currentDay.isRest && toggleRestDay()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.toggleIcon}>😴</Text>
-            <Text style={[styles.toggleText, currentDay.isRest && styles.toggleTextActive]}>
-              Rest
-            </Text>
-          </TouchableOpacity>
-        </View>
+  const renderFooter = () => (
+    <Text style={styles.dragHint}>Hold and drag to reorder exercises</Text>
+  );
 
-        {!currentDay.isRest ? (
-          <>
-            {/* Workout Name */}
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Workout Name <Text style={styles.required}>*</Text></Text>
+  const renderEmptyList = () => (
+    <EmptyState
+      emoji="💪"
+      title="No exercises added"
+      message="Add exercises to build your workout"
+    />
+  );
+
+  const renderExerciseItem = useCallback(({ item: exercise, drag, isActive, getIndex }) => {
+    const index = getIndex();
+    return (
+      <ScaleDecorator>
+        <TouchableOpacity
+          activeOpacity={1}
+          onLongPress={drag}
+          disabled={isActive}
+          style={[
+            styles.exerciseCard,
+            isActive && styles.exerciseCardDragging
+          ]}
+        >
+          <View style={styles.exerciseCardHeader}>
+            <TouchableOpacity
+              onPressIn={drag}
+              disabled={isActive}
+              style={styles.dragHandle}
+            >
+              <View style={styles.dragDots}>
+                {[0, 1].map((row) => (
+                  <View key={row} style={styles.dragDotsRow}>
+                    <View style={styles.dragDot} />
+                    <View style={styles.dragDot} />
+                    <View style={styles.dragDot} />
+                    <View style={styles.dragDot} />
+                  </View>
+                ))}
+              </View>
+            </TouchableOpacity>
+            <View style={styles.exerciseNumber}>
+              <Text style={styles.exerciseNumberText}>{index + 1}</Text>
+            </View>
+            <Text style={styles.exerciseName}>{exercise.name}</Text>
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={() => removeExerciseFromWorkout(index)}
+            >
+              <Ionicons name="close-circle" size={24} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.exerciseDivider} />
+
+          <View style={styles.exerciseInputs}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Sets</Text>
               <TextInput
-                style={styles.input}
-                placeholder="e.g., Push Day, Leg Day"
+                style={styles.smallInput}
+                placeholder="3"
+                value={exercise.sets}
+                onChangeText={(value) => updateExercise(index, 'sets', value)}
+                keyboardType="numeric"
                 placeholderTextColor={Colors.light.secondaryText}
-                value={currentDay.workoutName}
-                onChangeText={(value) => updateCurrentDay({ workoutName: value })}
-                maxLength={50}
               />
             </View>
 
-            {/* Exercises Section */}
-            <View style={styles.exercisesSection}>
-              <View style={styles.exercisesHeader}>
-                <Text style={styles.sectionLabel}>Exercises</Text>
-                <View style={styles.exerciseCounter}>
-                  <Text style={[
-                    styles.exerciseCounterText,
-                    (currentDay.exercises?.length >= 20) && styles.exerciseCounterTextLimit
-                  ]}>
-                    {currentDay.exercises?.length || 0}/20
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.addExerciseButton,
-                  (currentDay.exercises?.length >= 20) && styles.addExerciseButtonDisabled
-                ]}
-                onPress={() => setExercisePickerVisible(true)}
-                disabled={currentDay.exercises?.length >= 20}
-              >
-                <Ionicons name="add-circle" size={20} color={currentDay.exercises?.length >= 20 ? Colors.light.secondaryText : Colors.light.onPrimary} />
-                <Text style={[
-                  styles.addExerciseText,
-                  (currentDay.exercises?.length >= 20) && styles.addExerciseTextDisabled
-                ]}>
-                  Add Exercise
-                </Text>
-              </TouchableOpacity>
-
-              {/* Exercise List */}
-              {currentDay.exercises && currentDay.exercises.length > 0 ? (
-                <View style={styles.exercisesList}>
-                  {currentDay.exercises.map((exercise, index) => (
-                    <View key={index} style={styles.exerciseCard}>
-                      <View style={styles.exerciseCardHeader}>
-                        <View style={styles.exerciseNumber}>
-                          <Text style={styles.exerciseNumberText}>{index + 1}</Text>
-                        </View>
-                        <Text style={styles.exerciseName}>{exercise.name}</Text>
-                        <TouchableOpacity
-                          style={styles.removeButton}
-                          onPress={() => removeExerciseFromWorkout(index)}
-                        >
-                          <Ionicons name="close-circle" size={24} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
-
-                      <View style={styles.exerciseDivider} />
-
-                      <View style={styles.exerciseInputs}>
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputGroupLabel}>Sets</Text>
-                          <TextInput
-                            style={styles.smallInput}
-                            placeholder="3"
-                            value={exercise.sets}
-                            onChangeText={(value) => updateExercise(index, 'sets', value)}
-                            keyboardType="numeric"
-                            placeholderTextColor={Colors.light.secondaryText}
-                          />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputGroupLabel}>Reps</Text>
-                          <TextInput
-                            style={styles.smallInput}
-                            placeholder="8-10"
-                            value={exercise.reps}
-                            onChangeText={(value) => updateExercise(index, 'reps', value)}
-                            placeholderTextColor={Colors.light.secondaryText}
-                          />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputGroupLabel}>Weight</Text>
-                          <TextInput
-                            style={styles.smallInput}
-                            placeholder="135 lbs"
-                            value={exercise.weight}
-                            onChangeText={(value) => updateExercise(index, 'weight', value)}
-                            placeholderTextColor={Colors.light.secondaryText}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No exercises added yet</Text>
-                </View>
-              )}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Reps</Text>
+              <TextInput
+                style={styles.smallInput}
+                placeholder="8-10"
+                value={exercise.reps}
+                onChangeText={(value) => updateExercise(index, 'reps', value)}
+                placeholderTextColor={Colors.light.secondaryText}
+              />
             </View>
-          </>
-        ) : (
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Weight</Text>
+              <TextInput
+                style={styles.smallInput}
+                placeholder="135 lbs"
+                value={exercise.weight}
+                onChangeText={(value) => updateExercise(index, 'weight', value)}
+                placeholderTextColor={Colors.light.secondaryText}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Rest</Text>
+              <RestTimerInput
+                value={exercise.restSeconds || ''}
+                onChange={(value) => updateExercise(index, 'restSeconds', value)}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </ScaleDecorator>
+    );
+  }, [currentDay.exercises, removeExerciseFromWorkout, updateExercise]);
+
+  // Rest day view uses ScrollView
+  if (currentDay.isRest) {
+    return (
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>Day {editingDayIndex + 1}</Text>
+            <Text style={styles.subtitle}>Configure this workout day</Text>
+          </View>
+
+          {/* Rest Day Toggle */}
+          <View style={styles.toggleSection}>
+            <TouchableOpacity
+              style={[styles.toggleOption, !currentDay.isRest && styles.toggleOptionActive]}
+              onPress={() => currentDay.isRest && toggleRestDay()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.toggleIcon}>💪</Text>
+              <Text style={[styles.toggleText, !currentDay.isRest && styles.toggleTextActive]}>
+                Workout
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.toggleOption, currentDay.isRest && styles.toggleOptionActive]}
+              onPress={() => !currentDay.isRest && toggleRestDay()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.toggleIcon}>😴</Text>
+              <Text style={[styles.toggleText, currentDay.isRest && styles.toggleTextActive]}>
+                Rest
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.restDayContainer}>
             <Text style={styles.restDayEmoji}>😴</Text>
             <Text style={styles.restDayTitle}>Rest Day</Text>
             <Text style={styles.restDayText}>Take time to recover and let your muscles grow</Text>
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+
+      </View>
+    );
+  }
+
+  // Workout day view uses DraggableFlatList as main scroll container
+  return (
+    <View style={styles.container}>
+      <DraggableFlatList
+        data={currentDay.exercises || []}
+        extraData={currentDay.exercises}
+        keyExtractor={(item, index) => `exercise-${item.id || item.name}-${index}`}
+        onDragEnd={handleReorderExercises}
+        renderItem={renderExerciseItem}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={currentDay.exercises?.length > 0 ? renderFooter : null}
+        ListEmptyComponent={renderEmptyList}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      />
 
       {/* Exercise Picker Modal */}
       <Modal
@@ -484,7 +749,14 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
   },
   exercisesList: {
-    gap: 12,
+    gap: 0,
+  },
+  dragHint: {
+    fontSize: 12,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   exerciseCard: {
     backgroundColor: Colors.light.cardBackground,
@@ -492,12 +764,40 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.light.borderLight,
+    marginBottom: 12,
+  },
+  exerciseCardDragging: {
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+    borderColor: Colors.light.primary,
   },
   exerciseCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
     marginBottom: 12,
+  },
+  dragHandle: {
+    padding: 4,
+    marginRight: 4,
+  },
+  dragDots: {
+    flexDirection: 'column',
+    gap: 3,
+  },
+  dragDotsRow: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  dragDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.light.secondaryText,
   },
   exerciseNumber: {
     width: 24,

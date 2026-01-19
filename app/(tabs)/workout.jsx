@@ -2,10 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { ActivityIndicator, Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View, RefreshControl, Modal } from 'react-native';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import CelebrationAnimation from '../components/animations/CelebrationAnimation';
 import RestDayCard from '../components/workout/RestDayCard';
 import BeginSplitCard from '../components/workout/BeginSplitCard';
+import EmptyState from '../components/common/EmptyState';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
@@ -14,11 +17,13 @@ import { getCalendarData } from '../../storage/calendarStorage';
 import { clearLocalSplit, debugLocalSplit } from '../utils/clearLocalSplit';
 import { updateSplit } from '../api/splitsApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 const WorkoutScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const {
@@ -88,6 +93,8 @@ const WorkoutScreen = () => {
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showChangeDayModal, setShowChangeDayModal] = useState(false);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [localExercises, setLocalExercises] = useState([]);
 
   // Calculate if card would exceed screen height
   const { shouldCollapse, maxVisibleExercises } = useMemo(() => {
@@ -247,15 +254,56 @@ const WorkoutScreen = () => {
     }
   };
 
+  // Sync local exercises with todaysWorkout
+  useEffect(() => {
+    if (todaysWorkout?.exercises) {
+      setLocalExercises(todaysWorkout.exercises);
+    }
+  }, [todaysWorkout?.exercises]);
+
+  // Handle reordering exercises
+  const handleReorderExercises = useCallback(async ({ data }) => {
+    setLocalExercises(data);
+
+    // Update the split in local storage
+    try {
+      if (activeSplit) {
+        const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
+        const updatedSplit = { ...activeSplit };
+        const days = updatedSplit.days || updatedSplit.workoutDays;
+
+        if (days && days[currentDayIndex]) {
+          // Update exercises for the current day
+          days[currentDayIndex].exercises = data;
+
+          // Save to local storage
+          await storage.saveSplit(updatedSplit);
+
+          // Refresh to reflect changes
+          await refreshTodaysWorkout();
+        }
+      }
+    } catch (error) {
+      console.error('[Workout] Error saving reordered exercises:', error);
+      Alert.alert('Error', 'Failed to save exercise order. Please try again.');
+    }
+  }, [activeSplit, todaysWorkout, refreshTodaysWorkout]);
+
+  const openReorderModal = () => {
+    setShowOptionsMenu(false);
+    setLocalExercises(todaysWorkout?.exercises || []);
+    setShowReorderModal(true);
+  };
+
   // Show loading state while context initializes
   if (!isInitialized) {
     return (
-      <View style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Today's Workout</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+          <Text style={[styles.title, { color: colors.text }]}>Today's Workout</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </View>
     );
@@ -264,16 +312,16 @@ const WorkoutScreen = () => {
   // Show Begin Split card if split exists but hasn't been started
   if (activeSplit && activeSplit.started === false) {
     return (
-      <View style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Today's Workout</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+          <Text style={[styles.title, { color: colors.text }]}>Today's Workout</Text>
         </View>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         >
           <BeginSplitCard
@@ -285,58 +333,43 @@ const WorkoutScreen = () => {
     );
   }
 
-  // Handle case where no workout is available at all
-  if (!todaysWorkout) {
+  // Handle case where user has no split at all
+  if (!activeSplit) {
     return (
-      <View style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Today's Workout</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
-        </View>
-      </View>
-    );
-  }
-
-  // Handle case where no workout is available at all
-  if (!todaysWorkout) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Today's Workout</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+          <Text style={[styles.title, { color: colors.text }]}>Today's Workout</Text>
         </View>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.emptyScrollContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         >
-          <View style={styles.emptyStateContainer}>
-            {/* Icon */}
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="barbell-outline" size={48} color={Colors.light.primary} />
-            </View>
-
-            {/* Title */}
-            <Text style={styles.emptyStateTitle}>No Active Split</Text>
-
-            {/* Message */}
-            <Text style={styles.emptyStateMessage}>
-              Get started by creating a workout split in the Program tab. You'll be able to track your workouts and progress!
-            </Text>
-
-            {/* CTA Button */}
-            <TouchableOpacity
-              style={styles.emptyStateCTA}
-              onPress={() => router.push('/program')}
-            >
-              <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.emptyStateCTAText}>Create Your Split</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            icon="barbell-outline"
+            title="No Active Split"
+            message="Get started by creating a workout split in the Program tab. You'll be able to track your workouts and progress!"
+            ctaText="Create Your Split"
+            ctaIcon="add-circle-outline"
+            onCtaPress={() => router.push('/program')}
+          />
         </ScrollView>
+      </View>
+    );
+  }
+
+  // Handle case where split exists but workout is still being calculated
+  if (!todaysWorkout) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+          <Text style={[styles.title, { color: colors.text }]}>Today's Workout</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       </View>
     );
   }
@@ -344,7 +377,7 @@ const WorkoutScreen = () => {
   // Show Rest Day Card for rest days
   if (isRestDay) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.headerContainer, styles.headerContainerCompleted]}>
           <Text style={[styles.title, styles.titleCompleted]}>Today's Workout</Text>
         </View>
@@ -353,7 +386,7 @@ const WorkoutScreen = () => {
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         >
           <View style={styles.contentContainer}>
@@ -379,17 +412,17 @@ const WorkoutScreen = () => {
           presentationStyle="pageSheet"
           onRequestClose={() => setShowChangeDayModal(false)}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Workout Day</Text>
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Choose Workout Day</Text>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setShowChangeDayModal(false)}
               >
-                <Ionicons name="close" size={24} color={Colors.light.text} />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>
+            <Text style={[styles.modalSubtitle, { color: colors.secondaryText }]}>
               Select which day you'd like to train today
             </Text>
             <ScrollView
@@ -408,28 +441,28 @@ const WorkoutScreen = () => {
                 return (
                   <TouchableOpacity
                     key={index}
-                    style={styles.dayPickerCard}
+                    style={[styles.dayPickerCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}
                     onPress={() => handleDaySelected(index)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.dayPickerCardContent}>
                       {day.emoji && <Text style={styles.dayPickerEmoji}>{day.emoji}</Text>}
                       <View style={styles.dayPickerInfo}>
-                        <Text style={styles.dayPickerName}>{dayName}</Text>
+                        <Text style={[styles.dayPickerName, { color: colors.text }]}>{dayName}</Text>
                         {!isRest && exerciseCount > 0 && (
-                          <Text style={styles.dayPickerExercises}>
+                          <Text style={[styles.dayPickerExercises, { color: colors.secondaryText }]}>
                             {exerciseCount} exercises
                           </Text>
                         )}
                       </View>
                     </View>
                     {isRest && (
-                      <View style={styles.restDayBadge}>
-                        <Ionicons name="moon" size={14} color={Colors.light.secondaryText} />
-                        <Text style={styles.restDayBadgeText}>Rest</Text>
+                      <View style={[styles.restDayBadge, { backgroundColor: colors.borderLight + '40' }]}>
+                        <Ionicons name="moon" size={14} color={colors.secondaryText} />
+                        <Text style={[styles.restDayBadgeText, { color: colors.secondaryText }]}>Rest</Text>
                       </View>
                     )}
-                    <Ionicons name="chevron-forward" size={20} color={Colors.light.primary} />
+                    <Ionicons name="chevron-forward" size={20} color={colors.primary} />
                   </TouchableOpacity>
                 );
               })}
@@ -441,7 +474,10 @@ const WorkoutScreen = () => {
         {showCelebration && (
           <CelebrationAnimation
             key={completedSessionId || Date.now()}
-            onAnimationComplete={() => setShowCelebration(false)}
+            onAnimationComplete={() => {
+              setShowCelebration(false);
+              setIsToggling(false);
+            }}
           />
         )}
       </View>
@@ -563,7 +599,7 @@ const WorkoutScreen = () => {
             console.error('[Workout Tab] Error calculating streak:', error);
           }
 
-          // Show celebration animation
+          // Show celebration animation (isToggling stays true until animation completes)
           setShowCelebration(true);
 
           // Update pending count for sync
@@ -571,24 +607,26 @@ const WorkoutScreen = () => {
         } else {
           setShowCelebration(true);
         }
+        // Don't set isToggling to false here - wait for animation to complete
       } catch (error) {
         console.error('[Workout Tab] Error saving quick workout completion:', error);
         Alert.alert('Error', 'Failed to save workout progress. Please try again.');
-      } finally {
         setIsToggling(false);
       }
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[
         styles.headerContainer,
+        { backgroundColor: colors.cardBackground, shadowColor: colors.shadow },
         isCompleted && styles.headerContainerCompleted
       ]}>
         <Text style={[
           styles.title,
+          { color: colors.text },
           isCompleted && styles.titleCompleted
         ]}>Today's Workout</Text>
       </View>
@@ -597,21 +635,22 @@ const WorkoutScreen = () => {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
         <View style={styles.contentContainer}>
           {/* Today's Workout Card */}
           <View style={[
             styles.workoutCard,
+            { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.borderLight },
             isCompleted && styles.workoutCardCompleted
           ]}>
             <View style={styles.workoutHeader}>
               <View style={styles.workoutInfo}>
                 <View style={styles.workoutTitleRow}>
-                  <Text style={styles.workoutTitle}>{todaysWorkout.dayName}</Text>
+                  <Text style={[styles.workoutTitle, { color: colors.text }]}>{todaysWorkout.dayName}</Text>
                   <View style={styles.headerActions}>
-                    <Text style={styles.exerciseCount}>
+                    <Text style={[styles.exerciseCount, { color: colors.secondaryText }]}>
                       {todaysWorkout.exercises.length} exercises
                     </Text>
                     {!isCompleted && (
@@ -620,17 +659,17 @@ const WorkoutScreen = () => {
                         onPress={() => setShowOptionsMenu(!showOptionsMenu)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        <Ionicons name="ellipsis-horizontal" size={20} color={Colors.light.secondaryText} />
+                        <Ionicons name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
                       </TouchableOpacity>
                     )}
                   </View>
                 </View>
                 {activeSplit?.name && (
-                  <Text style={styles.splitName}>
+                  <Text style={[styles.splitName, { color: colors.primary }]}>
                     {activeSplit.emoji && `${activeSplit.emoji} `}{activeSplit.name}
                   </Text>
                 )}
-                <Text style={styles.cycleInfo}>
+                <Text style={[styles.cycleInfo, { color: colors.secondaryText }]}>
                   Cycle {todaysWorkout.weekNumber} · Day {todaysWorkout.dayNumber}
                 </Text>
               </View>
@@ -645,7 +684,7 @@ const WorkoutScreen = () => {
                   activeOpacity={1}
                   onPress={() => setShowOptionsMenu(false)}
                 />
-                <View style={styles.optionsMenuOverlay}>
+                <View style={[styles.optionsMenuOverlay, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
                   <TouchableOpacity
                     style={styles.optionsMenuItem}
                     onPress={() => {
@@ -653,8 +692,15 @@ const WorkoutScreen = () => {
                       setShowChangeDayModal(true);
                     }}
                   >
-                    <Ionicons name="calendar-outline" size={18} color={Colors.light.text} />
-                    <Text style={styles.optionsMenuItemText}>Change Today's Workout</Text>
+                    <Ionicons name="calendar-outline" size={18} color={colors.text} />
+                    <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Change Today's Workout</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.optionsMenuItem}
+                    onPress={openReorderModal}
+                  >
+                    <Ionicons name="reorder-four-outline" size={18} color={colors.text} />
+                    <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Reorder Exercises</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -666,12 +712,12 @@ const WorkoutScreen = () => {
                 ? todaysWorkout.exercises
                 : todaysWorkout.exercises.slice(0, maxVisibleExercises)
               ).map((exercise, exerciseIndex) => (
-                <View key={exerciseIndex} style={styles.exerciseItem}>
+                <View key={exerciseIndex} style={[styles.exerciseItem, { borderBottomColor: colors.borderLight + '40' }]}>
                   <View style={styles.exerciseContent}>
-                    <Text style={styles.exerciseName}>
+                    <Text style={[styles.exerciseName, { color: colors.text }]}>
                       {exerciseIndex + 1}. {exercise.name}
                     </Text>
-                    <Text style={styles.exerciseDetailText}>
+                    <Text style={[styles.exerciseDetailText, { color: colors.secondaryText }]}>
                       {exercise.sets && `${exercise.sets} sets`}
                       {exercise.sets && exercise.reps && ' · '}
                       {exercise.reps && `${exercise.reps} reps`}
@@ -686,7 +732,7 @@ const WorkoutScreen = () => {
                   style={styles.showMoreButton}
                   onPress={() => setIsExercisesExpanded(!isExercisesExpanded)}
                 >
-                  <Text style={styles.showMoreText}>
+                  <Text style={[styles.showMoreText, { color: colors.primary }]}>
                     {isExercisesExpanded
                       ? 'Show less'
                       : `Show ${todaysWorkout.exercises.length - maxVisibleExercises} more`}
@@ -694,7 +740,7 @@ const WorkoutScreen = () => {
                   <Ionicons
                     name={isExercisesExpanded ? 'chevron-up' : 'chevron-down'}
                     size={18}
-                    color={Colors.light.primary}
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
               )}
@@ -706,7 +752,7 @@ const WorkoutScreen = () => {
                 <>
                   {/* Primary CTA: Start/Resume Workout */}
                   <TouchableOpacity
-                    style={styles.startWorkoutButton}
+                    style={[styles.startWorkoutButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
                     onPress={() => router.push({
                       pathname: '/workout/session',
                       params: {
@@ -714,7 +760,7 @@ const WorkoutScreen = () => {
                       }
                     })}
                   >
-                    <Text style={styles.startWorkoutText}>
+                    <Text style={[styles.startWorkoutText, { color: colors.onPrimary }]}>
                       {hasActiveWorkout ? 'Resume Workout' : 'Start Workout'}
                     </Text>
                   </TouchableOpacity>
@@ -723,17 +769,14 @@ const WorkoutScreen = () => {
                   <TouchableOpacity
                     style={[
                       styles.secondaryActionButton,
+                      { borderColor: colors.borderLight },
                       isToggling && styles.secondaryActionButtonDisabled
                     ]}
                     onPress={handleToggleCompletion}
                     disabled={isToggling}
                     activeOpacity={isToggling ? 1 : 0.7}
                   >
-                    {isToggling ? (
-                      <ActivityIndicator size="small" color={Colors.light.secondaryText} />
-                    ) : (
-                      <Text style={styles.secondaryActionText}>Mark Complete</Text>
-                    )}
+                    <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Mark Complete</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -742,7 +785,10 @@ const WorkoutScreen = () => {
                 <>
                   {/* Share Button */}
                   <TouchableOpacity
-                    style={styles.postWorkoutButton}
+                    style={[
+                      styles.postWorkoutButton,
+                      isToggling && styles.postWorkoutButtonDisabled
+                    ]}
                     onPress={() =>
                       router.push({
                         pathname: '/post/create',
@@ -754,6 +800,8 @@ const WorkoutScreen = () => {
                         },
                       })
                     }
+                    disabled={isToggling}
+                    activeOpacity={isToggling ? 1 : 0.7}
                   >
                     <View style={styles.postWorkoutContent}>
                       <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
@@ -765,17 +813,14 @@ const WorkoutScreen = () => {
                   <TouchableOpacity
                     style={[
                       styles.secondaryActionButton,
+                      { borderColor: colors.borderLight },
                       isToggling && styles.secondaryActionButtonDisabled
                     ]}
                     onPress={handleToggleCompletion}
                     disabled={isToggling}
                     activeOpacity={isToggling ? 1 : 0.7}
                   >
-                    {isToggling ? (
-                      <ActivityIndicator size="small" color={Colors.light.secondaryText} />
-                    ) : (
-                      <Text style={styles.secondaryActionText}>Un-complete</Text>
-                    )}
+                    <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Un-complete</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -791,17 +836,17 @@ const WorkoutScreen = () => {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowChangeDayModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Choose Workout Day</Text>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Choose Workout Day</Text>
             <TouchableOpacity
               style={styles.modalCloseButton}
               onPress={() => setShowChangeDayModal(false)}
             >
-              <Ionicons name="close" size={24} color={Colors.light.text} />
+              <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.modalSubtitle}>
+          <Text style={[styles.modalSubtitle, { color: colors.secondaryText }]}>
             Select which day you'd like to train today
           </Text>
           <ScrollView
@@ -827,28 +872,28 @@ const WorkoutScreen = () => {
               return (
                 <TouchableOpacity
                   key={index}
-                  style={styles.dayPickerCard}
+                  style={[styles.dayPickerCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}
                   onPress={() => handleDaySelected(index)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.dayPickerCardContent}>
                     {day.emoji && <Text style={styles.dayPickerEmoji}>{day.emoji}</Text>}
                     <View style={styles.dayPickerInfo}>
-                      <Text style={styles.dayPickerName}>{dayName}</Text>
+                      <Text style={[styles.dayPickerName, { color: colors.text }]}>{dayName}</Text>
                       {!isRest && exerciseCount > 0 && (
-                        <Text style={styles.dayPickerExercises}>
+                        <Text style={[styles.dayPickerExercises, { color: colors.secondaryText }]}>
                           {exerciseCount} exercises
                         </Text>
                       )}
                     </View>
                   </View>
                   {isRest && (
-                    <View style={styles.restDayBadge}>
-                      <Ionicons name="moon" size={14} color={Colors.light.secondaryText} />
-                      <Text style={styles.restDayBadgeText}>Rest</Text>
+                    <View style={[styles.restDayBadge, { backgroundColor: colors.borderLight + '40' }]}>
+                      <Ionicons name="moon" size={14} color={colors.secondaryText} />
+                      <Text style={[styles.restDayBadgeText, { color: colors.secondaryText }]}>Rest</Text>
                     </View>
                   )}
-                  <Ionicons name="chevron-forward" size={20} color={Colors.light.primary} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.primary} />
                 </TouchableOpacity>
               );
             })}
@@ -856,11 +901,86 @@ const WorkoutScreen = () => {
         </View>
       </Modal>
 
+      {/* Reorder Exercises Modal */}
+      <Modal
+        visible={showReorderModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowReorderModal(false)}
+      >
+        <GestureHandlerRootView style={[styles.gestureRoot, { backgroundColor: colors.background }]}>
+          <View style={[styles.reorderModalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+            <TouchableOpacity onPress={() => setShowReorderModal(false)}>
+              <Text style={[styles.reorderCancelText, { color: colors.secondaryText }]}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={[styles.reorderModalTitle, { color: colors.text }]}>Reorder Exercises</Text>
+            <TouchableOpacity onPress={() => setShowReorderModal(false)}>
+              <Text style={[styles.reorderDoneText, { color: colors.primary }]}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Press the dots and drag to reorder</Text>
+
+          <DraggableFlatList
+            data={localExercises}
+            keyExtractor={(item, index) => `reorder-${item.id || item.name}-${index}`}
+            onDragEnd={handleReorderExercises}
+            contentContainerStyle={styles.reorderListContent}
+            activationDistance={0}
+            renderItem={({ item, drag, isActive, getIndex }) => {
+              const index = getIndex();
+              return (
+                <ScaleDecorator>
+                  <View
+                    style={[
+                      styles.reorderItem,
+                      { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
+                      isActive && [styles.reorderItemDragging, { shadowColor: colors.primary, borderColor: colors.primary }]
+                    ]}
+                  >
+                    <TouchableOpacity
+                      onPressIn={drag}
+                      disabled={isActive}
+                      style={styles.reorderDragHandle}
+                    >
+                      <View style={styles.reorderDragDots}>
+                        {[0, 1].map((row) => (
+                          <View key={row} style={styles.reorderDragDotsRow}>
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                          </View>
+                        ))}
+                      </View>
+                    </TouchableOpacity>
+                    <View style={[styles.reorderExerciseNumber, { backgroundColor: colors.primary + '15' }]}>
+                      <Text style={[styles.reorderExerciseNumberText, { color: colors.primary }]}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.reorderExerciseInfo}>
+                      <Text style={[styles.reorderExerciseName, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.reorderExerciseDetails, { color: colors.secondaryText }]}>
+                        {item.sets && `${item.sets} sets`}
+                        {item.sets && item.reps && ' · '}
+                        {item.reps && `${item.reps} reps`}
+                      </Text>
+                    </View>
+                  </View>
+                </ScaleDecorator>
+              );
+            }}
+          />
+        </GestureHandlerRootView>
+      </Modal>
+
       {/* Celebration Animation */}
       {showCelebration && (
         <CelebrationAnimation
           key={completedSessionId || Date.now()}
-          onAnimationComplete={() => setShowCelebration(false)}
+          onAnimationComplete={() => {
+            setShowCelebration(false);
+            setIsToggling(false);
+          }}
         />
       )}
     </View>
@@ -1122,6 +1242,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  postWorkoutButtonDisabled: {
+    opacity: 0.5,
+  },
   postWorkoutContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1305,6 +1428,113 @@ const styles = StyleSheet.create({
   restDayBadgeText: {
     fontSize: 12,
     fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+
+  // Reorder Modal
+  gestureRoot: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  reorderModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    backgroundColor: Colors.light.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.borderLight,
+  },
+  reorderModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  reorderCancelText: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
+  },
+  reorderDoneText: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    fontWeight: '600',
+  },
+  reorderHint: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontStyle: 'italic',
+  },
+  reorderListContent: {
+    padding: 16,
+  },
+  reorderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+  },
+  reorderItemDragging: {
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+    borderColor: Colors.light.primary,
+  },
+  reorderDragHandle: {
+    padding: 12,
+    marginRight: 8,
+    marginLeft: -8,
+  },
+  reorderDragDots: {
+    flexDirection: 'column',
+    gap: 3,
+  },
+  reorderDragDotsRow: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  reorderDragDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.light.secondaryText,
+  },
+  reorderExerciseNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  reorderExerciseNumberText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
+  },
+  reorderExerciseInfo: {
+    flex: 1,
+  },
+  reorderExerciseName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  reorderExerciseDetails: {
+    fontSize: 13,
     color: Colors.light.secondaryText,
   },
 });

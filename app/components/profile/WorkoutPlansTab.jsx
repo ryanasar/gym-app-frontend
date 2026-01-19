@@ -3,10 +3,12 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { useSync } from '../../contexts/SyncContext';
 import { getPublicSplitsByUserId } from '../../api/splitsApi';
+import EmptyState from '../common/EmptyState';
 
-const SplitCard = ({ split }) => {
+const SplitCard = ({ split, colors }) => {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
@@ -32,33 +34,33 @@ const SplitCard = ({ split }) => {
   };
 
   return (
-    <View style={styles.splitCard}>
+    <View style={[styles.splitCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
       {/* Split Header */}
       <View style={styles.splitHeader}>
         <View style={styles.splitTitleRow}>
           {split.emoji && <Text style={styles.splitEmoji}>{split.emoji}</Text>}
-          <Text style={styles.splitName}>{split.name}</Text>
+          <Text style={[styles.splitName, { color: colors.text }]}>{split.name}</Text>
         </View>
-        <View style={styles.publicBadge}>
-          <Ionicons name="globe-outline" size={12} color="#4CAF50" />
-          <Text style={styles.publicBadgeText}>Public</Text>
+        <View style={[styles.publicBadge, { backgroundColor: colors.accent + '15' }]}>
+          <Ionicons name="globe-outline" size={12} color={colors.accent} />
+          <Text style={[styles.publicBadgeText, { color: colors.accent }]}>Public</Text>
         </View>
       </View>
 
       {/* Description */}
       {split.description && (
-        <Text style={styles.splitDescription}>{split.description}</Text>
+        <Text style={[styles.splitDescription, { color: colors.secondaryText }]}>{split.description}</Text>
       )}
 
       {/* Split Info */}
       <View style={styles.splitInfo}>
         <View style={styles.infoItem}>
-          <Ionicons name="calendar-outline" size={16} color={Colors.light.secondaryText} />
-          <Text style={styles.infoText}>{split.numDays} days</Text>
+          <Ionicons name="calendar-outline" size={16} color={colors.secondaryText} />
+          <Text style={[styles.infoText, { color: colors.secondaryText }]}>{split.numDays} days</Text>
         </View>
         <View style={styles.infoItem}>
-          <Ionicons name="barbell-outline" size={16} color={Colors.light.secondaryText} />
-          <Text style={styles.infoText}>
+          <Ionicons name="barbell-outline" size={16} color={colors.secondaryText} />
+          <Text style={[styles.infoText, { color: colors.secondaryText }]}>
             {split.workoutDays?.filter(day => !day.isRest).length} workouts
           </Text>
         </View>
@@ -69,21 +71,21 @@ const SplitCard = ({ split }) => {
         {split.workoutDays?.slice(0, expanded ? undefined : 3).map((day, index) => (
           <View key={day.id || index} style={styles.dayChip}>
             {day.isRest ? (
-              <View style={styles.restDayChip}>
-                <Ionicons name="moon-outline" size={14} color={Colors.light.secondaryText} />
-                <Text style={styles.restDayText}>Rest</Text>
+              <View style={[styles.restDayChip, { backgroundColor: colors.borderLight + '30' }]}>
+                <Ionicons name="moon-outline" size={14} color={colors.secondaryText} />
+                <Text style={[styles.restDayText, { color: colors.secondaryText }]}>Rest</Text>
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.workoutDayChip}
+                style={[styles.workoutDayChip, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}
                 onPress={() => handleWorkoutDayPress(day)}
                 activeOpacity={0.7}
               >
                 {day.emoji && <Text style={styles.dayEmoji}>{day.emoji}</Text>}
-                <Text style={styles.dayName} numberOfLines={1}>
+                <Text style={[styles.dayName, { color: colors.primary }]} numberOfLines={1}>
                   {day.workoutName || `Day ${day.dayIndex + 1}`}
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.light.primary} />
+                <Ionicons name="chevron-forward" size={16} color={colors.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -96,26 +98,26 @@ const SplitCard = ({ split }) => {
           style={styles.expandButton}
           onPress={() => setExpanded(!expanded)}
         >
-          <Text style={styles.expandButtonText}>
+          <Text style={[styles.expandButtonText, { color: colors.primary }]}>
             {expanded ? 'Show less' : `Show ${split.workoutDays.length - 3} more days`}
           </Text>
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size={16}
-            color={Colors.light.primary}
+            color={colors.primary}
           />
         </TouchableOpacity>
       )}
 
       {/* Stats */}
-      <View style={styles.splitStats}>
+      <View style={[styles.splitStats, { borderTopColor: colors.borderLight + '40' }]}>
         <View style={styles.statItem}>
-          <Ionicons name="heart-outline" size={16} color={Colors.light.secondaryText} />
-          <Text style={styles.statText}>{split._count?.likes || 0}</Text>
+          <Ionicons name="heart-outline" size={16} color={colors.secondaryText} />
+          <Text style={[styles.statText, { color: colors.secondaryText }]}>{split._count?.likes || 0}</Text>
         </View>
         <View style={styles.statItem}>
-          <Ionicons name="chatbubble-outline" size={16} color={Colors.light.secondaryText} />
-          <Text style={styles.statText}>{split._count?.comments || 0}</Text>
+          <Ionicons name="chatbubble-outline" size={16} color={colors.secondaryText} />
+          <Text style={[styles.statText, { color: colors.secondaryText }]}>{split._count?.comments || 0}</Text>
         </View>
       </View>
     </View>
@@ -123,6 +125,7 @@ const SplitCard = ({ split }) => {
 };
 
 const WorkoutPlansTab = ({ userId }) => {
+  const colors = useThemeColors();
   const [splits, setSplits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -161,29 +164,27 @@ const WorkoutPlansTab = ({ userId }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
       </View>
     );
   }
 
   if (!splits || splits.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconContainer}>
-          <Text style={styles.emptyIcon}>📋</Text>
-        </View>
-        <Text style={styles.emptyTitle}>No public splits yet</Text>
-        <Text style={styles.emptySubtitle}>Public splits will appear here</Text>
-      </View>
+      <EmptyState
+        emoji="📋"
+        title="No public splits yet"
+        message="Public splits will appear here"
+      />
     );
   }
 
@@ -191,11 +192,12 @@ const WorkoutPlansTab = ({ userId }) => {
     <FlatList
       data={splits}
       keyExtractor={(item) => item.id.toString()}
-      renderItem={({ item }) => <SplitCard split={item} />}
+      renderItem={({ item }) => <SplitCard split={item} colors={colors} />}
       contentContainerStyle={styles.listContainer}
       showsVerticalScrollIndicator={false}
+      style={{ backgroundColor: colors.background }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
       }
     />
   );

@@ -11,12 +11,14 @@ import {
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from './constants/colors';
+import { useThemeColors } from './hooks/useThemeColors';
 import { useNotifications } from './contexts/NotificationContext';
+import EmptyState from './components/common/EmptyState';
 import { useAuth } from './auth/auth';
 import { getUserProfile } from './api/usersApi';
 
 const NotificationsScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const { user } = useAuth();
   const { notifications, unreadCount, isLoading, refreshNotifications, markAllAsRead } = useNotifications();
@@ -73,6 +75,8 @@ const NotificationsScreen = () => {
         return 'commented on your post';
       case 'follow':
         return 'started following you';
+      case 'tag':
+        return 'tagged you in a post';
       default:
         return 'interacted with you';
     }
@@ -81,13 +85,15 @@ const NotificationsScreen = () => {
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'like':
-        return { name: 'heart', color: '#EF4444' };
+        return { name: 'heart', color: colors.error };
       case 'comment':
-        return { name: 'chatbubble', color: Colors.light.primary };
+        return { name: 'chatbubble', color: colors.primary };
       case 'follow':
-        return { name: 'person-add', color: '#10B981' };
+        return { name: 'person-add', color: colors.accent };
+      case 'tag':
+        return { name: 'pricetag', color: colors.primary };
       default:
-        return { name: 'notifications', color: Colors.light.secondaryText };
+        return { name: 'notifications', color: colors.secondaryText };
     }
   };
 
@@ -112,17 +118,29 @@ const NotificationsScreen = () => {
     }
   };
 
-  const handleNotificationPress = (notification) => {
+  const handleProfilePress = (notification) => {
     const actorProfile = actorProfiles[notification.actor_id];
     const username = actorProfile?.user?.username;
-
-    if (notification.type === 'follow' && username) {
+    if (username) {
       router.push(`/user/${username}`);
-    } else if ((notification.type === 'like' || notification.type === 'comment') && notification.post_id) {
-      // Navigate to post - for now just go to the actor's profile
-      if (username) {
-        router.push(`/user/${username}`);
-      }
+    }
+  };
+
+  const handleNotificationPress = (notification) => {
+    // For follow notifications, go to profile
+    if (notification.type === 'follow') {
+      handleProfilePress(notification);
+      return;
+    }
+
+    // For like/comment/tag notifications, go to the post
+    if ((notification.type === 'like' || notification.type === 'comment' || notification.type === 'tag') && notification.post_id) {
+      router.push({
+        pathname: `/post/${notification.post_id}`,
+        params: {
+          openComments: notification.type === 'comment' ? 'true' : 'false'
+        }
+      });
     }
   };
 
@@ -136,40 +154,51 @@ const NotificationsScreen = () => {
       <TouchableOpacity
         style={[
           styles.notificationItem,
-          !item.is_read && styles.notificationUnread,
+          { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight + '50' },
+          !item.is_read && { backgroundColor: colors.primary + '08' },
         ]}
         onPress={() => handleNotificationPress(item)}
         activeOpacity={0.7}
       >
         <View style={styles.notificationContent}>
-          {/* Avatar */}
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={styles.avatar}
-              contentFit="cover"
-              transition={200}
-            />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>
-                {actorName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          {/* Avatar - tapping goes to profile */}
+          <TouchableOpacity
+            onPress={() => handleProfilePress(item)}
+            activeOpacity={0.7}
+          >
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={[styles.avatar, { backgroundColor: colors.borderLight }]}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
+                  {actorName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
 
-          {/* Icon badge */}
-          <View style={[styles.iconBadge, { backgroundColor: icon.color + '20' }]}>
-            <Ionicons name={icon.name} size={12} color={icon.color} />
-          </View>
+            {/* Icon badge */}
+            <View style={[styles.iconBadge, { backgroundColor: icon.color + '20', borderColor: colors.cardBackground }]}>
+              <Ionicons name={icon.name} size={12} color={icon.color} />
+            </View>
+          </TouchableOpacity>
 
           {/* Text content */}
           <View style={styles.textContent}>
-            <Text style={styles.notificationText}>
-              <Text style={styles.actorName}>{actorName}</Text>
+            <Text style={[styles.notificationText, { color: colors.text }]}>
+              <Text
+                style={styles.actorName}
+                onPress={() => handleProfilePress(item)}
+              >
+                {actorName}
+              </Text>
               {' '}{getNotificationText(item.type)}
             </Text>
-            <Text style={styles.timestamp}>{formatDate(item.created_at)}</Text>
+            <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{formatDate(item.created_at)}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -177,35 +206,31 @@ const NotificationsScreen = () => {
   };
 
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconContainer}>
-        <Ionicons name="notifications-outline" size={48} color={Colors.light.secondaryText} />
-      </View>
-      <Text style={styles.emptyTitle}>No notifications yet</Text>
-      <Text style={styles.emptyMessage}>
-        When someone likes, comments, or follows you, you'll see it here.
-      </Text>
-    </View>
+    <EmptyState
+      icon="notifications-outline"
+      title="No notifications yet"
+      message="When someone likes, comments, or follows you, you'll see it here."
+    />
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 
       {/* Notifications List */}
       {isLoading && notifications.length === 0 ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -218,7 +243,7 @@ const NotificationsScreen = () => {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              tintColor={Colors.light.primary}
+              tintColor={colors.primary}
             />
           }
         />
@@ -232,7 +257,6 @@ export default NotificationsScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   header: {
     flexDirection: 'row',
@@ -241,9 +265,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
   },
   backButton: {
     width: 40,
@@ -254,7 +276,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   headerPlaceholder: {
     width: 40,
@@ -273,12 +294,7 @@ const styles = StyleSheet.create({
   notificationItem: {
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight + '50',
-  },
-  notificationUnread: {
-    backgroundColor: Colors.light.primary + '08',
   },
   notificationContent: {
     flexDirection: 'row',
@@ -288,18 +304,15 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.light.borderLight,
   },
   avatarPlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: Colors.light.onPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -313,7 +326,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.light.cardBackground,
   },
   textContent: {
     flex: 1,
@@ -321,7 +333,6 @@ const styles = StyleSheet.create({
   },
   notificationText: {
     fontSize: 15,
-    color: Colors.light.text,
     lineHeight: 20,
   },
   actorName: {
@@ -329,34 +340,6 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     marginTop: 4,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.light.borderLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 8,
-  },
-  emptyMessage: {
-    fontSize: 15,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    lineHeight: 22,
   },
 });

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, View, RefreshControl } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { useSync } from '../../contexts/SyncContext';
 import Activity from '../common/Activity';
+import EmptyState from '../common/EmptyState';
 
 const ActivitiesTab = ({ posts, currentUserId, onRefresh }) => {
+  const colors = useThemeColors();
   const [localPosts, setLocalPosts] = useState(posts);
   const [refreshing, setRefreshing] = useState(false);
   const { manualSync } = useSync();
@@ -39,13 +42,11 @@ const ActivitiesTab = ({ posts, currentUserId, onRefresh }) => {
 
   if (!localPosts || localPosts.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconContainer}>
-          <Text style={styles.emptyIcon}>📝</Text>
-        </View>
-        <Text style={styles.emptyTitle}>No Posts yet</Text>
-        <Text style={styles.emptySubtitle}>Start working out to see your activities here</Text>
-      </View>
+      <EmptyState
+        emoji="📝"
+        title="No Posts yet"
+        message="Start working out to see your activities here"
+      />
     );
   }
 
@@ -63,14 +64,13 @@ const ActivitiesTab = ({ posts, currentUserId, onRefresh }) => {
       )}
       contentContainerStyle={styles.listContainer}
       showsVerticalScrollIndicator={false}
-      style={{ backgroundColor: Colors.light.background }}
+      style={{ backgroundColor: colors.background }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefreshPosts} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefreshPosts} tintColor={colors.primary} />
       }
-      initialNumToRender={5}
-      windowSize={7}
-      removeClippedSubviews
-      maxToRenderPerBatch={5}
+      initialNumToRender={10}
+      windowSize={10}
+      maxToRenderPerBatch={10}
     />
   );
 };

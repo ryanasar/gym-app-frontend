@@ -3,12 +3,14 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Activi
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors } from '../constants/colors';
 import { searchUsers } from '../api/usersApi';
 import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
+import EmptyState from '../components/common/EmptyState';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 export default function ExploreScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { user } = useAuth();
   const { manualSync } = useSync();
@@ -49,25 +51,25 @@ export default function ExploreScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>Explore</Text>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Explore</Text>
 
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Text style={styles.searchIcon}>🔍</Text>
+        <View style={[styles.searchContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+          <Text style={[styles.searchIcon, { color: colors.secondaryText }]}>🔍</Text>
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search users..."
-            placeholderTextColor={Colors.light.placeholder}
+            placeholderTextColor={colors.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
             autoCorrect={false}
           />
           {isSearching && (
-            <ActivityIndicator size="small" color={Colors.light.primary} />
+            <ActivityIndicator size="small" color={colors.primary} />
           )}
         </View>
       </View>
@@ -78,7 +80,7 @@ export default function ExploreScreen() {
             {searchResults.map((result) => (
               <TouchableOpacity
                 key={result.id}
-                style={styles.userCard}
+                style={[styles.userCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}
                 onPress={() => handleUserPress(result.username)}
                 activeOpacity={0.7}
               >
@@ -86,33 +88,33 @@ export default function ExploreScreen() {
                   {result.profile?.avatarUrl ? (
                     <Image
                       source={{ uri: result.profile.avatarUrl }}
-                      style={styles.userAvatarImage}
+                      style={[styles.userAvatarImage, { backgroundColor: colors.borderLight }]}
                       contentFit="cover"
                       transition={200}
                       cachePolicy="memory-disk"
                     />
                   ) : (
-                    <View style={styles.userAvatar}>
-                      <Text style={styles.userAvatarText}>
+                    <View style={[styles.userAvatar, { backgroundColor: colors.primary }]}>
+                      <Text style={[styles.userAvatarText, { color: colors.onPrimary }]}>
                         {result.name?.[0]?.toUpperCase() || result.username?.[0]?.toUpperCase() || '?'}
                       </Text>
                     </View>
                   )}
                   <View style={styles.userDetails}>
-                    <Text style={styles.userName}>{result.name || result.username}</Text>
-                    <Text style={styles.userUsername}>@{result.username}</Text>
+                    <Text style={[styles.userName, { color: colors.text }]}>{result.name || result.username}</Text>
+                    <Text style={[styles.userUsername, { color: colors.secondaryText }]}>@{result.username}</Text>
                     {result.profile?.bio && (
-                      <Text style={styles.userBio} numberOfLines={1}>
+                      <Text style={[styles.userBio, { color: colors.secondaryText }]} numberOfLines={1}>
                         {result.profile.bio}
                       </Text>
                     )}
                   </View>
                 </View>
                 <View style={styles.userStats}>
-                  <Text style={styles.userStat}>
+                  <Text style={[styles.userStat, { color: colors.secondaryText }]}>
                     {result._count?.posts || 0} posts
                   </Text>
-                  <Text style={styles.userStat}>
+                  <Text style={[styles.userStat, { color: colors.secondaryText }]}>
                     {result._count?.followedBy || 0} followers
                   </Text>
                 </View>
@@ -120,25 +122,17 @@ export default function ExploreScreen() {
             ))}
           </View>
         ) : searchQuery.trim() && !isSearching ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Text style={styles.emptyIcon}>😕</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No users found</Text>
-            <Text style={styles.emptySubtitle}>
-              Try searching for a different username
-            </Text>
-          </View>
+          <EmptyState
+            emoji="😕"
+            title="No users found"
+            message="Try searching for a different username"
+          />
         ) : !searchQuery.trim() ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Text style={styles.emptyIcon}>🔍</Text>
-            </View>
-            <Text style={styles.emptyTitle}>Discover new users</Text>
-            <Text style={styles.emptySubtitle}>
-              Search for users to follow and see their workouts
-            </Text>
-          </View>
+          <EmptyState
+            emoji="🔍"
+            title="Discover new users"
+            message="Search for users to follow and see their workouts"
+          />
         ) : null}
       </ScrollView>
     </View>
@@ -148,14 +142,11 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   headerContainer: {
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -164,28 +155,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.inputBackground,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   searchIcon: {
     fontSize: 16,
     marginRight: 8,
-    color: Colors.light.secondaryText,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.light.text,
   },
   scrollView: {
     flex: 1,
@@ -200,7 +186,6 @@ const styles = StyleSheet.create({
   emptyIconContainer: {
     width: 80,
     height: 80,
-    backgroundColor: Colors.light.borderLight,
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
@@ -212,13 +197,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -226,13 +209,10 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   userCard: {
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.light.border,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -247,7 +227,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -257,12 +236,10 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     marginRight: 12,
-    backgroundColor: Colors.light.borderLight,
   },
   userAvatarText: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.onPrimary,
   },
   userDetails: {
     flex: 1,
@@ -270,17 +247,14 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 2,
   },
   userUsername: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     marginBottom: 4,
   },
   userBio: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     marginTop: 2,
   },
   userStats: {
@@ -289,7 +263,6 @@ const styles = StyleSheet.create({
   },
   userStat: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
 });

@@ -8,54 +8,57 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
+import EmptyState from '../components/common/EmptyState';
 
 const ViewSplitScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const splitData = params.splitData ? JSON.parse(params.splitData) : null;
 
   if (!splitData) {
     return (
-      <View style={styles.container}>
-        <View style={styles.headerContainer}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Text style={[styles.backButtonText, { color: colors.text }]}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Split Details</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Split Details</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Split not found</Text>
+          <Text style={[styles.errorText, { color: colors.secondaryText }]}>Split not found</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.headerContainer}>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
+          <Text style={[styles.backButtonText, { color: colors.text }]}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Split Details</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Split Details</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.contentContainer}>
           {/* Split Header Card */}
-          <View style={styles.splitHeaderCard}>
+          <View style={[styles.splitHeaderCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.primary }]}>
             <View style={styles.splitHeaderContent}>
               <Text style={styles.splitEmoji}>{splitData.emoji}</Text>
               <View style={styles.splitHeaderText}>
-                <Text style={styles.splitName}>{splitData.name}</Text>
-                <Text style={styles.splitDescription}>
+                <Text style={[styles.splitName, { color: colors.text }]}>{splitData.name}</Text>
+                <Text style={[styles.splitDescription, { color: colors.secondaryText }]}>
                   {splitData.totalDays} day split
                   {splitData.description ? ` • ${splitData.description}` : ''}
                 </Text>
                 {splitData.workoutDays && splitData.workoutDays.length > 0 && (
-                  <Text style={styles.workoutNamesList}>
+                  <Text style={[styles.workoutNamesList, { color: colors.text }]}>
                     {splitData.workoutDays.map(day => day.name).filter(Boolean).join(' • ')}
                   </Text>
                 )}
@@ -65,20 +68,20 @@ const ViewSplitScreen = () => {
 
           {/* Workout Days */}
           <View style={styles.workoutsSection}>
-            <Text style={styles.sectionTitle}>All Workouts</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>All Workouts</Text>
 
             {splitData.workoutDays && splitData.workoutDays.length > 0 ? (
               splitData.workoutDays.map((day, index) => (
-                <View key={index} style={styles.workoutDayCard}>
+                <View key={index} style={[styles.workoutDayCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.borderLight }]}>
                   {/* Day Header */}
                   <View style={[
                     styles.workoutDayHeader,
                     (!day.exercises || day.exercises.length === 0) && styles.workoutDayHeaderNoMargin
                   ]}>
-                    <View style={styles.dayNumberBadge}>
-                      <Text style={styles.dayNumberText}>Day {index + 1}</Text>
+                    <View style={[styles.dayNumberBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={[styles.dayNumberText, { color: colors.onPrimary }]}>Day {index + 1}</Text>
                     </View>
-                    <Text style={styles.workoutDayName}>
+                    <Text style={[styles.workoutDayName, { color: colors.text }]}>
                       {day.isRest || (!day.name && (!day.exercises || day.exercises.length === 0))
                         ? 'Rest Day'
                         : day.name || 'Workout'}
@@ -88,27 +91,27 @@ const ViewSplitScreen = () => {
                   {/* Exercises List */}
                   {day.exercises && day.exercises.length > 0 && (
                     <View style={styles.exercisesList}>
-                      <Text style={styles.exercisesTitle}>
+                      <Text style={[styles.exercisesTitle, { color: colors.secondaryText }]}>
                         Exercises ({day.exercises.length})
                       </Text>
                       {day.exercises.map((exercise, exerciseIndex) => (
-                        <View key={exerciseIndex} style={styles.exerciseItem}>
-                          <Text style={styles.exerciseName}>
+                        <View key={exerciseIndex} style={[styles.exerciseItem, { borderBottomColor: colors.borderLight + '40' }]}>
+                          <Text style={[styles.exerciseName, { color: colors.text }]}>
                             {exerciseIndex + 1}. {exercise.name}
                           </Text>
                           <View style={styles.exerciseDetails}>
                             {exercise.sets && (
-                              <Text style={styles.exerciseDetail}>
+                              <Text style={[styles.exerciseDetail, { color: colors.secondaryText, backgroundColor: colors.borderLight + '60' }]}>
                                 {exercise.sets} sets
                               </Text>
                             )}
                             {exercise.reps && (
-                              <Text style={styles.exerciseDetail}>
+                              <Text style={[styles.exerciseDetail, { color: colors.secondaryText, backgroundColor: colors.borderLight + '60' }]}>
                                 {exercise.reps} reps
                               </Text>
                             )}
                             {exercise.restTime && (
-                              <Text style={styles.exerciseDetail}>
+                              <Text style={[styles.exerciseDetail, { color: colors.secondaryText, backgroundColor: colors.borderLight + '60' }]}>
                                 {exercise.restTime} rest
                               </Text>
                             )}
@@ -120,9 +123,11 @@ const ViewSplitScreen = () => {
                 </View>
               ))
             ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No workouts in this split</Text>
-              </View>
+              <EmptyState
+                emoji="📋"
+                title="No workouts"
+                message="No workouts in this split"
+              />
             )}
           </View>
         </View>

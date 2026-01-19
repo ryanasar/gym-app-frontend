@@ -31,14 +31,17 @@ export function buildWorkoutFromSplit(split, dayIndex) {
   }
 
   const exercises = day.exercises.map(splitExercise => {
-    const targetSets = splitExercise.targetSets || 0;
-    const targetReps = splitExercise.targetReps || 0;
+    const targetSets = parseInt(splitExercise.targetSets) || parseInt(splitExercise.sets) || 3;
+    const targetReps = parseInt(splitExercise.targetReps) || parseInt(splitExercise.reps) || 10;
+    const restSeconds = parseInt(splitExercise.restSeconds) || 0;
 
-    // Ensure exerciseId is a number to match the local database
-    const exerciseId = parseInt(splitExercise.exerciseId) || splitExercise.exerciseId;
+    // Ensure exerciseId is a number to match the local database (fall back to id if exerciseId not present)
+    const rawId = splitExercise.exerciseId || splitExercise.id;
+    const exerciseId = parseInt(rawId) || rawId;
 
     return {
       exerciseId: exerciseId,
+      restSeconds: restSeconds,
       sets: Array.from({ length: targetSets }, (_, i) => ({
         setIndex: i,
         reps: targetReps,
@@ -90,16 +93,22 @@ export async function startWorkout(splitId, dayIndex) {
   const validatedExercises = (day.exercises || []).map(ex => {
     const targetSets = parseInt(ex.targetSets) || parseInt(ex.sets) || 3;
     const targetReps = parseInt(ex.targetReps) || parseInt(ex.reps) || 10;
+    const restSeconds = parseInt(ex.restSeconds) || 0;
 
-    if (targetSets !== ex.targetSets || targetReps !== ex.targetReps) {
+    // Handle both exerciseId and id field names
+    const rawId = ex.exerciseId || ex.id;
+    const exerciseId = parseInt(rawId) || rawId;
+
+    if (targetSets !== ex.targetSets || targetReps !== ex.targetReps || exerciseId !== ex.exerciseId) {
       needsUpdate = true;
     }
 
     return {
       ...ex,
-      exerciseId: parseInt(ex.exerciseId) || ex.exerciseId,
+      exerciseId,
       targetSets,
-      targetReps
+      targetReps,
+      restSeconds
     };
   });
 

@@ -12,13 +12,15 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { getFollowers, getFollowing } from '../../api/usersApi';
+import EmptyState from '../common/EmptyState';
 
 const FollowListModal = ({ visible, onClose, username, type }) => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const colors = useThemeColors();
 
   useEffect(() => {
     if (visible && username) {
@@ -47,21 +49,21 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
 
   const renderUser = ({ item }) => (
     <TouchableOpacity
-      style={styles.userItem}
+      style={[styles.userItem, { backgroundColor: colors.cardBackground }]}
       onPress={() => handleUserPress(item.username)}
     >
       <View style={styles.avatarContainer}>
         {item.profile?.avatarUrl ? (
           <Image
             source={{ uri: item.profile.avatarUrl }}
-            style={styles.avatarImage}
+            style={[styles.avatarImage, { backgroundColor: colors.borderLight }]}
             contentFit="cover"
             transition={200}
             cachePolicy="memory-disk"
           />
         ) : (
-          <View style={[styles.avatar, { backgroundColor: Colors.light.primary }]}>
-            <Text style={styles.avatarText}>
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
               {item.name ? item.name.charAt(0).toUpperCase() : '?'}
             </Text>
           </View>
@@ -69,16 +71,16 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
       </View>
 
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name || 'Unknown'}</Text>
-        <Text style={styles.username}>@{item.username}</Text>
+        <Text style={[styles.userName, { color: colors.text }]}>{item.name || 'Unknown'}</Text>
+        <Text style={[styles.username, { color: colors.secondaryText }]}>@{item.username}</Text>
         {item.profile?.bio && (
-          <Text style={styles.bio} numberOfLines={1}>
+          <Text style={[styles.bio, { color: colors.secondaryText }]} numberOfLines={1}>
             {item.profile.bio}
           </Text>
         )}
       </View>
 
-      <Ionicons name="chevron-forward" size={20} color={Colors.light.secondaryText} />
+      <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
     </TouchableOpacity>
   );
 
@@ -89,13 +91,13 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color={Colors.light.text} />
+            <Ionicons name="close" size={28} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
             {type === 'followers' ? 'Followers' : 'Following'}
           </Text>
           <View style={styles.headerPlaceholder} />
@@ -104,7 +106,7 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
         {/* List */}
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.light.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : users.length > 0 ? (
           <FlatList
@@ -114,12 +116,11 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
             contentContainerStyle={styles.listContent}
           />
         ) : (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={48} color={Colors.light.secondaryText} />
-            <Text style={styles.emptyText}>
-              {type === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
-            </Text>
-          </View>
+          <EmptyState
+            icon="people-outline"
+            title={type === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+            message={type === 'followers' ? 'When someone follows this user, they will appear here' : 'Users this person follows will appear here'}
+          />
         )}
       </SafeAreaView>
     </Modal>
@@ -129,7 +130,6 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   header: {
     flexDirection: 'row',
@@ -137,9 +137,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
   },
   closeButton: {
     padding: 4,
@@ -147,7 +145,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   headerPlaceholder: {
     width: 36,
@@ -165,7 +162,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: Colors.light.cardBackground,
     marginBottom: 1,
   },
   avatarContainer: {
@@ -182,12 +178,10 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.light.borderLight,
   },
   avatarText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   userInfo: {
     flex: 1,
@@ -195,30 +189,15 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
     marginBottom: 2,
   },
   username: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     marginBottom: 2,
   },
   bio: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     marginTop: 2,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    marginTop: 16,
-    textAlign: 'center',
   },
 });
 

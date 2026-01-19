@@ -9,8 +9,10 @@ import { Colors } from '../constants/colors';
 import { useSync } from '../contexts/SyncContext';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { clearLocalSplit } from '../utils/clearLocalSplit';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const ProgramScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuth();
@@ -278,33 +280,33 @@ const ProgramScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>Program</Text>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Program</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
         <View style={styles.contentContainer}>
           {/* Active Split Section */}
           <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Active Split</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Split</Text>
 
             {currentActiveSplit ? (
-              <View style={styles.activeProgramCard}>
+              <View style={[styles.activeProgramCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.borderLight }]}>
                 {/* Program Info with Circular Emoji Icon */}
                 <View style={styles.activeProgramHeader}>
-                  <View style={styles.emojiCircle}>
+                  <View style={[styles.emojiCircle, { backgroundColor: colors.primary + '15' }]}>
                     <Text style={styles.emojiCircleText}>{currentActiveSplit.emoji}</Text>
                   </View>
                   <View style={styles.activeProgramTextContainer}>
-                    <Text style={styles.activeProgramName}>{currentActiveSplit.name}</Text>
+                    <Text style={[styles.activeProgramName, { color: colors.text }]}>{currentActiveSplit.name}</Text>
                     <Text style={styles.activeProgramDescription}>
                       Today's Workout: {todaysWorkout?.dayName || 'Rest Day'}
                     </Text>
@@ -315,51 +317,51 @@ const ProgramScreen = () => {
                 </View>
 
                 {/* Divider */}
-                <View style={styles.activeProgramDivider} />
+                <View style={[styles.activeProgramDivider, { backgroundColor: colors.borderLight }]} />
 
                 {/* Action Buttons */}
                 <View style={styles.activeProgramActions}>
                   {/* Primary Action - Full Width */}
                   <TouchableOpacity
-                    style={styles.primaryActionButton}
+                    style={[styles.primaryActionButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
                     onPress={handleViewWorkouts}
                   >
-                    <Text style={styles.primaryActionButtonText}>View Workouts</Text>
+                    <Text style={[styles.primaryActionButtonText, { color: colors.onPrimary }]}>View Workouts</Text>
                   </TouchableOpacity>
 
                   {/* Secondary Actions Row */}
                   <View style={styles.secondaryActionsRow}>
                     <TouchableOpacity
-                      style={styles.secondaryActionButton}
+                      style={[styles.secondaryActionButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                       onPress={handleChangeActiveSplit}
                     >
-                      <Text style={styles.secondaryActionButtonText}>Switch Split</Text>
+                      <Text style={[styles.secondaryActionButtonText, { color: colors.text }]}>Switch Split</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.secondaryActionButton}
+                      style={[styles.secondaryActionButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                       onPress={handleEditSplit}
                     >
-                      <Text style={styles.secondaryActionButtonText}>Edit</Text>
+                      <Text style={[styles.secondaryActionButtonText, { color: colors.text }]}>Edit</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               </View>
             ) : (
-              <Text style={styles.noActiveSplit}>No active split selected</Text>
+              <Text style={[styles.noActiveSplit, { color: colors.secondaryText }]}>No active split selected</Text>
             )}
           </View>
 
           {/* Other Splits Section */}
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Other Splits</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Other Splits</Text>
               <Text style={styles.sectionSubtitle}>Your saved programs</Text>
             </View>
 
             {/* Create New Split Button above Other Splits */}
-            <TouchableOpacity style={styles.createSplitButton} onPress={handleCreateNewSplit}>
-              <Text style={styles.createSplitButtonText}>+ Create New Split</Text>
+            <TouchableOpacity style={[styles.createSplitButton, { backgroundColor: colors.cardBackground, borderColor: colors.primary, shadowColor: colors.shadow }]} onPress={handleCreateNewSplit}>
+              <Text style={[styles.createSplitButtonText, { color: colors.primary }]}>+ Create New Split</Text>
             </TouchableOpacity>
 
             <View style={styles.splitsContainer}>

@@ -2,13 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { exercises } from '../data/exercises/exerciseDatabase';
 import { muscleGroups } from '../data/exercises/muscleGroups';
 
 const WorkoutDetailScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const colors = useThemeColors();
 
   // Parse workout data from params
   const workoutData = params.workoutData ? JSON.parse(params.workoutData) : null;
@@ -16,11 +17,11 @@ const WorkoutDetailScreen = () => {
 
   if (!workoutData) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Workout data not found</Text>
+          <Text style={[styles.errorText, { color: colors.secondaryText }]}>Workout data not found</Text>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: colors.primary }]}
             onPress={() => {
               if (router.canDismiss()) {
                 router.dismiss();
@@ -29,7 +30,7 @@ const WorkoutDetailScreen = () => {
               }
             }}
           >
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={[styles.backButtonText, { color: colors.onPrimary }]}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -61,9 +62,9 @@ const WorkoutDetailScreen = () => {
   const primaryMuscles = getPrimaryMuscles();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <TouchableOpacity
           style={styles.backIconButton}
           onPress={() => {
@@ -74,9 +75,9 @@ const WorkoutDetailScreen = () => {
             }
           }}
         >
-          <Ionicons name="close" size={28} color={Colors.light.text} />
+          <Ionicons name="close" size={28} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Workout Details</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Workout Details</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -86,12 +87,12 @@ const WorkoutDetailScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Workout Name */}
-        <Text style={styles.workoutName}>{workoutData.dayName}</Text>
+        <Text style={[styles.workoutName, { color: colors.text }]}>{workoutData.dayName}</Text>
 
         {/* Program Name */}
         {splitData?.name && (
           <View style={styles.programSection}>
-            <Text style={styles.programName}>
+            <Text style={[styles.programName, { color: colors.accent }]}>
               {splitData.emoji && `${splitData.emoji} `}{splitData.name}
             </Text>
           </View>
@@ -101,14 +102,14 @@ const WorkoutDetailScreen = () => {
         {workoutData.weekNumber && workoutData.dayNumber && (
           <View style={styles.metadataSection}>
             <View style={styles.metadataItem}>
-              <Ionicons name="calendar-outline" size={18} color={Colors.light.secondaryText} />
-              <Text style={styles.metadataText}>
+              <Ionicons name="calendar-outline" size={18} color={colors.secondaryText} />
+              <Text style={[styles.metadataText, { color: colors.secondaryText }]}>
                 Week {workoutData.weekNumber}
               </Text>
             </View>
             <View style={styles.metadataItem}>
-              <Ionicons name="today-outline" size={18} color={Colors.light.secondaryText} />
-              <Text style={styles.metadataText}>
+              <Ionicons name="today-outline" size={18} color={colors.secondaryText} />
+              <Text style={[styles.metadataText, { color: colors.secondaryText }]}>
                 Day {workoutData.dayNumber}
               </Text>
             </View>
@@ -116,28 +117,28 @@ const WorkoutDetailScreen = () => {
         )}
 
         {/* Stats Summary */}
-        <View style={styles.statsCard}>
+        <View style={[styles.statsCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totalSets}</Text>
-            <Text style={styles.statLabel}>Total Sets</Text>
+            <Text style={[styles.statValue, { color: colors.primary }]}>{totalSets}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Total Sets</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{workoutData.exercises?.length || 0}</Text>
-            <Text style={styles.statLabel}>Total Exercises</Text>
+            <Text style={[styles.statValue, { color: colors.primary }]}>{workoutData.exercises?.length || 0}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Total Exercises</Text>
           </View>
         </View>
 
         {/* Muscle Groups */}
         {primaryMuscles.length > 0 && (
           <View style={styles.muscleGroupsSection}>
-            <Text style={styles.sectionTitle}>Muscle Groups</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Muscle Groups</Text>
             <View style={styles.muscleGroupsList}>
               {primaryMuscles.map((muscleKey, index) => {
                 const muscle = muscleGroups[muscleKey];
                 return muscle ? (
-                  <View key={index} style={styles.muscleGroupChip}>
-                    <Text style={styles.muscleGroupText}>{muscle.name}</Text>
+                  <View key={index} style={[styles.muscleGroupChip, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '30' }]}>
+                    <Text style={[styles.muscleGroupText, { color: colors.accent }]}>{muscle.name}</Text>
                   </View>
                 ) : null;
               })}
@@ -147,27 +148,27 @@ const WorkoutDetailScreen = () => {
 
         {/* Exercise List */}
         <View style={styles.exercisesSection}>
-          <Text style={styles.sectionTitle}>Exercises</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Exercises</Text>
           <View style={styles.exerciseList}>
             {workoutData.exercises?.map((exercise, index) => (
-              <View key={index} style={styles.exerciseCard}>
+              <View key={index} style={[styles.exerciseCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
                 <View style={styles.exerciseHeader}>
-                  <View style={styles.exerciseNumber}>
-                    <Text style={styles.exerciseNumberText}>{index + 1}</Text>
+                  <View style={[styles.exerciseNumber, { backgroundColor: colors.primary + '20' }]}>
+                    <Text style={[styles.exerciseNumberText, { color: colors.primary }]}>{index + 1}</Text>
                   </View>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
+                  <Text style={[styles.exerciseName, { color: colors.text }]}>{exercise.name}</Text>
                 </View>
                 {exercise.sets && (
                   <View style={styles.exerciseDetails}>
                     {Array.isArray(exercise.sets) ? (
                       <>
-                        <Text style={styles.exerciseDetailSummary}>
+                        <Text style={[styles.exerciseDetailSummary, { color: colors.secondaryText }]}>
                           {exercise.sets.length} sets × {exercise.sets[0]?.reps || '-'} reps
                         </Text>
                         {exercise.sets.map((set, setIndex) => (
-                          <View key={setIndex} style={styles.setRow}>
-                            <Text style={styles.setLabel}>Set {set.setNumber}</Text>
-                            <Text style={styles.setDetails}>
+                          <View key={setIndex} style={[styles.setRow, { backgroundColor: colors.borderLight + '30' }]}>
+                            <Text style={[styles.setLabel, { color: colors.text }]}>Set {set.setNumber}</Text>
+                            <Text style={[styles.setDetails, { color: colors.secondaryText }]}>
                               {set.weight ? `${set.weight} lbs` : '-'} × {set.reps || '-'} reps
                             </Text>
                           </View>
@@ -175,12 +176,12 @@ const WorkoutDetailScreen = () => {
                       </>
                     ) : (
                       <View style={styles.templateExerciseInfo}>
-                        <Text style={styles.exerciseDetailSummary}>
+                        <Text style={[styles.exerciseDetailSummary, { color: colors.secondaryText }]}>
                           {exercise.sets} sets
                           {exercise.reps && ` × ${exercise.reps} reps`}
                         </Text>
                         {exercise.weight && (
-                          <Text style={styles.exerciseDetailSummary}>
+                          <Text style={[styles.exerciseDetailSummary, { color: colors.secondaryText }]}>
                             Weight: {exercise.weight}
                           </Text>
                         )}
@@ -195,13 +196,13 @@ const WorkoutDetailScreen = () => {
 
         {/* View Full Split Button */}
         <TouchableOpacity
-          style={styles.viewSplitButton}
+          style={[styles.viewSplitButton, { backgroundColor: colors.borderLight + '20', borderColor: colors.borderLight }]}
           disabled
           activeOpacity={0.7}
         >
-          <Ionicons name="list-outline" size={20} color={Colors.light.secondaryText} />
-          <Text style={styles.viewSplitButtonText}>View full split</Text>
-          <Text style={styles.comingSoonBadge}>Coming soon</Text>
+          <Ionicons name="list-outline" size={20} color={colors.secondaryText} />
+          <Text style={[styles.viewSplitButtonText, { color: colors.secondaryText }]}>View full split</Text>
+          <Text style={[styles.comingSoonBadge, { color: colors.secondaryText, backgroundColor: colors.borderLight + '40' }]}>Coming soon</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -213,7 +214,6 @@ export default WorkoutDetailScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   header: {
     flexDirection: 'row',
@@ -222,8 +222,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -238,7 +236,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   headerSpacer: {
     width: 40,
@@ -255,7 +252,6 @@ const styles = StyleSheet.create({
   workoutName: {
     fontSize: 32,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 16,
     lineHeight: 38,
   },
@@ -267,7 +263,6 @@ const styles = StyleSheet.create({
   programName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4CAF50',
   },
 
   // Metadata Section
@@ -284,17 +279,14 @@ const styles = StyleSheet.create({
   metadataText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
 
   // Stats Card
   statsCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -308,19 +300,16 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.light.primary,
     marginBottom: 6,
   },
   statLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   statDivider: {
     width: 1,
-    backgroundColor: Colors.light.borderLight,
   },
 
   // Muscle Groups Section
@@ -330,7 +319,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 12,
   },
   muscleGroupsList: {
@@ -339,17 +327,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   muscleGroupChip: {
-    backgroundColor: '#4CAF50' + '15',
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#4CAF50' + '30',
   },
   muscleGroupText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#4CAF50',
   },
 
   // Exercises Section
@@ -360,10 +345,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   exerciseCard: {
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     padding: 16,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -379,20 +362,17 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.light.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
   exerciseNumberText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.light.primary,
   },
   exerciseName: {
     flex: 1,
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   exerciseDetails: {
     gap: 8,
@@ -403,7 +383,6 @@ const styles = StyleSheet.create({
   exerciseDetailSummary: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
     marginBottom: 4,
   },
   setRow: {
@@ -412,18 +391,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: Colors.light.borderLight + '20',
     borderRadius: 8,
   },
   setLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.text,
   },
   setDetails: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
   },
 
   // View Split Button
@@ -431,25 +407,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.light.borderLight + '20',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
     gap: 8,
     marginTop: 8,
   },
   viewSplitButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
   comingSoonBadge: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.light.secondaryText,
-    backgroundColor: Colors.light.borderLight + '40',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 8,
@@ -466,12 +437,10 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
     marginBottom: 20,
     textAlign: 'center',
   },
   backButton: {
-    backgroundColor: Colors.light.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -479,6 +448,5 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.light.onPrimary,
   },
 });

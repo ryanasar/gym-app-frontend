@@ -37,22 +37,24 @@ export const WorkoutProvider = ({ children }) => {
       if (day.isRest || !day.exercises) return day;
 
       const validatedExercises = day.exercises.map(ex => {
-        // Normalize exerciseId - try both string and number versions
-        const exerciseIdStr = String(ex.exerciseId);
-        const exerciseIdNum = parseInt(ex.exerciseId);
+        // Normalize exerciseId - handle both exerciseId and id field names
+        const rawId = ex.exerciseId || ex.id;
+        const exerciseIdStr = String(rawId);
+        const exerciseIdNum = parseInt(rawId);
 
-        // Ensure targetSets and targetReps have valid values
+        // Ensure targetSets, targetReps, and restSeconds have valid values
         const targetSets = parseInt(ex.targetSets) || parseInt(ex.sets) || 3;
         const targetReps = parseInt(ex.targetReps) || parseInt(ex.reps) || 10;
+        const restSeconds = parseInt(ex.restSeconds) || 0;
 
         // Check if values were missing and need fixing
-        if (!ex.targetSets || !ex.targetReps) {
+        if (!ex.targetSets || !ex.targetReps || !ex.exerciseId) {
           needsUpdate = true;
         }
 
         // Check if this exerciseId exists in local database (try both string and number)
         if (exerciseMap[exerciseIdStr] || exerciseMap[exerciseIdNum]) {
-          return { ...ex, exerciseId: exerciseIdStr, targetSets, targetReps };
+          return { ...ex, exerciseId: exerciseIdStr, targetSets, targetReps, restSeconds };
         }
 
         // Exercise ID not found - try to match by name
@@ -60,13 +62,13 @@ export const WorkoutProvider = ({ children }) => {
           const matchedId = nameToIdMap[ex.name.toLowerCase()];
           if (matchedId) {
             needsUpdate = true;
-            return { ...ex, exerciseId: String(matchedId), targetSets, targetReps };
+            return { ...ex, exerciseId: String(matchedId), targetSets, targetReps, restSeconds };
           }
         }
 
         // Could not match - keep original but flag for update
         needsUpdate = true;
-        return { ...ex, exerciseId: exerciseIdStr, targetSets, targetReps };
+        return { ...ex, exerciseId: exerciseIdStr, targetSets, targetReps, restSeconds };
       }).filter(ex => {
         // Filter out exercises that couldn't be matched and don't exist
         const idStr = String(ex.exerciseId);
@@ -121,6 +123,7 @@ export const WorkoutProvider = ({ children }) => {
                       exerciseId: exerciseId,
                       targetSets: parseInt(ex.sets || ex.targetSets) || 3,
                       targetReps: parseInt(ex.reps || ex.targetReps) || 10,
+                      restSeconds: parseInt(ex.restSeconds) || 0,
                     };
                   })
                   .filter(ex => ex.exerciseId && ex.exerciseId !== 'undefined'), // Filter out invalid exercises
@@ -370,7 +373,7 @@ export const WorkoutProvider = ({ children }) => {
         name: exerciseName,
         sets: exercise.targetSets?.toString() || '3',
         reps: exercise.targetReps?.toString() || '10',
-        restTime: '2 min', // Default rest time
+        restSeconds: exercise.restSeconds || 0,
         id: exercise.exerciseId,
       };
     });

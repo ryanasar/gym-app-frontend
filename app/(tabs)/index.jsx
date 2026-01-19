@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
 import { getFollowingPosts } from '../api/postsApi';
 import Activity from '../components/common/Activity';
+import EmptyState from '../components/common/EmptyState';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 export default function FollowingScreen() {
+  const colors = useThemeColors();
   const { user } = useAuth();
   const { manualSync } = useSync();
   const [posts, setPosts] = useState([]);
@@ -89,11 +91,11 @@ export default function FollowingScreen() {
   };
 
   const renderEmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyTitle}>
-        No new workouts yet — go lift or hype a friend 💪
-      </Text>
-    </View>
+    <EmptyState
+      emoji="💪"
+      title="No new workouts yet"
+      message="Go lift or hype a friend!"
+    />
   );
 
   const renderFooter = () => {
@@ -101,31 +103,31 @@ export default function FollowingScreen() {
 
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={Colors.light.primary} />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Following</Text>
-          <Text style={styles.subtitle}>Friends' workouts</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
+          <Text style={[styles.title, { color: colors.text }]}>Following</Text>
+          <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Friends' workouts</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>Following</Text>
-        <Text style={styles.subtitle}>Friends' workouts</Text>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Following</Text>
+        <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Friends' workouts</Text>
       </View>
 
       <FlatList
@@ -141,17 +143,16 @@ export default function FollowingScreen() {
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
         ListEmptyComponent={renderEmptyComponent}
         ListFooterComponent={renderFooter}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
         contentContainerStyle={posts.length === 0 ? styles.emptyListContainer : styles.listContainer}
-        initialNumToRender={5}
-        windowSize={7}
-        removeClippedSubviews
-        maxToRenderPerBatch={5}
+        initialNumToRender={10}
+        windowSize={10}
+        maxToRenderPerBatch={10}
       />
     </View>
   );
@@ -160,25 +161,21 @@ export default function FollowingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   headerContainer: {
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.light.cardBackground,
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: Colors.light.text,
     letterSpacing: -0.5,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
   },
   loadingContainer: {
     flex: 1,
@@ -204,7 +201,6 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 22,
   },

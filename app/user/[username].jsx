@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { getUserByUsername, followUser, unfollowUser } from '../api/usersApi';
 import { getPostsByUserId } from '../api/postsApi';
 import { createFollowNotification, deleteFollowNotification } from '../api/notificationsApi';
@@ -11,21 +11,12 @@ import ProfileHeader from '../components/profile/ProfileHeader';
 import PostsTab from '../components/profile/PostsTab';
 import ProgressTab from '../components/profile/ProgressTab';
 import FollowListModal from '../components/profile/FollowListModal';
-
-// Empty state component for unavailable content
-const EmptyState = ({ icon, title, message }) => (
-  <ScrollView contentContainerStyle={styles.emptyStateContainer}>
-    <View style={styles.emptyIconContainer}>
-      <Ionicons name={icon} size={40} color={Colors.light.secondaryText} />
-    </View>
-    <Text style={styles.emptyTitle}>{title}</Text>
-    <Text style={styles.emptyMessage}>{message}</Text>
-  </ScrollView>
-);
+import EmptyState from '../components/common/EmptyState';
 
 export default function UserProfileScreen() {
   const { username } = useLocalSearchParams();
   const router = useRouter();
+  const colors = useThemeColors();
   const { user: currentUser, refreshProfile } = useAuth();
 
   const [selectedTab, setSelectedTab] = useState('Progress');
@@ -150,16 +141,16 @@ export default function UserProfileScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>User not found</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.secondaryText }]}>User not found</Text>
       </View>
     );
   }
@@ -167,16 +158,16 @@ export default function UserProfileScreen() {
   const isOwnProfile = currentUser?.username === username;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header with back button */}
-      <View style={styles.headerContainer}>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>{user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || `@${username}`}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || `@${username}`}</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 
@@ -199,38 +190,38 @@ export default function UserProfileScreen() {
       />
 
       {/* Tabs */}
-      <View style={styles.tabsContainer}>
+      <View style={[styles.tabsContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Progress')}
         >
-          <Text style={selectedTab === 'Progress' ? styles.activeTabText : styles.inactiveTabText}>
+          <Text style={[styles.tabText, { color: selectedTab === 'Progress' ? colors.primary : colors.secondaryText }]}>
             Progress
           </Text>
-          {selectedTab === 'Progress' && <View style={styles.activeTabIndicator} />}
+          {selectedTab === 'Progress' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Posts')}
         >
-          <Text style={selectedTab === 'Posts' ? styles.activeTabText : styles.inactiveTabText}>
+          <Text style={[styles.tabText, { color: selectedTab === 'Posts' ? colors.primary : colors.secondaryText }]}>
             Posts
           </Text>
-          {selectedTab === 'Posts' && <View style={styles.activeTabIndicator} />}
+          {selectedTab === 'Posts' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Splits')}
         >
-          <Text style={selectedTab === 'Splits' ? styles.activeTabText : styles.inactiveTabText}>
+          <Text style={[styles.tabText, { color: selectedTab === 'Splits' ? colors.primary : colors.secondaryText }]}>
             Splits
           </Text>
-          {selectedTab === 'Splits' && <View style={styles.activeTabIndicator} />}
+          {selectedTab === 'Splits' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
-      <View style={styles.tabContentContainer}>
+      <View style={[styles.tabContentContainer, { backgroundColor: colors.background }]}>
         {renderTabContent()}
       </View>
 
@@ -248,17 +239,14 @@ export default function UserProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.light.background,
   },
   errorText: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -267,8 +255,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -283,17 +269,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   headerPlaceholder: {
     width: 40,
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.cardBackground,
     paddingHorizontal: 24,
     paddingTop: 12,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -305,57 +288,19 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     position: 'relative',
   },
-  activeTabText: {
+  tabText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.light.primary,
-  },
-  inactiveTabText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.light.secondaryText,
   },
   activeTabIndicator: {
     position: 'absolute',
     bottom: 0,
     height: 3,
-    backgroundColor: Colors.light.primary,
     borderRadius: 1.5,
     width: '70%',
   },
   tabContentContainer: {
     flex: 1,
     paddingTop: 16,
-    backgroundColor: Colors.light.background,
-  },
-  // Empty state styles
-  emptyStateContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 100,
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: Colors.light.borderLight,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyMessage: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    lineHeight: 22,
   },
 });

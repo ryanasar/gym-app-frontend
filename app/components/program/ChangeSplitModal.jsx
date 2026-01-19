@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import EmptyState from '../common/EmptyState';
 
 const ChangeSplitModal = ({ visible, onClose, currentSplit, otherSplits, onSelectSplit }) => {
   return (
@@ -76,11 +77,11 @@ const ChangeSplitModal = ({ visible, onClose, currentSplit, otherSplits, onSelec
                 </TouchableOpacity>
               ))
             ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="barbell-outline" size={48} color={Colors.light.secondaryText} />
-                <Text style={styles.emptyText}>No other splits available</Text>
-                <Text style={styles.emptySubtext}>Create a new split to switch to</Text>
-              </View>
+              <EmptyState
+                icon="barbell-outline"
+                title="No other splits available"
+                message="Create a new split to switch to"
+              />
             )}
           </ScrollView>
 

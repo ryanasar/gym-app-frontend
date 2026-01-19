@@ -61,6 +61,7 @@ export async function reloadSplitFromBackend(splitId, userId) {
             const exerciseId = ex.exerciseId?.toString() || ex.id?.toString();
             const targetSets = parseInt(ex.targetSets || ex.sets) || 3;
             const targetReps = parseInt(ex.targetReps || ex.reps) || 10;
+            const restSeconds = parseInt(ex.restSeconds) || 0;
 
             if (!exerciseId || exerciseId === 'undefined') {
               console.warn('[ReloadSplit] Skipping invalid exercise:', ex);
@@ -71,6 +72,7 @@ export async function reloadSplitFromBackend(splitId, userId) {
               exerciseId,
               targetSets,
               targetReps,
+              restSeconds,
             };
           })
           .filter(ex => ex !== null), // Remove invalid exercises

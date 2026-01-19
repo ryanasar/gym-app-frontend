@@ -121,6 +121,33 @@ export const createFollowNotification = async (recipientId, actorId) => {
 };
 
 /**
+ * Create a notification for a tag action
+ */
+export const createTagNotification = async (recipientId, actorId, postId) => {
+  // Don't notify yourself
+  if (recipientId === actorId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('Notifications')
+      .insert({
+        recipient_id: recipientId,
+        actor_id: actorId,
+        type: 'tag',
+        post_id: postId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating tag notification:', error);
+    return null;
+  }
+};
+
+/**
  * Delete a like notification (when unliking)
  */
 export const deleteLikeNotification = async (actorId, postId) => {

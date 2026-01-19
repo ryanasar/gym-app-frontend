@@ -6,8 +6,10 @@ import { Image } from 'expo-image';
 import { createComment, deletePost, likePost, unlikePost, getComments } from '../../api/postsApi';
 import { createLikeNotification, deleteLikeNotification, createCommentNotification } from '../../api/notificationsApi';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
-const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
+const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOpenComments = false }) => {
+  const colors = useThemeColors();
   const router = useRouter();
   const {
     id,
@@ -22,6 +24,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     streak,
     _count,
     likes = [],
+    taggedUsers = [],
   } = post;
 
   const [showCommentsModal, setShowCommentsModal] = useState(false);
@@ -42,6 +45,13 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
     setLocalLikeCount(_count?.likes || 0);
     setLocalCommentCount(_count?.comments || 0);
   }, [likes, _count?.likes, _count?.comments, currentUserId]);
+
+  // Auto-open comments if initialOpenComments is true
+  useEffect(() => {
+    if (initialOpenComments) {
+      openCommentsModal();
+    }
+  }, [initialOpenComments]);
 
   const isOwnPost = currentUserId && author?.id === currentUserId;
 
@@ -279,15 +289,18 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
   };
 
   const [showMenu, setShowMenu] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [descriptionNeedsTruncation, setDescriptionNeedsTruncation] = useState(false);
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow },
         pressed && !isRestDay && styles.cardPressed
       ]}
       onPress={handleCardPress}
-      android_ripple={{ color: Colors.light.borderLight }}
+      android_ripple={{ color: colors.borderLight }}
       disabled={isRestDay}
     >
       {/* Header Row: Avatar, Name, Timestamp, Menu */}
@@ -300,22 +313,22 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
           {author?.profile?.avatarUrl ? (
             <Image
               source={{ uri: author.profile.avatarUrl }}
-              style={styles.authorAvatar}
+              style={[styles.authorAvatar, { backgroundColor: colors.borderLight }]}
               contentFit="cover"
               transition={200}
               cachePolicy="memory-disk"
             />
           ) : (
-            <View style={styles.authorAvatarPlaceholder}>
-              <Text style={styles.avatarText}>
+            <View style={[styles.authorAvatarPlaceholder, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
                 {(author?.name || author?.username || 'U').charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
           <View style={styles.authorTextContainer}>
             <View style={styles.nameTimestampRow}>
-              <Text style={styles.authorName}>{author?.name || author?.username || 'Unknown User'}</Text>
-              <Text style={styles.timestampInline}>· {formatDate(createdAt)}</Text>
+              <Text style={[styles.authorName, { color: colors.text }]}>{author?.name || author?.username || 'Unknown User'}</Text>
+              <Text style={[styles.timestampInline, { color: colors.secondaryText }]}>· {formatDate(createdAt)}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -326,14 +339,14 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
             onPress={() => setShowMenu(!showMenu)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color={Colors.light.secondaryText} />
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* Overflow Menu */}
       {showMenu && isOwnPost && (
-        <View style={styles.menuOverlay}>
+        <View style={[styles.menuOverlay, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => {
@@ -341,8 +354,8 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
               handleEditPost();
             }}
           >
-            <Ionicons name="pencil" size={18} color={Colors.light.text} />
-            <Text style={styles.menuItemText}>Edit Post</Text>
+            <Ionicons name="pencil" size={18} color={colors.text} />
+            <Text style={[styles.menuItemText, { color: colors.text }]}>Edit Post</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.menuItem, styles.menuItemDanger]}
@@ -351,8 +364,8 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
               handleDeletePost();
             }}
           >
-            <Ionicons name="trash-outline" size={18} color="#EF4444" />
-            <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete Post</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+            <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Post</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -360,20 +373,41 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
       {/* Content Body */}
       <View style={[styles.contentBody, !imageUrl && styles.contentBodyNoImage]}>
         {/* Type Label + Workout Name */}
-        <Text style={styles.typeLabel}>{isRestDay ? 'REST DAY' : 'WORKOUT'}</Text>
+        <Text style={[styles.typeLabel, { color: colors.primary }]}>{isRestDay ? 'REST DAY' : 'WORKOUT'}</Text>
         {isRestDay ? (
-          <Text style={styles.workoutName}>Rest & Recover</Text>
+          <Text style={[styles.workoutName, { color: colors.text }]}>Rest & Recover</Text>
         ) : (
-          <Text style={styles.workoutName}>
+          <Text style={[styles.workoutName, { color: colors.text }]}>
             {title || workoutData?.dayName || 'Workout'}
           </Text>
         )}
 
         {/* Description */}
         {description && (
-          <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-            {isRestDay ? description.replace(/Recovery:\s*.+?(?:\n|$)/, '').trim() || 'Took a rest day' : description}
-          </Text>
+          <View>
+            <Text
+              style={[styles.description, { color: colors.secondaryText }]}
+              numberOfLines={isDescriptionExpanded ? undefined : 4}
+              ellipsizeMode="tail"
+              onTextLayout={(e) => {
+                if (!isDescriptionExpanded && e.nativeEvent.lines.length > 4) {
+                  setDescriptionNeedsTruncation(true);
+                }
+              }}
+            >
+              {isRestDay ? description.replace(/Recovery:\s*.+?(?:\n|$)/, '').trim() || 'Took a rest day' : description}
+            </Text>
+            {descriptionNeedsTruncation && (
+              <TouchableOpacity
+                onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.showMoreText, { color: colors.primary }]}>
+                  {isDescriptionExpanded ? 'show less' : 'show more'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -392,8 +426,26 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
       <View style={[styles.metadataSection, !imageUrl && styles.metadataSectionNoImage]}>
         {/* Streak Badge */}
         {streak && streak > 1 && (
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakText}>🔥 {streak}-day streak</Text>
+          <View style={[styles.streakBadge, { backgroundColor: colors.warning + '20' }]}>
+            <Text style={[styles.streakText, { color: colors.warning }]}>🔥 {streak}-day streak</Text>
+          </View>
+        )}
+
+        {/* Tagged Users Badge */}
+        {taggedUsers && taggedUsers.length > 0 && (
+          <View style={styles.taggedBadgesContainer}>
+            {taggedUsers.map((taggedUser) => (
+              <TouchableOpacity
+                key={taggedUser.id}
+                style={[styles.taggedUserBadge, { backgroundColor: colors.primary + '15' }]}
+                onPress={() => router.push(`/user/${taggedUser.username}`)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.taggedUserBadgeText, { color: colors.primary }]}>
+                  🏋️ @{taggedUser.username}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 
@@ -401,15 +453,15 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
         <View style={styles.badgesContainer}>
           {/* Rest Activities */}
           {isRestDay && restActivities && restActivities.length > 0 && restActivities.map((activity, index) => (
-            <View key={index} style={styles.activityBadge}>
-              <Text style={styles.activityBadgeText}>{activity}</Text>
+            <View key={index} style={[styles.activityBadge, { backgroundColor: colors.accent + '20' }]}>
+              <Text style={[styles.activityBadgeText, { color: colors.accent }]}>{activity}</Text>
             </View>
           ))}
 
           {/* Muscles Worked for Workout Days */}
           {!isRestDay && musclesWorked && musclesWorked.length > 0 && musclesWorked.map((muscle, index) => (
-            <View key={index} style={styles.muscleBadge}>
-              <Text style={styles.muscleBadgeText}>{muscle}</Text>
+            <View key={index} style={[styles.muscleBadge, { backgroundColor: colors.primary + '15' }]}>
+              <Text style={[styles.muscleBadgeText, { color: colors.primary }]}>{muscle}</Text>
             </View>
           ))}
         </View>
@@ -417,10 +469,10 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
         {/* Stats Row */}
         {workoutData && !isRestDay && (
           <View style={styles.statsRow}>
-            <Text style={styles.statsText}>
+            <Text style={[styles.statsText, { color: colors.secondaryText }]}>
               {totalSets} {totalSets === 1 ? 'set' : 'sets'} • {workoutData.exercises?.length || 0} {workoutData.exercises?.length === 1 ? 'exercise' : 'exercises'}
             </Text>
-            <Text style={styles.tapHintText}>• Tap to view workout details</Text>
+            <Text style={[styles.tapHintText, { color: colors.secondaryText }]}>• Tap to view workout details</Text>
           </View>
         )}
       </View>
@@ -435,10 +487,10 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
           <Ionicons
             name={isLiked ? "heart" : "heart-outline"}
             size={20}
-            color={isLiked ? "#EF4444" : Colors.light.secondaryText}
+            color={isLiked ? colors.error : colors.secondaryText}
           />
           {localLikeCount > 0 && (
-            <Text style={[styles.actionCount, isLiked && styles.likedCount]}>
+            <Text style={[styles.actionCount, { color: colors.secondaryText }, isLiked && { color: colors.error }]}>
               {localLikeCount}
             </Text>
           )}
@@ -449,9 +501,9 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
           onPress={openCommentsModal}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chatbubble-outline" size={18} color={Colors.light.secondaryText} />
+          <Ionicons name="chatbubble-outline" size={18} color={colors.secondaryText} />
           {localCommentCount > 0 && (
-            <Text style={styles.actionCount}>{localCommentCount}</Text>
+            <Text style={[styles.actionCount, { color: colors.secondaryText }]}>{localCommentCount}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -462,7 +514,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
           style={styles.viewCommentsButton}
           onPress={openCommentsModal}
         >
-          <Text style={styles.viewCommentsText}>
+          <Text style={[styles.viewCommentsText, { color: colors.secondaryText }]}>
             View {localCommentCount === 1 ? 'comment' : `all ${localCommentCount} comments`}
           </Text>
         </TouchableOpacity>
@@ -476,26 +528,26 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
         onRequestClose={closeCommentsModal}
       >
         <KeyboardAvoidingView
-          style={styles.modalContainer}
+          style={[styles.modalContainer, { backgroundColor: colors.background }]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
           {/* Modal Header */}
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Comments</Text>
+          <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Comments</Text>
             <TouchableOpacity
               style={styles.modalCloseButton}
               onPress={closeCommentsModal}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={24} color={Colors.light.text} />
+              <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
 
           {/* Comments List */}
           {isLoadingComments ? (
             <View style={styles.modalLoading}>
-              <ActivityIndicator size="large" color={Colors.light.primary} />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : (
             <FlatList
@@ -506,35 +558,35 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
                   {comment.author?.profile?.avatarUrl ? (
                     <Image
                       source={{ uri: comment.author.profile.avatarUrl }}
-                      style={styles.modalCommentAvatar}
+                      style={[styles.modalCommentAvatar, { backgroundColor: colors.borderLight }]}
                       contentFit="cover"
                       transition={200}
                       cachePolicy="memory-disk"
                     />
                   ) : (
-                    <View style={styles.modalCommentAvatarPlaceholder}>
-                      <Text style={styles.modalCommentAvatarText}>
+                    <View style={[styles.modalCommentAvatarPlaceholder, { backgroundColor: colors.primary + '20' }]}>
+                      <Text style={[styles.modalCommentAvatarText, { color: colors.primary }]}>
                         {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
                       </Text>
                     </View>
                   )}
                   <View style={styles.modalCommentContent}>
                     <View style={styles.modalCommentHeader}>
-                      <Text style={styles.modalCommentAuthor}>
+                      <Text style={[styles.modalCommentAuthor, { color: colors.text }]}>
                         {comment.author?.name || comment.author?.username || 'Unknown User'}
                       </Text>
-                      <Text style={styles.modalCommentTimestamp}>
+                      <Text style={[styles.modalCommentTimestamp, { color: colors.secondaryText }]}>
                         {formatDate(comment.timestamp)}
                       </Text>
                     </View>
-                    <Text style={styles.modalCommentText}>{comment.content}</Text>
+                    <Text style={[styles.modalCommentText, { color: colors.text }]}>{comment.content}</Text>
                   </View>
                 </View>
               )}
               ListEmptyComponent={
                 <View style={styles.modalEmptyState}>
-                  <Text style={styles.modalEmptyText}>No comments yet</Text>
-                  <Text style={styles.modalEmptySubtext}>Be the first to comment!</Text>
+                  <Text style={[styles.modalEmptyText, { color: colors.text }]}>No comments yet</Text>
+                  <Text style={[styles.modalEmptySubtext, { color: colors.secondaryText }]}>Be the first to comment!</Text>
                 </View>
               }
               contentContainerStyle={styles.modalCommentsList}
@@ -543,11 +595,11 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
           )}
 
           {/* Comment Input */}
-          <View style={styles.modalInputContainer}>
+          <View style={[styles.modalInputContainer, { backgroundColor: colors.cardBackground, borderTopColor: colors.borderLight }]}>
             <TextInput
-              style={styles.modalCommentInput}
+              style={[styles.modalCommentInput, { backgroundColor: colors.borderLight + '30', color: colors.text }]}
               placeholder="Write a comment..."
-              placeholderTextColor={Colors.light.secondaryText}
+              placeholderTextColor={colors.secondaryText}
               value={commentText}
               onChangeText={setCommentText}
               multiline
@@ -556,18 +608,19 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted }) => {
             <TouchableOpacity
               style={[
                 styles.modalSendButton,
+                { backgroundColor: colors.primary + '15' },
                 (!commentText.trim() || isSubmittingComment) && styles.modalSendButtonDisabled
               ]}
               onPress={handleCommentSubmit}
               disabled={!commentText.trim() || isSubmittingComment}
             >
               {isSubmittingComment ? (
-                <ActivityIndicator size="small" color={Colors.light.primary} />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
                 <Ionicons
                   name="send"
                   size={20}
-                  color={commentText.trim() ? Colors.light.primary : Colors.light.secondaryText}
+                  color={commentText.trim() ? colors.primary : colors.secondaryText}
                 />
               )}
             </TouchableOpacity>
@@ -721,6 +774,12 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     fontWeight: '400',
   },
+  showMoreText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
+    marginTop: 4,
+  },
 
   // Post Image - Full Width
   postImage: {
@@ -751,6 +810,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#EA580C',
+  },
+
+  // Tagged Users Badges
+  taggedBadgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  taggedUserBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  taggedUserBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // Badges Container
@@ -806,6 +881,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
+  // Tagged Users
+  taggedUsersContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  taggedLabel: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+  },
+  taggedUserLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.primary,
+  },
+
   // Social Actions Row
   actionsRow: {
     flexDirection: 'row',
@@ -813,8 +905,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: Colors.light.borderLight + '30',
   },
   actionItem: {
     flexDirection: 'row',

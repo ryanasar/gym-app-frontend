@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
-import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import SettingsDropdown from './SettingsDropdown';
 
 const ProfileHeader = ({
@@ -22,16 +22,16 @@ const ProfileHeader = ({
   onFollowingPress,
   onEditPress,
 }) => {
-  const colorScheme = 'light'; // or dynamically from context/theme
+  const colors = useThemeColors();
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors[colorScheme].background }]}>
+    <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
       {/* Combined Profile Section */}
-      <View style={styles.profileContainer}>
+      <View style={[styles.profileContainer, { backgroundColor: colors.cardBackground }]}>
         {/* Settings Dropdown - Top Right */}
         {isOwnProfile && (
           <View style={styles.settingsContainer}>
-            <SettingsDropdown onSignOut={onSignOut} colorScheme={colorScheme} />
+            <SettingsDropdown onSignOut={onSignOut} />
           </View>
         )}
 
@@ -42,14 +42,14 @@ const ProfileHeader = ({
             {avatarUrl ? (
               <Image
                 source={{ uri: avatarUrl }}
-                style={styles.profileImage}
+                style={[styles.profileImage, { shadowColor: colors.shadow }]}
                 contentFit="cover"
                 transition={200}
                 cachePolicy="memory-disk"
               />
             ) : (
-              <View style={[styles.profileInitialContainer, { backgroundColor: Colors[colorScheme].primary }]}>
-                <Text style={[styles.profileInitial, { color: Colors[colorScheme].onPrimary }]}>
+              <View style={[styles.profileInitialContainer, { backgroundColor: colors.primary, shadowColor: colors.shadow }]}>
+                <Text style={[styles.profileInitial, { color: colors.onPrimary }]}>
                   {name ? name.charAt(0).toUpperCase() : "?"}
                 </Text>
               </View>
@@ -59,18 +59,19 @@ const ProfileHeader = ({
           {/* Profile Info */}
           <View style={styles.profileInfo}>
             {/* Username */}
-            <Text style={[styles.username, { color: Colors[colorScheme].text }]} numberOfLines={1}>@{username}</Text>
+            <Text style={[styles.username, { color: colors.text }]} numberOfLines={1}>@{username}</Text>
 
             {/* Edit Profile Button / Follow Button */}
             {isOwnProfile ? (
-              <TouchableOpacity style={styles.editButton} onPress={onEditPress}>
-                <Text style={styles.editButtonText}>Edit profile</Text>
+              <TouchableOpacity style={[styles.editButton, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]} onPress={onEditPress}>
+                <Text style={[styles.editButtonText, { color: colors.text }]}>Edit profile</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 style={[
                   styles.followButton,
-                  isFollowing && styles.followingButton,
+                  { backgroundColor: colors.primary, shadowColor: colors.primary },
+                  isFollowing && [styles.followingButton, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }],
                   isFollowLoading && styles.buttonLoading
                 ]}
                 onPress={onFollowToggle}
@@ -79,13 +80,14 @@ const ProfileHeader = ({
                 {isFollowLoading ? (
                   <ActivityIndicator
                     size="small"
-                    color={isFollowing ? Colors.light.text : '#FFFFFF'}
+                    color={isFollowing ? colors.text : colors.onPrimary}
                   />
                 ) : (
                   <Text
                     style={[
                       styles.followButtonText,
-                      isFollowing && styles.followingButtonText
+                      { color: colors.onPrimary },
+                      isFollowing && { color: colors.text }
                     ]}
                   >
                     {isFollowing ? 'Following' : 'Follow'}
@@ -98,22 +100,22 @@ const ProfileHeader = ({
 
         {/* Stats Section */}
         <View style={styles.statsSection}>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: Colors[colorScheme].text }]}>{workouts || 0}</Text>
-            <Text style={[styles.statLabel, { color: Colors[colorScheme].secondaryText }]}>Posts</Text>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{workouts || 0}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Posts</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <TouchableOpacity style={styles.statItem} onPress={onFollowersPress} activeOpacity={0.7}>
-            <Text style={[styles.statNumber, { color: Colors[colorScheme].text }]}>{followedBy || 0}</Text>
-            <Text style={[styles.statLabel, { color: Colors[colorScheme].secondaryText }]}>Followers</Text>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{followedBy || 0}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Followers</Text>
           </TouchableOpacity>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <TouchableOpacity style={styles.statItem} onPress={onFollowingPress} activeOpacity={0.7}>
-            <Text style={[styles.statNumber, { color: Colors[colorScheme].text }]}>{following || 0}</Text>
-            <Text style={[styles.statLabel, { color: Colors[colorScheme].secondaryText }]}>Following</Text>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{following || 0}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Following</Text>
           </TouchableOpacity>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
         </View>
       </View>
 
@@ -121,10 +123,10 @@ const ProfileHeader = ({
       {bio ? (
         <>
           {/* Divider */}
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
 
-          <View style={styles.bioContainer}>
-            <Text style={[styles.bio, { color: Colors[colorScheme].text }]} numberOfLines={2}>
+          <View style={[styles.bioContainer, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.bio, { color: colors.text }]} numberOfLines={2}>
               {bio}
             </Text>
           </View>
@@ -138,10 +140,8 @@ export default ProfileHeader;
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.light.cardBackground,
   },
   profileContainer: {
-    backgroundColor: Colors.light.cardBackground,
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 0,
@@ -166,7 +166,6 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -176,7 +175,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -197,14 +195,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   editButton: {
-    backgroundColor: Colors.light.cardBackground,
     borderWidth: 1.5,
-    borderColor: Colors.light.border,
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 12,
     alignSelf: 'flex-start',
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -213,16 +208,13 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.text,
     letterSpacing: -0.2,
   },
   followButton: {
-    backgroundColor: Colors.light.primary,
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 12,
     alignSelf: 'flex-start',
-    shadowColor: Colors.light.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -231,18 +223,13 @@ const styles = StyleSheet.create({
   followButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
     letterSpacing: -0.2,
   },
   followingButton: {
-    backgroundColor: Colors.light.cardBackground,
     borderWidth: 1.5,
-    borderColor: Colors.light.border,
-    shadowColor: Colors.light.shadow,
     shadowOpacity: 0.05,
   },
   followingButtonText: {
-    color: Colors.light.text,
   },
   buttonLoading: {
     opacity: 0.7,
@@ -273,21 +260,18 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
-    backgroundColor: Colors.light.borderLight,
   },
   divider: {
     height: 1,
-    backgroundColor: '#E5E5EA',
     marginHorizontal: 12,
   },
   bioContainer: {
     paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: Colors.light.cardBackground,
+    paddingVertical: 10,
   },
   bio: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: '400',
   },
 });

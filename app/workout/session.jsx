@@ -1,13 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Alert, Animated, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
 import { startWorkout, updateWorkoutSet, completeWorkout, cancelWorkout, getActiveWorkout, calculateStreakFromLocal, storage } from '../../storage';
+import LiveActivity from '../modules/LiveActivity';
 
 const WorkoutSessionScreen = () => {
+  const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { markWorkoutCompleted } = useWorkout();
@@ -35,14 +41,57 @@ const WorkoutSessionScreen = () => {
   const [showSwapExerciseModal, setShowSwapExerciseModal] = useState(false);
   const [swapExerciseSearch, setSwapExerciseSearch] = useState('');
 
+  // Reorder Exercises Modal state
+  const [showReorderModal, setShowReorderModal] = useState(false);
+
+  // Completion state - prevents interaction during finish animation
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  // Rest Timer state
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [restTimeRemaining, setRestTimeRemaining] = useState(0);
+  const [totalRestTime, setTotalRestTime] = useState(0);
+  const [inputSectionHeight, setInputSectionHeight] = useState(null);
+  const restTimerRef = useRef(null);
+  const pendingNavigationRef = useRef(null);
+
   // Animation refs
   const slideXAnim = useRef(new Animated.Value(0)).current; // Horizontal for sets
   const slideYAnim = useRef(new Animated.Value(0)).current; // Vertical for exercises
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
+  // Live Activity ref to track if started
+  const liveActivityStartedRef = useRef(false);
+
   // Input refs
   const weightInputRef = useRef(null);
   const repsInputRef = useRef(null);
+
+  // Helper to update Live Activity with current exercise info
+  const updateLiveActivity = useCallback((exercisesList, exIndex, sIndex, isStart = false) => {
+    if (!exercisesList || exercisesList.length === 0) return;
+
+    const exercise = exercisesList[exIndex];
+    if (!exercise) return;
+
+    const currentSetData = exercise.sessionSets?.[sIndex];
+    const weight = parseInt(currentSetData?.weight) || 0;
+    const reps = parseInt(currentSetData?.reps) || 0;
+    const setInfo = `Set ${sIndex + 1} of ${exercise.totalSets}`;
+
+    if (isStart && !liveActivityStartedRef.current) {
+      LiveActivity.startWorkout(
+        workoutData?.dayName || 'Workout',
+        exercise.name,
+        setInfo,
+        weight,
+        reps
+      );
+      liveActivityStartedRef.current = true;
+    } else if (liveActivityStartedRef.current) {
+      LiveActivity.updateExercise(exercise.name, setInfo, weight, reps);
+    }
+  }, [workoutData?.dayName]);
 
   // Load exercise database on mount
   useEffect(() => {
@@ -95,6 +144,7 @@ const WorkoutSessionScreen = () => {
                 id: exercise.exerciseId,
                 completedSets: completed,
                 totalSets: exercise.sets.length,
+                restSeconds: exercise.restSeconds || 0,
                 sessionSets: exercise.sets.map((set) => ({
                   setNumber: set.setIndex + 1,
                   weight: set.weight?.toString() || '0',
@@ -108,12 +158,16 @@ const WorkoutSessionScreen = () => {
 
             // Find current position (first incomplete set)
             let foundCurrent = false;
+            let restoredExIndex = 0;
+            let restoredSetIndex = 0;
             for (let i = 0; i < restoredExercises.length; i++) {
               const ex = restoredExercises[i];
               const firstIncompleteSet = ex.sessionSets.findIndex(s => !s.completed);
               if (firstIncompleteSet !== -1) {
                 setCurrentExerciseIndex(i);
                 setCurrentSetIndex(firstIncompleteSet);
+                restoredExIndex = i;
+                restoredSetIndex = firstIncompleteSet;
                 foundCurrent = true;
                 break;
               }
@@ -121,9 +175,14 @@ const WorkoutSessionScreen = () => {
 
             if (!foundCurrent) {
               // All sets complete, set to last
-              setCurrentExerciseIndex(restoredExercises.length - 1);
-              setCurrentSetIndex(restoredExercises[restoredExercises.length - 1].sessionSets.length - 1);
+              restoredExIndex = restoredExercises.length - 1;
+              restoredSetIndex = restoredExercises[restoredExercises.length - 1].sessionSets.length - 1;
+              setCurrentExerciseIndex(restoredExIndex);
+              setCurrentSetIndex(restoredSetIndex);
             }
+
+            // Start Live Activity for restored workout
+            updateLiveActivity(restoredExercises, restoredExIndex, restoredSetIndex, true);
 
             return;
           }
@@ -149,12 +208,17 @@ const WorkoutSessionScreen = () => {
           // This ensures we use the correct exerciseIds that match the storage
           const initializedExercises = newWorkout.exercises.map((exercise) => {
             const exerciseData = exerciseMap[exercise.exerciseId] || exerciseMap[String(exercise.exerciseId)];
+            // Get restSeconds from workoutData if available
+            const workoutExercise = workoutData.exercises?.find(
+              ex => ex.id === exercise.exerciseId || String(ex.id) === String(exercise.exerciseId)
+            );
 
             return {
               name: exerciseData?.name || `Exercise ${exercise.exerciseId}`,
               id: exercise.exerciseId,
               completedSets: 0,
               totalSets: exercise.sets.length,
+              restSeconds: workoutExercise?.restSeconds || exercise.restSeconds || 0,
               sessionSets: exercise.sets.map((set) => ({
                 setNumber: set.setIndex + 1,
                 weight: set.weight?.toString() || '0',
@@ -165,6 +229,9 @@ const WorkoutSessionScreen = () => {
           });
 
           setExercises(initializedExercises);
+
+          // Start Live Activity for new workout
+          updateLiveActivity(initializedExercises, 0, 0, true);
         }
       } catch (error) {
         console.error('[Session] Error checking for active workout:', error);
@@ -172,7 +239,109 @@ const WorkoutSessionScreen = () => {
     };
 
     checkForActiveWorkout();
+  }, [updateLiveActivity]);
+
+  // Rest timer countdown effect
+  useEffect(() => {
+    if (showRestTimer && restTimeRemaining > 0) {
+      // Update Live Activity with rest time at start
+      if (restTimeRemaining === totalRestTime) {
+        LiveActivity.startRest(restTimeRemaining);
+      }
+
+      restTimerRef.current = setInterval(() => {
+        setRestTimeRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(restTimerRef.current);
+            setShowRestTimer(false);
+            // End rest on Live Activity
+            LiveActivity.endRest();
+            // Execute pending navigation
+            if (pendingNavigationRef.current) {
+              pendingNavigationRef.current();
+              pendingNavigationRef.current = null;
+            }
+            return 0;
+          }
+          // Update Live Activity with remaining rest time
+          LiveActivity.updateRest(prev - 1);
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => {
+        if (restTimerRef.current) {
+          clearInterval(restTimerRef.current);
+        }
+      };
+    }
+  }, [showRestTimer, restTimeRemaining, totalRestTime]);
+
+  // Cleanup timer and Live Activity on unmount
+  useEffect(() => {
+    return () => {
+      if (restTimerRef.current) {
+        clearInterval(restTimerRef.current);
+      }
+      // Note: We don't stop the Live Activity here by default
+      // because the user might be switching apps temporarily.
+      // The Live Activity will be stopped explicitly when the
+      // workout is completed, discarded, or saved.
+    };
   }, []);
+
+  // Helper to format time for display
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Skip rest timer and proceed immediately
+  const skipRestTimer = () => {
+    if (restTimerRef.current) {
+      clearInterval(restTimerRef.current);
+    }
+    setShowRestTimer(false);
+    setRestTimeRemaining(0);
+    // End rest on Live Activity
+    LiveActivity.endRest();
+    if (pendingNavigationRef.current) {
+      pendingNavigationRef.current();
+      pendingNavigationRef.current = null;
+    }
+  };
+
+  // useCallback must be before any early returns to follow Rules of Hooks
+  const handleReorderExercises = useCallback(async ({ data }) => {
+    // Update UI state
+    setExercises(data);
+
+    // Find the new index of the current exercise
+    const currentExerciseId = exercises[currentExerciseIndex]?.id;
+    const newIndex = data.findIndex(ex => ex.id === currentExerciseId);
+    if (newIndex !== -1 && newIndex !== currentExerciseIndex) {
+      setCurrentExerciseIndex(newIndex);
+    }
+
+    // Update storage
+    try {
+      const activeWorkout = await storage.getActiveWorkout();
+      if (activeWorkout && activeWorkout.id === workoutSessionId) {
+        // Reorder exercises in storage to match the new order
+        const reorderedStorageExercises = data.map(uiExercise => {
+          return activeWorkout.exercises.find(
+            storageEx => storageEx.exerciseId === uiExercise.id || String(storageEx.exerciseId) === String(uiExercise.id)
+          );
+        }).filter(Boolean);
+
+        activeWorkout.exercises = reorderedStorageExercises;
+        await storage.saveActiveWorkout(activeWorkout);
+      }
+    } catch (error) {
+      console.error('[Session] Error reordering exercises in storage:', error);
+    }
+  }, [exercises, currentExerciseIndex, workoutSessionId]);
 
   if (!workoutData || !exercises.length) {
     return (
@@ -476,6 +645,11 @@ const WorkoutSessionScreen = () => {
     }
   };
 
+  const openReorderModal = () => {
+    setShowOptionsMenu(false);
+    setShowReorderModal(true);
+  };
+
   // Filter exercises for search
   const filteredExercisesForAdd = exerciseDatabase.filter(ex =>
     ex.name.toLowerCase().includes(addExerciseSearch.toLowerCase()) &&
@@ -504,18 +678,30 @@ const WorkoutSessionScreen = () => {
     // Save to storage immediately
     await saveSetToStorage(currentExerciseIndex, currentSetIndex, updatedSetData);
 
-    // Move to next set or exercise
-    if (isLastSet) {
-      if (isLastExercise) {
-        // Workout completed!
-        handleWorkoutComplete();
+    // Determine what to do next
+    const proceedToNext = () => {
+      if (isLastSet) {
+        if (isLastExercise) {
+          handleWorkoutComplete();
+        } else {
+          animateToNextExercise();
+        }
       } else {
-        // Move to next exercise with vertical animation
-        animateToNextExercise();
+        animateToNextSet();
       }
+    };
+
+    // Check if rest timer is configured and we're not on the last set
+    const restSeconds = parseInt(currentExercise.restSeconds) || 0;
+    if (restSeconds > 0 && !isLastSet) {
+      // Show rest timer before proceeding
+      pendingNavigationRef.current = proceedToNext;
+      setTotalRestTime(restSeconds);
+      setRestTimeRemaining(restSeconds);
+      setShowRestTimer(true);
     } else {
-      // Move to next set with horizontal animation
-      animateToNextSet();
+      // No rest timer or last set, proceed immediately
+      proceedToNext();
     }
   };
 
@@ -533,6 +719,32 @@ const WorkoutSessionScreen = () => {
         useNativeDriver: true,
       })
     ]).start(() => {
+      const nextSetIndex = currentSetIndex + 1;
+
+      // Copy weight/reps from previous set if next set values aren't set
+      setExercises(prev => {
+        const updated = [...prev];
+        const exercise = updated[currentExerciseIndex];
+        const prevSet = exercise.sessionSets[currentSetIndex];
+        const nextSet = exercise.sessionSets[nextSetIndex];
+
+        if (nextSet) {
+          // Copy weight if not set
+          if (!nextSet.weight || nextSet.weight === '0' || nextSet.weight === '') {
+            nextSet.weight = prevSet.weight;
+          }
+          // Copy reps if not set
+          if (!nextSet.reps || nextSet.reps === '0' || nextSet.reps === '') {
+            nextSet.reps = prevSet.reps;
+          }
+        }
+
+        // Update Live Activity with next set info
+        updateLiveActivity(updated, currentExerciseIndex, nextSetIndex);
+
+        return updated;
+      });
+
       // Update state after animation
       setCurrentSetIndex(prev => prev + 1);
 
@@ -573,8 +785,12 @@ const WorkoutSessionScreen = () => {
       if (isLastExercise) {
         handleWorkoutComplete();
       } else {
-        setCurrentExerciseIndex(prev => prev + 1);
+        const nextExerciseIndex = currentExerciseIndex + 1;
+        setCurrentExerciseIndex(nextExerciseIndex);
         setCurrentSetIndex(0);
+
+        // Update Live Activity with next exercise info
+        updateLiveActivity(exercises, nextExerciseIndex, 0);
 
         // Reset animation values and animate in from top
         slideYAnim.setValue(100);
@@ -775,6 +991,14 @@ const WorkoutSessionScreen = () => {
   };
 
   const handleWorkoutComplete = async () => {
+    // Prevent multiple presses during completion
+    if (isCompleting) return;
+    setIsCompleting(true);
+
+    // Stop Live Activity
+    LiveActivity.stopWorkout();
+    liveActivityStartedRef.current = false;
+
     // Mark workout as complete in storage (moves to pending sync)
     if (workoutSessionId) {
       try {
@@ -806,6 +1030,10 @@ const WorkoutSessionScreen = () => {
         {
           text: 'Save & Exit',
           onPress: () => {
+            // Keep Live Activity running so user can resume later
+            // (or stop it if you prefer to end it on pause)
+            LiveActivity.stopWorkout();
+            liveActivityStartedRef.current = false;
             router.replace({
               pathname: '/(tabs)/workout',
               params: { paused: 'true' }
@@ -816,6 +1044,10 @@ const WorkoutSessionScreen = () => {
           text: 'Discard Workout',
           style: 'destructive',
           onPress: async () => {
+            // Stop Live Activity
+            LiveActivity.stopWorkout();
+            liveActivityStartedRef.current = false;
+
             if (workoutSessionId) {
               try {
                 await cancelWorkout(workoutSessionId);
@@ -835,35 +1067,37 @@ const WorkoutSessionScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} pointerEvents={isCompleting ? 'none' : 'auto'}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={exitWorkout} style={styles.headerLeft}>
-          <Text style={styles.exitButton}>Exit</Text>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+        <TouchableOpacity onPress={exitWorkout} style={styles.headerLeft} disabled={isCompleting}>
+          <Text style={[styles.exitButton, { color: colors.error }, isCompleting && styles.disabledText]}>Exit</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{workoutData.dayName}</Text>
-        <TouchableOpacity onPress={handleWorkoutComplete} style={styles.headerRight}>
-          <Text style={styles.completeButton}>Finish</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{workoutData.dayName}</Text>
+        <TouchableOpacity onPress={handleWorkoutComplete} style={styles.headerRight} disabled={isCompleting}>
+          <Text style={[styles.completeButton, isCompleting && styles.disabledText]}>
+            {isCompleting ? 'Finishing...' : 'Finish'}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Progress Bar */}
-      <View style={styles.progressContainer}>
+      <View style={[styles.progressContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Workout Progress</Text>
-          <Text style={styles.progressCounter}>
+          <Text style={[styles.progressTitle, { color: colors.text }]}>Workout Progress</Text>
+          <Text style={[styles.progressCounter, { color: colors.primary }]}>
             {currentExerciseIndex + 1}/{exercises.length}
           </Text>
         </View>
         <View style={styles.progressBarContainer}>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: colors.borderLight + '60' }]}>
             <View style={[
               styles.progressFill,
-              { width: `${((currentExerciseIndex + (currentSetIndex + 1) / currentExercise.totalSets) / exercises.length) * 100}%` }
+              { width: `${((currentExerciseIndex + (currentSetIndex + 1) / currentExercise.totalSets) / exercises.length) * 100}%`, backgroundColor: colors.primary, shadowColor: colors.primary }
             ]} />
           </View>
         </View>
-        <Text style={styles.progressText}>
+        <Text style={[styles.progressText, { color: colors.secondaryText }]}>
           Exercise {currentExerciseIndex + 1} of {exercises.length} • Set {currentSetIndex + 1} of {currentExercise.totalSets}
         </Text>
       </View>
@@ -873,6 +1107,7 @@ const WorkoutSessionScreen = () => {
         <Animated.View
           style={[
             styles.currentExerciseCard,
+            { backgroundColor: colors.cardBackground, borderColor: colors.primary + '30', shadowColor: colors.shadow },
             {
               transform: [
                 { translateX: slideXAnim },
@@ -890,14 +1125,14 @@ const WorkoutSessionScreen = () => {
                 onPress={goBackOneStep}
                 activeOpacity={0.7}
               >
-                <Ionicons name="arrow-back" size={18} color={Colors.light.text} />
+                <Ionicons name="arrow-back" size={18} color={colors.text} />
               </TouchableOpacity>
             )}
 
             <View style={styles.exerciseTitleContainer}>
-              <Text style={styles.exerciseTitle}>{currentExercise.name}</Text>
-              <View style={styles.setBadge}>
-                <Text style={styles.setBadgeText}>
+              <Text style={[styles.exerciseTitle, { color: colors.text }]}>{currentExercise.name}</Text>
+              <View style={[styles.setBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                <Text style={[styles.setBadgeText, { color: colors.primary }]}>
                   Set {currentSetIndex + 1}/{currentExercise.totalSets}
                 </Text>
               </View>
@@ -909,82 +1144,129 @@ const WorkoutSessionScreen = () => {
               onPress={() => setShowOptionsMenu(true)}
               activeOpacity={0.7}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color={Colors.light.text} />
+              <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          {/* Set Input Fields */}
-          <View style={styles.inputSection}>
-            <View style={styles.setInputs}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>WEIGHT (LBS)</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    ref={weightInputRef}
-                    style={[
-                      styles.input,
-                      (!currentSet?.weight || currentSet?.weight === '0') && styles.inputGreyedOut
-                    ]}
-                    placeholder={currentExercise.weight || "0"}
-                    value={currentSet?.weight !== undefined ? currentSet.weight : '0'}
-                    onChangeText={(value) => updateSetData('weight', value)}
-                    onFocus={() => {
-                      if (currentSet?.weight === '0') {
-                        updateSetData('weight', '');
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!currentSet?.weight || currentSet?.weight === '') {
-                        updateSetData('weight', '0');
-                      }
-                    }}
-                    keyboardType="numeric"
-                    placeholderTextColor={Colors.light.secondaryText + '80'}
-                    selectionColor={Colors.light.primary}
-                  />
+          {/* Set Input Fields or Rest Timer */}
+          <View
+            style={[styles.inputSection, inputSectionHeight && { minHeight: inputSectionHeight }]}
+            onLayout={(event) => {
+              if (!inputSectionHeight && !showRestTimer) {
+                setInputSectionHeight(event.nativeEvent.layout.height);
+              }
+            }}
+          >
+            {showRestTimer ? (
+              <View style={styles.inlineRestTimerContainer}>
+                <View style={styles.circularProgressContainer}>
+                  <Svg width={80} height={80} style={styles.circularProgressSvg}>
+                    {/* Background circle */}
+                    <Circle
+                      cx={40}
+                      cy={40}
+                      r={36}
+                      stroke={colors.border}
+                      strokeWidth={4}
+                      fill="transparent"
+                    />
+                    {/* Progress circle */}
+                    <Circle
+                      cx={40}
+                      cy={40}
+                      r={36}
+                      stroke={colors.primary}
+                      strokeWidth={4}
+                      fill="transparent"
+                      strokeDasharray={2 * Math.PI * 36}
+                      strokeDashoffset={2 * Math.PI * 36 * (1 - restTimeRemaining / totalRestTime)}
+                      strokeLinecap="round"
+                      transform="rotate(-90 40 40)"
+                    />
+                  </Svg>
+                  <View style={styles.timerTextContainer}>
+                    <Text style={[styles.timerText, { color: colors.text }]}>{formatTime(restTimeRemaining)}</Text>
+                    <Text style={[styles.timerLabel, { color: colors.secondaryText }]}>Rest</Text>
+                  </View>
                 </View>
               </View>
+            ) : (
+              <View style={styles.setInputs}>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.secondaryText }]}>WEIGHT (LBS)</Text>
+                  <View style={[styles.inputWrapper, { shadowColor: colors.shadow }]}>
+                    <TextInput
+                      ref={weightInputRef}
+                      style={[
+                        styles.input,
+                        { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, color: colors.text },
+                        (!currentSet?.weight || currentSet?.weight === '0') && { color: colors.secondaryText + '60', borderColor: colors.borderLight + '60' }
+                      ]}
+                      placeholder={currentExercise.weight || "0"}
+                      value={currentSet?.weight !== undefined ? currentSet.weight : '0'}
+                      onChangeText={(value) => updateSetData('weight', value)}
+                      onFocus={() => {
+                        if (currentSet?.weight === '0') {
+                          updateSetData('weight', '');
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!currentSet?.weight || currentSet?.weight === '') {
+                          updateSetData('weight', '0');
+                        }
+                      }}
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.secondaryText + '80'}
+                      selectionColor={colors.primary}
+                    />
+                  </View>
+                </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>REPS</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    ref={repsInputRef}
-                    style={styles.input}
-                    placeholder={currentExercise.reps || "0"}
-                    value={currentSet?.reps !== undefined ? currentSet.reps : '0'}
-                    onChangeText={(value) => updateSetData('reps', value)}
-                    onFocus={() => {
-                      if (currentSet?.reps === '0') {
-                        updateSetData('reps', '');
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!currentSet?.reps || currentSet?.reps === '') {
-                        updateSetData('reps', '0');
-                      }
-                    }}
-                    keyboardType="numeric"
-                    placeholderTextColor={Colors.light.secondaryText + '80'}
-                    selectionColor={Colors.light.primary}
-                  />
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.secondaryText }]}>REPS</Text>
+                  <View style={[styles.inputWrapper, { shadowColor: colors.shadow }]}>
+                    <TextInput
+                      ref={repsInputRef}
+                      style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, color: colors.text }]}
+                      placeholder={currentExercise.reps || "0"}
+                      value={currentSet?.reps !== undefined ? currentSet.reps : '0'}
+                      onChangeText={(value) => updateSetData('reps', value)}
+                      onFocus={() => {
+                        if (currentSet?.reps === '0') {
+                          updateSetData('reps', '');
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!currentSet?.reps || currentSet?.reps === '') {
+                          updateSetData('reps', '0');
+                        }
+                      }}
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.secondaryText + '80'}
+                      selectionColor={colors.primary}
+                    />
+                  </View>
                 </View>
               </View>
-            </View>
+            )}
           </View>
 
-          {/* Set Completion Button */}
+          {/* Set Completion Button or Skip Button */}
           <View style={styles.primaryActionContainer}>
             <TouchableOpacity
               style={[
                 styles.completeSetButton,
-                isLastSet && isLastExercise && styles.finishWorkoutButton
+                { backgroundColor: colors.primary, shadowColor: colors.primary },
+                isLastSet && isLastExercise && !showRestTimer && styles.finishWorkoutButton,
+                showRestTimer && [styles.skipRestButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]
               ]}
-              onPress={completeCurrentSet}
+              onPress={showRestTimer ? skipRestTimer : completeCurrentSet}
               activeOpacity={0.8}
             >
-              <Text style={styles.completeSetText}>
-                {isLastSet && isLastExercise ? '🎉 Finish Workout' : '✓ Complete Set'}
+              <Text style={[styles.completeSetText, { color: colors.onPrimary }, showRestTimer && { color: colors.secondaryText }]}>
+                {showRestTimer
+                  ? 'Skip Rest'
+                  : (isLastSet && isLastExercise ? '🎉 Finish Workout' : '✓ Complete Set')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -994,9 +1276,10 @@ const WorkoutSessionScreen = () => {
         {currentExercise.completedSets > 0 && (
           <View style={[
             styles.setHistoryCard,
+            { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
             !nextExercise && styles.setHistoryCardLast
           ]}>
-            <Text style={styles.setHistoryTitle}>Completed Sets</Text>
+            <Text style={[styles.setHistoryTitle, { color: colors.text }]}>Completed Sets</Text>
             {currentExercise.sessionSets
               .filter(set => set.completed)
               .map((set, index) => {
@@ -1015,8 +1298,8 @@ const WorkoutSessionScreen = () => {
                 }
 
                 return (
-                  <View key={index} style={styles.completedSet}>
-                    <Text style={styles.completedSetText}>
+                  <View key={index} style={[styles.completedSet, { borderBottomColor: colors.borderLight + '40' }]}>
+                    <Text style={[styles.completedSetText, { color: colors.secondaryText }]}>
                       Set {set.setNumber}: {details}
                     </Text>
                   </View>
@@ -1028,18 +1311,18 @@ const WorkoutSessionScreen = () => {
         {/* Next Exercise Preview */}
         {nextExercise && (
           <TouchableOpacity
-            style={styles.nextExerciseCard}
+            style={[styles.nextExerciseCard, { backgroundColor: colors.borderLight + '25', borderColor: colors.borderLight + '60', shadowColor: colors.shadow }]}
             onPress={goToNextExercise}
             activeOpacity={0.7}
           >
             <View style={styles.nextExerciseHeader}>
-              <Text style={styles.nextExerciseTitle}>Up Next</Text>
-              <View style={styles.nextExerciseIcon}>
-                <Text style={styles.nextExerciseIconText}>→</Text>
+              <Text style={[styles.nextExerciseTitle, { color: colors.secondaryText }]}>Up Next</Text>
+              <View style={[styles.nextExerciseIcon, { backgroundColor: colors.borderLight + '80' }]}>
+                <Text style={[styles.nextExerciseIconText, { color: colors.secondaryText }]}>→</Text>
               </View>
             </View>
-            <Text style={styles.nextExerciseName}>{nextExercise.name}</Text>
-            <Text style={styles.nextExerciseDetails}>
+            <Text style={[styles.nextExerciseName, { color: colors.text }]}>{nextExercise.name}</Text>
+            <Text style={[styles.nextExerciseDetails, { color: colors.secondaryText }]}>
               {nextExercise.totalSets || nextExercise.sets} sets{nextExercise.reps ? ` × ${nextExercise.reps} reps` : ''}
             </Text>
           </TouchableOpacity>
@@ -1059,14 +1342,14 @@ const WorkoutSessionScreen = () => {
           onPress={() => setShowOptionsMenu(false)}
         >
           <TouchableOpacity activeOpacity={1}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
               <TouchableOpacity
                 style={styles.modalOption}
                 onPress={handleAddSet}
                 activeOpacity={0.7}
               >
-                <Ionicons name="add-circle-outline" size={24} color={Colors.light.primary} />
-                <Text style={styles.modalOptionText}>Add Set</Text>
+                <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                <Text style={[styles.modalOptionText, { color: colors.text }]}>Add Set</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1074,19 +1357,19 @@ const WorkoutSessionScreen = () => {
                 onPress={handleDeleteSet}
                 activeOpacity={0.7}
               >
-                <Ionicons name="remove-circle-outline" size={24} color="#EF4444" />
-                <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete Current Set</Text>
+                <Ionicons name="remove-circle-outline" size={24} color={colors.error} />
+                <Text style={[styles.modalOptionText, { color: colors.error }]}>Delete Current Set</Text>
               </TouchableOpacity>
 
-              <View style={styles.modalDivider} />
+              <View style={[styles.modalDivider, { backgroundColor: colors.borderLight }]} />
 
               <TouchableOpacity
                 style={styles.modalOption}
                 onPress={openAddExerciseModal}
                 activeOpacity={0.7}
               >
-                <Ionicons name="fitness-outline" size={24} color={Colors.light.primary} />
-                <Text style={styles.modalOptionText}>Add Exercise</Text>
+                <Ionicons name="fitness-outline" size={24} color={colors.primary} />
+                <Text style={[styles.modalOptionText, { color: colors.text }]}>Add Exercise</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1094,8 +1377,17 @@ const WorkoutSessionScreen = () => {
                 onPress={openSwapExerciseModal}
                 activeOpacity={0.7}
               >
-                <Ionicons name="swap-horizontal-outline" size={24} color={Colors.light.primary} />
-                <Text style={styles.modalOptionText}>Swap Exercise</Text>
+                <Ionicons name="swap-horizontal-outline" size={24} color={colors.primary} />
+                <Text style={[styles.modalOptionText, { color: colors.text }]}>Swap Exercise</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={openReorderModal}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="reorder-four-outline" size={24} color={colors.primary} />
+                <Text style={[styles.modalOptionText, { color: colors.text }]}>Reorder Exercises</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1103,8 +1395,8 @@ const WorkoutSessionScreen = () => {
                 onPress={handleDeleteExercise}
                 activeOpacity={0.7}
               >
-                <Ionicons name="trash-outline" size={24} color="#EF4444" />
-                <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete Exercise</Text>
+                <Ionicons name="trash-outline" size={24} color={colors.error} />
+                <Text style={[styles.modalOptionText, { color: colors.error }]}>Delete Exercise</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1119,79 +1411,79 @@ const WorkoutSessionScreen = () => {
         onRequestClose={() => setShowAddExerciseModal(false)}
       >
         <KeyboardAvoidingView
-          style={styles.fullScreenModal}
+          style={[styles.fullScreenModal, { backgroundColor: colors.background }]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.fullScreenModalHeader}>
+          <View style={[styles.fullScreenModalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
             <TouchableOpacity onPress={() => setShowAddExerciseModal(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: colors.secondaryText }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.fullScreenModalTitle}>Add Exercise</Text>
+            <Text style={[styles.fullScreenModalTitle, { color: colors.text }]}>Add Exercise</Text>
             <TouchableOpacity onPress={handleAddExercise}>
-              <Text style={[styles.modalSaveText, !selectedNewExercise && styles.modalSaveTextDisabled]}>
+              <Text style={[styles.modalSaveText, { color: colors.primary }, !selectedNewExercise && styles.modalSaveTextDisabled]}>
                 Add
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={Colors.light.secondaryText} />
+          <View style={[styles.searchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
+            <Ionicons name="search" size={20} color={colors.secondaryText} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search exercises..."
-              placeholderTextColor={Colors.light.secondaryText}
+              placeholderTextColor={colors.secondaryText}
               value={addExerciseSearch}
               onChangeText={setAddExerciseSearch}
               autoCapitalize="none"
             />
             {addExerciseSearch.length > 0 && (
               <TouchableOpacity onPress={() => setAddExerciseSearch('')}>
-                <Ionicons name="close-circle" size={20} color={Colors.light.secondaryText} />
+                <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
               </TouchableOpacity>
             )}
           </View>
 
           {selectedNewExercise && (
-            <View style={styles.selectedExerciseConfig}>
+            <View style={[styles.selectedExerciseConfig, { backgroundColor: colors.cardBackground, borderColor: colors.primary + '40' }]}>
               <View style={styles.selectedExerciseBadge}>
-                <Text style={styles.selectedExerciseName}>{selectedNewExercise.name}</Text>
+                <Text style={[styles.selectedExerciseName, { color: colors.text }]}>{selectedNewExercise.name}</Text>
                 <TouchableOpacity onPress={() => setSelectedNewExercise(null)}>
-                  <Ionicons name="close-circle" size={20} color={Colors.light.secondaryText} />
+                  <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.exerciseConfigRow}>
                 <View style={styles.configInputGroup}>
-                  <Text style={styles.configLabel}>Sets</Text>
+                  <Text style={[styles.configLabel, { color: colors.secondaryText }]}>Sets</Text>
                   <TextInput
-                    style={styles.configInput}
+                    style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
                     value={newExerciseSets}
                     onChangeText={setNewExerciseSets}
                     keyboardType="numeric"
                     placeholder="3"
-                    placeholderTextColor={Colors.light.secondaryText}
+                    placeholderTextColor={colors.secondaryText}
                   />
                 </View>
                 <View style={styles.configInputGroup}>
-                  <Text style={styles.configLabel}>Reps</Text>
+                  <Text style={[styles.configLabel, { color: colors.secondaryText }]}>Reps</Text>
                   <TextInput
-                    style={styles.configInput}
+                    style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
                     value={newExerciseReps}
                     onChangeText={setNewExerciseReps}
                     keyboardType="numeric"
                     placeholder="10"
-                    placeholderTextColor={Colors.light.secondaryText}
+                    placeholderTextColor={colors.secondaryText}
                   />
                 </View>
                 <View style={styles.configInputGroup}>
-                  <Text style={styles.configLabel}>Weight (opt)</Text>
+                  <Text style={[styles.configLabel, { color: colors.secondaryText }]}>Weight (opt)</Text>
                   <TextInput
-                    style={styles.configInput}
+                    style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
                     value={newExerciseWeight}
                     onChangeText={setNewExerciseWeight}
                     keyboardType="numeric"
                     placeholder="0"
-                    placeholderTextColor={Colors.light.secondaryText}
+                    placeholderTextColor={colors.secondaryText}
                   />
                 </View>
               </View>
@@ -1204,23 +1496,24 @@ const WorkoutSessionScreen = () => {
                 key={exercise.id}
                 style={[
                   styles.exerciseListItem,
-                  selectedNewExercise?.id === exercise.id && styles.exerciseListItemSelected
+                  { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
+                  selectedNewExercise?.id === exercise.id && { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primary + '08' }
                 ]}
                 onPress={() => setSelectedNewExercise(exercise)}
               >
-                <Text style={styles.exerciseListItemName}>{exercise.name}</Text>
+                <Text style={[styles.exerciseListItemName, { color: colors.text }]}>{exercise.name}</Text>
                 {exercise.primaryMuscles && (
-                  <Text style={styles.exerciseListItemMuscles}>
+                  <Text style={[styles.exerciseListItemMuscles, { color: colors.secondaryText }]}>
                     {exercise.primaryMuscles.join(', ')}
                   </Text>
                 )}
                 {selectedNewExercise?.id === exercise.id && (
-                  <Ionicons name="checkmark-circle" size={24} color={Colors.light.primary} />
+                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
                 )}
               </TouchableOpacity>
             ))}
             {filteredExercisesForAdd.length === 0 && (
-              <Text style={styles.noExercisesText}>No exercises found</Text>
+              <Text style={[styles.noExercisesText, { color: colors.secondaryText }]}>No exercises found</Text>
             )}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1233,33 +1526,33 @@ const WorkoutSessionScreen = () => {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowSwapExerciseModal(false)}
       >
-        <View style={styles.fullScreenModal}>
-          <View style={styles.fullScreenModalHeader}>
+        <View style={[styles.fullScreenModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.fullScreenModalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
             <TouchableOpacity onPress={() => setShowSwapExerciseModal(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: colors.secondaryText }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.fullScreenModalTitle}>Swap Exercise</Text>
+            <Text style={[styles.fullScreenModalTitle, { color: colors.text }]}>Swap Exercise</Text>
             <View style={{ width: 50 }} />
           </View>
 
-          <View style={styles.swapCurrentExercise}>
-            <Text style={styles.swapCurrentLabel}>Current:</Text>
-            <Text style={styles.swapCurrentName}>{currentExercise?.name}</Text>
+          <View style={[styles.swapCurrentExercise, { backgroundColor: colors.primary + '10' }]}>
+            <Text style={[styles.swapCurrentLabel, { color: colors.secondaryText }]}>Current:</Text>
+            <Text style={[styles.swapCurrentName, { color: colors.primary }]}>{currentExercise?.name}</Text>
           </View>
 
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={Colors.light.secondaryText} />
+          <View style={[styles.searchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
+            <Ionicons name="search" size={20} color={colors.secondaryText} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search exercises..."
-              placeholderTextColor={Colors.light.secondaryText}
+              placeholderTextColor={colors.secondaryText}
               value={swapExerciseSearch}
               onChangeText={setSwapExerciseSearch}
               autoCapitalize="none"
             />
             {swapExerciseSearch.length > 0 && (
               <TouchableOpacity onPress={() => setSwapExerciseSearch('')}>
-                <Ionicons name="close-circle" size={20} color={Colors.light.secondaryText} />
+                <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
               </TouchableOpacity>
             )}
           </View>
@@ -1268,26 +1561,104 @@ const WorkoutSessionScreen = () => {
             {filteredExercisesForSwap.map(exercise => (
               <TouchableOpacity
                 key={exercise.id}
-                style={styles.exerciseListItem}
+                style={[styles.exerciseListItem, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}
                 onPress={() => handleSwapExercise(exercise)}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.exerciseListItemName}>{exercise.name}</Text>
+                  <Text style={[styles.exerciseListItemName, { color: colors.text }]}>{exercise.name}</Text>
                   {exercise.primaryMuscles && (
-                    <Text style={styles.exerciseListItemMuscles}>
+                    <Text style={[styles.exerciseListItemMuscles, { color: colors.secondaryText }]}>
                       {exercise.primaryMuscles.join(', ')}
                     </Text>
                   )}
                 </View>
-                <Ionicons name="swap-horizontal" size={20} color={Colors.light.primary} />
+                <Ionicons name="swap-horizontal" size={20} color={colors.primary} />
               </TouchableOpacity>
             ))}
             {filteredExercisesForSwap.length === 0 && (
-              <Text style={styles.noExercisesText}>No exercises found</Text>
+              <Text style={[styles.noExercisesText, { color: colors.secondaryText }]}>No exercises found</Text>
             )}
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Reorder Exercises Modal */}
+      <Modal
+        visible={showReorderModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowReorderModal(false)}
+      >
+        <GestureHandlerRootView style={[styles.gestureRoot, { backgroundColor: colors.background }]}>
+          <View style={[styles.fullScreenModalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+            <TouchableOpacity onPress={() => setShowReorderModal(false)}>
+              <Text style={[styles.modalCancelText, { color: colors.secondaryText }]}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenModalTitle, { color: colors.text }]}>Reorder Exercises</Text>
+            <TouchableOpacity onPress={() => setShowReorderModal(false)}>
+              <Text style={[styles.modalSaveText, { color: colors.primary }]}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Press the dots and drag to reorder</Text>
+
+          <DraggableFlatList
+            data={exercises}
+            keyExtractor={(item, index) => `reorder-${item.id}-${index}`}
+            onDragEnd={handleReorderExercises}
+            contentContainerStyle={styles.reorderListContent}
+            activationDistance={0}
+            renderItem={({ item, drag, isActive, getIndex }) => {
+              const index = getIndex();
+              const isCurrentExercise = index === currentExerciseIndex;
+              return (
+                <ScaleDecorator>
+                  <View
+                    style={[
+                      styles.reorderItem,
+                      { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
+                      isActive && [styles.reorderItemDragging, { shadowColor: colors.primary, borderColor: colors.primary }],
+                      isCurrentExercise && { borderColor: colors.primary + '60', backgroundColor: colors.primary + '08' }
+                    ]}
+                  >
+                    <TouchableOpacity
+                      onPressIn={drag}
+                      disabled={isActive}
+                      style={styles.reorderDragHandle}
+                    >
+                      <View style={styles.reorderDragDots}>
+                        {[0, 1].map((row) => (
+                          <View key={row} style={styles.reorderDragDotsRow}>
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                          </View>
+                        ))}
+                      </View>
+                    </TouchableOpacity>
+                    <View style={[styles.reorderExerciseNumber, { backgroundColor: colors.primary + '15' }]}>
+                      <Text style={[styles.reorderExerciseNumberText, { color: colors.primary }]}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.reorderExerciseInfo}>
+                      <Text style={[styles.reorderExerciseName, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.reorderExerciseDetails, { color: colors.secondaryText }]}>
+                        {item.completedSets}/{item.totalSets} sets completed
+                      </Text>
+                    </View>
+                    {isCurrentExercise && (
+                      <View style={[styles.currentBadge, { backgroundColor: colors.primary }]}>
+                        <Text style={[styles.currentBadgeText, { color: colors.onPrimary }]}>Current</Text>
+                      </View>
+                    )}
+                  </View>
+                </ScaleDecorator>
+              );
+            }}
+          />
+        </GestureHandlerRootView>
+      </Modal>
+
     </View>
   );
 };
@@ -1335,6 +1706,9 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontWeight: '600',
     overflow: 'hidden',
+  },
+  disabledText: {
+    opacity: 0.5,
   },
 
   // Progress
@@ -1855,5 +2229,143 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.primary,
     flex: 1,
+  },
+
+  // Reorder Modal
+  gestureRoot: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  reorderHint: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontStyle: 'italic',
+  },
+  reorderListContent: {
+    padding: 16,
+  },
+  reorderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+  },
+  reorderItemDragging: {
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+    borderColor: Colors.light.primary,
+  },
+  reorderItemCurrent: {
+    borderColor: Colors.light.primary + '60',
+    backgroundColor: Colors.light.primary + '08',
+  },
+  reorderDragHandle: {
+    padding: 12,
+    marginRight: 8,
+    marginLeft: -8,
+  },
+  reorderDragDots: {
+    flexDirection: 'column',
+    gap: 3,
+  },
+  reorderDragDotsRow: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  reorderDragDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.light.secondaryText,
+  },
+  reorderExerciseNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  reorderExerciseNumberText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
+  },
+  reorderExerciseInfo: {
+    flex: 1,
+  },
+  reorderExerciseName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  reorderExerciseDetails: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+  },
+  currentBadge: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  currentBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.onPrimary,
+    textTransform: 'uppercase',
+  },
+
+  // Inline Rest Timer
+  inlineRestTimerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circularProgressContainer: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  circularProgressSvg: {
+    position: 'absolute',
+  },
+  timerTextContainer: {
+    alignItems: 'center',
+  },
+  timerText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
+    fontVariant: ['tabular-nums'],
+  },
+  timerLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  skipRestButton: {
+    backgroundColor: Colors.light.cardBackground,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  skipRestText: {
+    color: Colors.light.secondaryText,
   },
 });
