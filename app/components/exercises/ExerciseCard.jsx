@@ -1,16 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { getMuscleInfo } from '../../data/exercises/muscleGroups';
 
-const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false }) => {
+// Helper to format equipment names: "pull_up_bar" → "Pull Up Bar"
+const formatEquipmentName = (equipment) => {
+  if (!equipment) return '';
+  return equipment
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false, showCategory = true, isCustom = false, style }) => {
+  const colors = useThemeColors();
   const {
     name,
-    primaryMuscles,
-    secondaryMuscles,
-    equipment,
-    difficulty,
-    category
+    primaryMuscles = [],
+    secondaryMuscles = [],
+    equipment = 'unknown',
+    difficulty = 'intermediate',
+    category = 'compound'
   } = exercise;
 
   const primaryMuscleInfo = primaryMuscles.map(muscle => getMuscleInfo(muscle));
@@ -27,7 +38,12 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false }
 
   return (
     <TouchableOpacity
-      style={[styles.card, compact && styles.compactCard]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.borderLight },
+        compact && styles.compactCard,
+        style
+      ]}
       onPress={onPress}
       activeOpacity={0.8}
     >
@@ -35,34 +51,42 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false }
       <View style={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.exerciseName} numberOfLines={2}>
+          <Text style={[styles.exerciseName, { color: colors.text }]} numberOfLines={2}>
             {name}
           </Text>
-          <View style={styles.badges}>
-            <View style={[styles.categoryBadge]}>
-              <Text style={styles.categoryText}>
+          {showCategory && (
+            <View style={[styles.categoryBadge, { backgroundColor: colors.borderLight }]}>
+              <Text style={[styles.categoryText, { color: colors.secondaryText }]}>
                 {categoryIcon[category]} {category}
               </Text>
             </View>
-          </View>
+          )}
         </View>
 
-        {/* Equipment & Difficulty */}
+        {/* Equipment & Difficulty/Custom Badge */}
         <View style={styles.metaInfo}>
-          <Text style={styles.equipment}>
-            🏋️ {equipment.replace('_', ' ')}
+          <Text style={[styles.equipment, { color: colors.secondaryText }]}>
+            🏋️ {formatEquipmentName(equipment)}
           </Text>
-          <View style={[styles.difficultyBadge, { backgroundColor: difficultyColor[difficulty] }]}>
-            <Text style={styles.difficultyText}>
-              {difficulty}
-            </Text>
-          </View>
+          {isCustom ? (
+            <View style={[styles.customBadge, { backgroundColor: colors.accent + '20' }]}>
+              <Text style={[styles.customBadgeText, { color: colors.accent }]}>
+                Custom
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.difficultyBadge, { backgroundColor: difficultyColor[difficulty] }]}>
+              <Text style={styles.difficultyText}>
+                {difficulty}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Muscle Groups */}
         {showMuscles && (
           <View style={styles.muscleContainer}>
-            <Text style={styles.muscleLabel}>Primary:</Text>
+            <Text style={[styles.muscleLabel, { color: colors.text }]}>Primary:</Text>
             <View style={styles.muscleList}>
               {primaryMuscleInfo.map((muscle, index) => (
                 <View
@@ -78,16 +102,16 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false }
 
             {secondaryMuscles.length > 0 && !compact && (
               <>
-                <Text style={styles.muscleLabel}>Secondary:</Text>
+                <Text style={[styles.muscleLabel, { color: colors.text }]}>Secondary:</Text>
                 <View style={styles.muscleList}>
                   {secondaryMuscles.map((muscle, index) => {
                     const muscleInfo = getMuscleInfo(muscle);
                     return (
                       <View
                         key={index}
-                        style={[styles.muscleBadge, styles.secondaryMuscle]}
+                        style={[styles.muscleBadge, styles.secondaryMuscle, { backgroundColor: colors.borderLight }]}
                       >
-                        <Text style={styles.secondaryMuscleText}>
+                        <Text style={[styles.secondaryMuscleText, { color: colors.secondaryText }]}>
                           {muscleInfo?.name}
                         </Text>
                       </View>
@@ -139,8 +163,14 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  badges: {
-    alignItems: 'flex-end',
+  customBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  customBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   categoryBadge: {
     backgroundColor: Colors.light.borderLight,

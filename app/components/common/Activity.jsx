@@ -328,6 +328,9 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
           <View style={styles.authorTextContainer}>
             <View style={styles.nameTimestampRow}>
               <Text style={[styles.authorName, { color: colors.text }]}>{author?.name || author?.username || 'Unknown User'}</Text>
+              {author?.profile?.isVerified && (
+                <Ionicons name="checkmark-circle" size={16} color="#1D9BF0" style={styles.verifiedBadge} />
+              )}
               <Text style={[styles.timestampInline, { color: colors.secondaryText }]}>· {formatDate(createdAt)}</Text>
             </View>
           </View>
@@ -529,8 +532,8 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
       >
         <KeyboardAvoidingView
           style={[styles.modalContainer, { backgroundColor: colors.background }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
         >
           {/* Modal Header */}
           <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
@@ -575,6 +578,9 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
                       <Text style={[styles.modalCommentAuthor, { color: colors.text }]}>
                         {comment.author?.name || comment.author?.username || 'Unknown User'}
                       </Text>
+                      {comment.author?.profile?.isVerified && (
+                        <Ionicons name="checkmark-circle" size={14} color="#1D9BF0" style={styles.verifiedBadge} />
+                      )}
                       <Text style={[styles.modalCommentTimestamp, { color: colors.secondaryText }]}>
                         {formatDate(comment.timestamp)}
                       </Text>
@@ -697,6 +703,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
     color: Colors.light.text,
+  },
+  verifiedBadge: {
+    marginLeft: 2,
   },
   timestampInline: {
     fontSize: 13,

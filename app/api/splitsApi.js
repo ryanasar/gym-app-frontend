@@ -3,6 +3,27 @@ import axios from 'axios';
 import { BACKEND_API_URL } from '@/constants';
 
 /**
+ * Get a split by ID (fetches from user's public splits)
+ * @param {number} splitId
+ * @param {number} userId - The user ID who owns the split
+ * @returns {Promise<Object>}
+ */
+export const getSplitById = async (splitId, userId) => {
+  try {
+    // Fetch user's public splits and find the one we need
+    const publicSplits = await getPublicSplitsByUserId(userId);
+    const split = publicSplits.find(s => s.id === splitId);
+    if (!split) {
+      throw new Error('Split not found');
+    }
+    return split;
+  } catch (error) {
+    console.error('Failed to fetch split:', error);
+    throw error;
+  }
+};
+
+/**
  * Get splits by userId
  * @param {number} userId
  * @returns {Promise<Array>}

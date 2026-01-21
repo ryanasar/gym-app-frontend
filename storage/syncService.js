@@ -5,28 +5,14 @@
 
 import { storage } from './StorageAdapter.js';
 import { createWorkoutSession } from '../app/api/workoutSessionsApi.js';
+import { checkNetworkStatus as checkNetwork } from '../services/networkService.js';
 
 /**
  * Network status check
  * @returns {Promise<boolean>}
  */
 export async function checkNetworkStatus() {
-  // In React Native, we could use @react-native-community/netinfo
-  // For now, we'll try a simple fetch to detect connectivity
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-    await fetch('https://www.google.com/generate_204', {
-      method: 'HEAD',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-    return true;
-  } catch (error) {
-    return false;
-  }
+  return checkNetwork();
 }
 
 /**

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 const SplitInformation = ({ splitData, updateSplitData }) => {
+  const colors = useThemeColors();
   const [selectedEmoji, setSelectedEmoji] = useState(splitData.emoji || '💪');
 
   const emojiOptions = ['💪', '🏋️', '🔥', '⚡', '🎯', '🚀', '💯', '🔱', '⭐', '🏆'];
@@ -32,16 +34,17 @@ const SplitInformation = ({ splitData, updateSplitData }) => {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       <View style={styles.content}>
-        <Text style={styles.sectionTitle}>Split Details</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Split Details</Text>
 
         {/* Split Name */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Split Name *</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Split Name *</Text>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
             placeholder="Enter split name (e.g., Push Pull Legs)"
+            placeholderTextColor={colors.secondaryText}
             value={splitData.name}
             onChangeText={handleNameChange}
             maxLength={50}
@@ -50,14 +53,15 @@ const SplitInformation = ({ splitData, updateSplitData }) => {
 
         {/* Emoji Selection */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Choose an Icon</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Choose an Icon</Text>
           <View style={styles.emojiGrid}>
             {emojiOptions.map((emoji) => (
               <TouchableOpacity
                 key={emoji}
                 style={[
                   styles.emojiButton,
-                  selectedEmoji === emoji && styles.emojiButtonSelected
+                  { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                  selectedEmoji === emoji && [styles.emojiButtonSelected, { borderColor: colors.primary, backgroundColor: colors.primary + '20' }]
                 ]}
                 onPress={() => handleEmojiSelect(emoji)}
               >
@@ -69,20 +73,22 @@ const SplitInformation = ({ splitData, updateSplitData }) => {
 
         {/* Number of Days */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Split Length (Including Rest Days)</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Split Length (Including Rest Days)</Text>
           <View style={styles.daysGrid}>
             {dayOptions.map((days) => (
               <TouchableOpacity
                 key={days}
                 style={[
                   styles.dayButton,
-                  splitData.totalDays === days && styles.dayButtonSelected
+                  { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                  splitData.totalDays === days && [styles.dayButtonSelected, { borderColor: colors.primary, backgroundColor: colors.primary }]
                 ]}
                 onPress={() => handleDaysSelect(days)}
               >
                 <Text style={[
                   styles.dayButtonText,
-                  splitData.totalDays === days && styles.dayButtonTextSelected
+                  { color: colors.text },
+                  splitData.totalDays === days && [styles.dayButtonTextSelected, { color: colors.onPrimary }]
                 ]}>
                   {days} days
                 </Text>
@@ -93,10 +99,11 @@ const SplitInformation = ({ splitData, updateSplitData }) => {
 
         {/* Description */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Description (Optional)</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Description (Optional)</Text>
           <TextInput
-            style={[styles.textInput, styles.descriptionInput]}
+            style={[styles.textInput, styles.descriptionInput, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
             placeholder="Describe your split routine..."
+            placeholderTextColor={colors.secondaryText}
             value={splitData.description}
             onChangeText={handleDescriptionChange}
             maxLength={200}
@@ -107,19 +114,21 @@ const SplitInformation = ({ splitData, updateSplitData }) => {
 
         {/* Public/Private Toggle */}
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.toggleContainer} onPress={handleTogglePublic}>
+          <TouchableOpacity style={[styles.toggleContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]} onPress={handleTogglePublic}>
             <View style={styles.toggleInfo}>
-              <Text style={styles.toggleTitle}>Make Public</Text>
-              <Text style={styles.toggleDescription}>
+              <Text style={[styles.toggleTitle, { color: colors.text }]}>Make Public</Text>
+              <Text style={[styles.toggleDescription, { color: colors.secondaryText }]}>
                 Allow others to view and use your split
               </Text>
             </View>
             <View style={[
               styles.toggle,
-              splitData.isPublic && styles.toggleActive
+              { backgroundColor: colors.borderLight },
+              splitData.isPublic && [styles.toggleActive, { backgroundColor: colors.primary }]
             ]}>
               <View style={[
                 styles.toggleButton,
+                { backgroundColor: colors.onPrimary },
                 splitData.isPublic && styles.toggleButtonActive
               ]} />
             </View>

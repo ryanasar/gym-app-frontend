@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { searchUsers } from '../api/usersApi';
@@ -101,7 +102,12 @@ export default function ExploreScreen() {
                     </View>
                   )}
                   <View style={styles.userDetails}>
-                    <Text style={[styles.userName, { color: colors.text }]}>{result.name || result.username}</Text>
+                    <View style={styles.nameRow}>
+                      <Text style={[styles.userName, { color: colors.text }]}>{result.name || result.username}</Text>
+                      {result.profile?.isVerified && (
+                        <Ionicons name="checkmark-circle" size={16} color="#1D9BF0" style={styles.verifiedBadge} />
+                      )}
+                    </View>
                     <Text style={[styles.userUsername, { color: colors.secondaryText }]}>@{result.username}</Text>
                     {result.profile?.bio && (
                       <Text style={[styles.userBio, { color: colors.secondaryText }]} numberOfLines={1}>
@@ -244,9 +250,17 @@ const styles = StyleSheet.create({
   userDetails: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   userName: {
     fontSize: 16,
     fontWeight: '700',
+    marginBottom: 2,
+  },
+  verifiedBadge: {
+    marginLeft: 4,
     marginBottom: 2,
   },
   userUsername: {

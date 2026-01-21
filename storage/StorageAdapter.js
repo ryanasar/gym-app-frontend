@@ -354,6 +354,262 @@ export class AsyncStorageAdapter {
     }
   }
 
+  // ==================== Saved Workout Operations ====================
+
+  /**
+   * Get all saved workouts from local storage
+   * @returns {Promise<import('../types/storage').SavedWorkout[]>}
+   */
+  async getSavedWorkouts() {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_WORKOUTS);
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to get saved workouts:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single saved workout by ID
+   * @param {string} workoutId - Local workout ID
+   * @returns {Promise<import('../types/storage').SavedWorkout | null>}
+   */
+  async getSavedWorkout(workoutId) {
+    try {
+      const workouts = await this.getSavedWorkouts();
+      return workouts.find(w => w.id === workoutId) || null;
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to get saved workout:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save a new workout to local storage
+   * @param {import('../types/storage').SavedWorkout} workout
+   * @returns {Promise<import('../types/storage').SavedWorkout>}
+   */
+  async createSavedWorkout(workout) {
+    try {
+      const workouts = await this.getSavedWorkouts();
+
+      // Generate local ID if not provided
+      const newWorkout = {
+        ...workout,
+        id: workout.id || `saved_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        createdAt: workout.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        pendingSync: true,
+      };
+
+      workouts.push(newWorkout);
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_WORKOUTS, JSON.stringify(workouts));
+
+      return newWorkout;
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to create saved workout:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a saved workout in local storage
+   * @param {string} workoutId - Local workout ID
+   * @param {Partial<import('../types/storage').SavedWorkout>} updates
+   * @returns {Promise<import('../types/storage').SavedWorkout | null>}
+   */
+  async updateSavedWorkout(workoutId, updates) {
+    try {
+      const workouts = await this.getSavedWorkouts();
+      const index = workouts.findIndex(w => w.id === workoutId);
+
+      if (index === -1) {
+        console.warn('[StorageAdapter] Saved workout not found:', workoutId);
+        return null;
+      }
+
+      workouts[index] = {
+        ...workouts[index],
+        ...updates,
+        updatedAt: Date.now(),
+        pendingSync: true,
+      };
+
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_WORKOUTS, JSON.stringify(workouts));
+      return workouts[index];
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to update saved workout:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a saved workout from local storage
+   * @param {string} workoutId - Local workout ID
+   * @returns {Promise<void>}
+   */
+  async deleteSavedWorkout(workoutId) {
+    try {
+      const workouts = await this.getSavedWorkouts();
+      const filtered = workouts.filter(w => w.id !== workoutId);
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_WORKOUTS, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to delete saved workout:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a saved workout as synced with backend
+   * @param {string} localId - Local workout ID
+   * @param {number} backendId - Backend workout ID
+   * @returns {Promise<void>}
+   */
+  async markSavedWorkoutSynced(localId, backendId) {
+    try {
+      const workouts = await this.getSavedWorkouts();
+      const index = workouts.findIndex(w => w.id === localId);
+
+      if (index !== -1) {
+        workouts[index].pendingSync = false;
+        workouts[index].backendId = backendId;
+        await AsyncStorage.setItem(STORAGE_KEYS.SAVED_WORKOUTS, JSON.stringify(workouts));
+      }
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to mark saved workout synced:', error);
+      throw error;
+    }
+  }
+
+  // ==================== Custom Exercise Operations ====================
+
+  /**
+   * Get all custom exercises from local storage
+   * @returns {Promise<import('../types/storage').CustomExercise[]>}
+   */
+  async getCustomExercises() {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOM_EXERCISES);
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to get custom exercises:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single custom exercise by ID
+   * @param {string} exerciseId - Local exercise ID
+   * @returns {Promise<import('../types/storage').CustomExercise | null>}
+   */
+  async getCustomExercise(exerciseId) {
+    try {
+      const exercises = await this.getCustomExercises();
+      return exercises.find(e => e.id === exerciseId) || null;
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to get custom exercise:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Create a new custom exercise in local storage
+   * @param {import('../types/storage').CustomExercise} exercise
+   * @returns {Promise<import('../types/storage').CustomExercise>}
+   */
+  async createCustomExercise(exercise) {
+    try {
+      const exercises = await this.getCustomExercises();
+
+      // Generate local ID with custom_ prefix
+      const newExercise = {
+        ...exercise,
+        id: exercise.id || `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        createdAt: exercise.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        pendingSync: true,
+      };
+
+      exercises.push(newExercise);
+      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(exercises));
+
+      return newExercise;
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to create custom exercise:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a custom exercise in local storage
+   * @param {string} exerciseId - Local exercise ID
+   * @param {Partial<import('../types/storage').CustomExercise>} updates
+   * @returns {Promise<import('../types/storage').CustomExercise | null>}
+   */
+  async updateCustomExercise(exerciseId, updates) {
+    try {
+      const exercises = await this.getCustomExercises();
+      const index = exercises.findIndex(e => e.id === exerciseId);
+
+      if (index === -1) {
+        console.warn('[StorageAdapter] Custom exercise not found:', exerciseId);
+        return null;
+      }
+
+      exercises[index] = {
+        ...exercises[index],
+        ...updates,
+        updatedAt: Date.now(),
+        pendingSync: true,
+      };
+
+      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(exercises));
+      return exercises[index];
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to update custom exercise:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a custom exercise from local storage
+   * @param {string} exerciseId - Local exercise ID
+   * @returns {Promise<void>}
+   */
+  async deleteCustomExercise(exerciseId) {
+    try {
+      const exercises = await this.getCustomExercises();
+      const filtered = exercises.filter(e => e.id !== exerciseId);
+      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to delete custom exercise:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a custom exercise as synced with backend
+   * @param {string} localId - Local exercise ID
+   * @param {number} backendId - Backend exercise ID
+   * @returns {Promise<void>}
+   */
+  async markCustomExerciseSynced(localId, backendId) {
+    try {
+      const exercises = await this.getCustomExercises();
+      const index = exercises.findIndex(e => e.id === localId);
+
+      if (index !== -1) {
+        exercises[index].pendingSync = false;
+        exercises[index].backendId = backendId;
+        await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(exercises));
+      }
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to mark custom exercise synced:', error);
+      throw error;
+    }
+  }
+
   // ==================== Rest Day Operations ====================
 
   /**
@@ -376,6 +632,36 @@ export class AsyncStorageAdapter {
       await AsyncStorage.setItem(STORAGE_KEYS.PENDING_WORKOUTS, JSON.stringify(pending));
     } catch (error) {
       console.error('[StorageAdapter] Failed to save rest day completion:', error);
+      throw error;
+    }
+  }
+
+  // ==================== Cleanup Operations ====================
+
+  /**
+   * Clear all Gymvy storage data (for logout)
+   * @returns {Promise<void>}
+   */
+  async clearAllData() {
+    try {
+      const keys = Object.values(STORAGE_KEYS);
+      await AsyncStorage.multiRemove(keys);
+      console.log('[StorageAdapter] All data cleared');
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to clear all data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear only the pending workouts queue
+   * @returns {Promise<void>}
+   */
+  async clearPendingWorkouts() {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.PENDING_WORKOUTS);
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to clear pending workouts:', error);
       throw error;
     }
   }

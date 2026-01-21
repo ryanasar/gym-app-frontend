@@ -190,14 +190,7 @@ const CreatePostScreen = () => {
         // Trigger automatic sync
         manualSync();
 
-        Alert.alert('Success', 'Post updated successfully!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/(tabs)/profile');
-            },
-          },
-        ]);
+        router.replace('/(tabs)/profile');
       } else {
         // Create new post
         // Look up database ID for local workout ID
@@ -241,7 +234,7 @@ const CreatePostScreen = () => {
           published: true,
           workoutSessionId: databaseWorkoutSessionId,
           splitId: splitId ? parseInt(splitId) : null,
-          streak: streak,
+          streak: streak > 1 ? streak : null,
           taggedUserIds: taggedUsers.map(u => u.id),
         };
 
@@ -262,14 +255,7 @@ const CreatePostScreen = () => {
         // Trigger automatic sync
         manualSync();
 
-        Alert.alert('Success', 'Post created successfully!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/(tabs)/profile');
-            },
-          },
-        ]);
+        router.replace('/(tabs)/profile');
       }
     } catch (error) {
       console.error(`Error ${isEditMode ? 'updating' : 'creating'} post:`, error);
@@ -383,7 +369,9 @@ const CreatePostScreen = () => {
               value={description}
               onChangeText={setDescription}
               textAlignVertical="top"
+              maxLength={500}
             />
+            <Text style={[styles.charCount, { color: colors.secondaryText }]}>{description.length}/500</Text>
           </View>
 
           {/* Image Upload Section */}
@@ -592,6 +580,11 @@ const styles = StyleSheet.create({
     minHeight: 120,
     borderWidth: 1,
     borderColor: Colors.light.borderLight,
+  },
+  charCount: {
+    fontSize: 12,
+    marginTop: 6,
+    textAlign: 'right',
   },
 
   // Image Upload

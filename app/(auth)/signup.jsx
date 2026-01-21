@@ -1,33 +1,47 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  Alert, 
-  StyleSheet, 
-  TouchableOpacity, 
-  KeyboardAvoidingView, 
-  Platform, 
-  ScrollView 
+import {
+  View,
+  Text,
+  TextInput,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView
 } from 'react-native';
 import { supabase } from '../../supabase';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
+import { useNetwork } from '../contexts/NetworkContext';
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { isOffline } = useNetwork();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleSignup = async () => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    setError('');
 
-    if (error) {
-      Alert.alert('Sign Up Error', error.message);
-    } else {
-      Alert.alert('Success', 'Check your email to confirm your account.');
-      router.back();
+    if (isOffline) {
+      setError('You are offline. Please connect to the internet to sign up.');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        setError(error.message);
+      } else {
+        Alert.alert('Success', 'Check your email to confirm your account.');
+        router.back();
+      }
+    } catch (networkError) {
+      setError('Network error. Please check your connection and try again.');
     }
   };
 
@@ -58,6 +72,8 @@ export default function SignUpScreen() {
               placeholderTextColor={Colors.light.placeholder}
               value={email}
               onChangeText={setEmail}
+              maxLength={100}
+              autoCorrect={false}
             />
 
             <TextInput
@@ -68,7 +84,19 @@ export default function SignUpScreen() {
               placeholderTextColor={Colors.light.placeholder}
               value={password}
               onChangeText={setPassword}
+              maxLength={128}
+              autoCorrect={false}
             />
+
+            {isOffline && (
+              <View style={styles.offlineWarning}>
+                <Text style={styles.offlineText}>You are offline</Text>
+              </View>
+            )}
+
+            {error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
 
             <TouchableOpacity style={styles.primaryButton} onPress={handleSignup}>
               <Text style={styles.primaryButtonText}>Sign Up</Text>
@@ -146,5 +174,25 @@ const styles = StyleSheet.create({
   signupLink: {
     color: Colors.light.primary,
     fontWeight: '600',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  offlineWarning: {
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineText: {
+    color: '#FCD34D',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

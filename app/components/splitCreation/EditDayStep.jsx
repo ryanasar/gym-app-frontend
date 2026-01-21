@@ -1,14 +1,19 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert } from 'react-native';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import DraggableFlatList from 'react-native-draggable-flatlist';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { exercises } from '../../data/exercises/exerciseDatabase';
 import ExerciseCard from '../exercises/ExerciseCard';
 import EmptyState from '../common/EmptyState';
+import SavedWorkoutPickerModal from './SavedWorkoutPickerModal';
+import SaveWorkoutModal from './SaveWorkoutModal';
+import CreateCustomExerciseModal from '../exercises/CreateCustomExerciseModal';
+import { getSavedWorkouts, createSavedWorkout } from '../../api/savedWorkoutsApi';
+import { getCustomExercises, createCustomExercise } from '../../api/customExercisesApi';
 
 // Rest Timer Input Component with digit selection
-const RestTimerInput = ({ value, onChange }) => {
+const RestTimerInput = ({ value, onChange, colors }) => {
   const [selectedDigit, setSelectedDigit] = useState(null); // 0=min, 1=sec1, 2=sec2
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
@@ -66,7 +71,7 @@ const RestTimerInput = ({ value, onChange }) => {
   };
 
   return (
-    <View style={restTimerStyles.container}>
+    <View style={[restTimerStyles.container, { backgroundColor: colors.background, borderColor: colors.border }]}>
       <TextInput
         ref={inputRef}
         style={restTimerStyles.hiddenInput}
@@ -85,30 +90,32 @@ const RestTimerInput = ({ value, onChange }) => {
       <TouchableOpacity
         style={[
           restTimerStyles.digit,
-          selectedDigit === 0 && restTimerStyles.digitSelected
+          selectedDigit === 0 && [restTimerStyles.digitSelected, { backgroundColor: colors.primary }]
         ]}
         onPress={() => handleDigitPress(0)}
         activeOpacity={0.7}
       >
         <Text style={[
           restTimerStyles.digitText,
-          selectedDigit === 0 && restTimerStyles.digitTextSelected
+          { color: colors.text },
+          selectedDigit === 0 && [restTimerStyles.digitTextSelected, { color: colors.onPrimary }]
         ]}>
           {minutes}
         </Text>
       </TouchableOpacity>
-      <Text style={restTimerStyles.colon}>:</Text>
+      <Text style={[restTimerStyles.colon, { color: colors.text }]}>:</Text>
       <TouchableOpacity
         style={[
           restTimerStyles.digit,
-          selectedDigit === 1 && restTimerStyles.digitSelected
+          selectedDigit === 1 && [restTimerStyles.digitSelected, { backgroundColor: colors.primary }]
         ]}
         onPress={() => handleDigitPress(1)}
         activeOpacity={0.7}
       >
         <Text style={[
           restTimerStyles.digitText,
-          selectedDigit === 1 && restTimerStyles.digitTextSelected
+          { color: colors.text },
+          selectedDigit === 1 && [restTimerStyles.digitTextSelected, { color: colors.onPrimary }]
         ]}>
           {sec1}
         </Text>
@@ -116,14 +123,15 @@ const RestTimerInput = ({ value, onChange }) => {
       <TouchableOpacity
         style={[
           restTimerStyles.digit,
-          selectedDigit === 2 && restTimerStyles.digitSelected
+          selectedDigit === 2 && [restTimerStyles.digitSelected, { backgroundColor: colors.primary }]
         ]}
         onPress={() => handleDigitPress(2)}
         activeOpacity={0.7}
       >
         <Text style={[
           restTimerStyles.digitText,
-          selectedDigit === 2 && restTimerStyles.digitTextSelected
+          { color: colors.text },
+          selectedDigit === 2 && [restTimerStyles.digitTextSelected, { color: colors.onPrimary }]
         ]}>
           {sec2}
         </Text>
@@ -137,9 +145,7 @@ const restTimerStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.light.background,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     borderRadius: 8,
     paddingHorizontal: 8,
     height: 36,
@@ -156,30 +162,54 @@ const restTimerStyles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   digitSelected: {
-    backgroundColor: Colors.light.primary,
+    // backgroundColor set dynamically
   },
   digitText: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.light.text,
   },
   digitTextSelected: {
-    color: Colors.light.onPrimary,
+    // color set dynamically
   },
   colon: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.light.text,
   },
 });
 
 const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
+  const colors = useThemeColors();
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState('all');
 
+  // Saved workout states
+  const [savedWorkoutPickerVisible, setSavedWorkoutPickerVisible] = useState(false);
+  const [saveWorkoutModalVisible, setSaveWorkoutModalVisible] = useState(false);
+  const [savedWorkouts, setSavedWorkouts] = useState([]);
+  const [loadingSavedWorkouts, setLoadingSavedWorkouts] = useState(false);
+  const [savingWorkout, setSavingWorkout] = useState(false);
+
+  // Custom exercise states
+  const [customExercises, setCustomExercises] = useState([]);
+  const [createCustomModalVisible, setCreateCustomModalVisible] = useState(false);
+
+  // Load custom exercises on mount
+  useEffect(() => {
+    const loadCustomExercises = async () => {
+      try {
+        const exercises = await getCustomExercises();
+        setCustomExercises(exercises);
+      } catch (error) {
+        console.error('Failed to load custom exercises:', error);
+      }
+    };
+    loadCustomExercises();
+  }, []);
+
   const muscleGroups = [
     { id: 'all', name: 'All Exercises' },
+    { id: 'my_exercises', name: 'My Exercises' },
     { id: 'chest', name: 'Chest' },
     { id: 'lats', name: 'Back' },
     { id: 'front_delts', name: 'Shoulders' },
@@ -192,7 +222,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   if (editingDayIndex === null || !splitData.workoutDays[editingDayIndex]) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No day selected</Text>
+        <Text style={[styles.errorText, { color: colors.secondaryText }]}>No day selected</Text>
       </View>
     );
   }
@@ -262,7 +292,26 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   }, [currentDay, updateCurrentDay]);
 
   const getFilteredExercises = () => {
-    let filtered = [...exercises];
+    // Handle "My Exercises" filter - only show custom exercises
+    if (selectedMuscleFilter === 'my_exercises') {
+      let filtered = customExercises.map(ex => ({ ...ex, isCustom: true }));
+
+      if (searchQuery.trim()) {
+        const lowercaseQuery = searchQuery.toLowerCase();
+        filtered = filtered.filter(exercise =>
+          exercise.name.toLowerCase().includes(lowercaseQuery) ||
+          exercise.primaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
+          exercise.equipment?.toLowerCase().includes(lowercaseQuery)
+        );
+      }
+
+      return filtered;
+    }
+
+    // Merge bundled exercises with custom exercises
+    const bundledExercises = [...exercises];
+    const customWithFlag = customExercises.map(ex => ({ ...ex, isCustom: true }));
+    let filtered = [...bundledExercises, ...customWithFlag];
 
     if (selectedMuscleFilter !== 'all') {
       filtered = filtered.filter(exercise => {
@@ -282,33 +331,127 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
     return filtered;
   };
 
+  // Handle opening create custom exercise modal
+  const openCreateCustomModal = () => {
+    // Close exercise picker first to avoid nested modal issues on iOS
+    setExercisePickerVisible(false);
+    // Small delay to allow the first modal to close
+    setTimeout(() => {
+      setCreateCustomModalVisible(true);
+    }, 300);
+  };
+
+  // Handle creating a new custom exercise
+  const handleCreateCustomExercise = async (exerciseData) => {
+    const newExercise = await createCustomExercise(exerciseData);
+    setCustomExercises([...customExercises, newExercise]);
+    // Optionally auto-select "My Exercises" filter to show the new exercise
+    setSelectedMuscleFilter('my_exercises');
+    // Re-open exercise picker after creating
+    setTimeout(() => {
+      setExercisePickerVisible(true);
+    }, 300);
+  };
+
+  // Load saved workouts from local storage
+  const loadSavedWorkouts = async () => {
+    setLoadingSavedWorkouts(true);
+    try {
+      const workouts = await getSavedWorkouts();
+      setSavedWorkouts(workouts);
+    } catch (error) {
+      console.error('Failed to load saved workouts:', error);
+      Alert.alert('Error', 'Failed to load saved workouts');
+    } finally {
+      setLoadingSavedWorkouts(false);
+    }
+  };
+
+  // Apply a saved workout to current day
+  const applySavedWorkout = (savedWorkout) => {
+    updateCurrentDay({
+      workoutName: savedWorkout.name,
+      workoutDescription: savedWorkout.description || '',
+      workoutType: savedWorkout.workoutType || '',
+      emoji: savedWorkout.emoji || '💪',
+      exercises: savedWorkout.exercises || []
+    });
+    setSavedWorkoutPickerVisible(false);
+  };
+
+  // Save current day as a saved workout to local storage
+  const saveCurrentDayAsWorkout = async (name, description) => {
+    setSavingWorkout(true);
+    try {
+      await createSavedWorkout({
+        name,
+        description,
+        emoji: currentDay.emoji || '💪',
+        workoutType: currentDay.workoutType || '',
+        exercises: currentDay.exercises || []
+      });
+      setSaveWorkoutModalVisible(false);
+    } catch (error) {
+      console.error('Failed to save workout:', error);
+      Alert.alert('Error', 'Failed to save workout');
+    } finally {
+      setSavingWorkout(false);
+    }
+  };
+
   const renderHeader = () => (
     <>
       <View style={styles.header}>
-        <Text style={styles.title}>Day {editingDayIndex + 1}</Text>
-        <Text style={styles.subtitle}>Configure this workout day</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Day {editingDayIndex + 1}</Text>
+        <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Configure this workout day</Text>
       </View>
 
+      {/* Quick Actions Row */}
+      {!currentDay.isRest && (
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity
+            style={[styles.quickActionButton, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}
+            onPress={() => {
+              loadSavedWorkouts();
+              setSavedWorkoutPickerVisible(true);
+            }}
+          >
+            <Ionicons name="folder-open-outline" size={18} color={colors.primary} />
+            <Text style={[styles.quickActionText, { color: colors.primary }]}>Use Saved Workout</Text>
+          </TouchableOpacity>
+
+          {currentDay.exercises?.length > 0 && (
+            <TouchableOpacity
+              style={[styles.quickActionButton, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '30' }]}
+              onPress={() => setSaveWorkoutModalVisible(true)}
+            >
+              <Ionicons name="bookmark-outline" size={18} color={colors.accent} />
+              <Text style={[styles.quickActionText, { color: colors.accent }]}>Save Workout</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {/* Rest Day Toggle */}
-      <View style={styles.toggleSection}>
+      <View style={[styles.toggleSection, { backgroundColor: colors.borderLight }]}>
         <TouchableOpacity
-          style={[styles.toggleOption, !currentDay.isRest && styles.toggleOptionActive]}
+          style={[styles.toggleOption, !currentDay.isRest && [styles.toggleOptionActive, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]]}
           onPress={() => currentDay.isRest && toggleRestDay()}
           activeOpacity={0.8}
         >
           <Text style={styles.toggleIcon}>💪</Text>
-          <Text style={[styles.toggleText, !currentDay.isRest && styles.toggleTextActive]}>
+          <Text style={[styles.toggleText, { color: colors.secondaryText }, !currentDay.isRest && [styles.toggleTextActive, { color: colors.text }]]}>
             Workout
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.toggleOption, currentDay.isRest && styles.toggleOptionActive]}
+          style={[styles.toggleOption, currentDay.isRest && [styles.toggleOptionActive, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]]}
           onPress={() => !currentDay.isRest && toggleRestDay()}
           activeOpacity={0.8}
         >
           <Text style={styles.toggleIcon}>😴</Text>
-          <Text style={[styles.toggleText, currentDay.isRest && styles.toggleTextActive]}>
+          <Text style={[styles.toggleText, { color: colors.secondaryText }, currentDay.isRest && [styles.toggleTextActive, { color: colors.text }]]}>
             Rest
           </Text>
         </TouchableOpacity>
@@ -316,11 +459,11 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
 
       {/* Workout Name */}
       <View style={styles.inputSection}>
-        <Text style={styles.inputLabel}>Workout Name <Text style={styles.required}>*</Text></Text>
+        <Text style={[styles.inputLabel, { color: colors.text }]}>Workout Name <Text style={[styles.required, { color: colors.primary }]}>*</Text></Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
           placeholder="e.g., Push Day, Leg Day"
-          placeholderTextColor={Colors.light.secondaryText}
+          placeholderTextColor={colors.placeholder}
           value={currentDay.workoutName}
           onChangeText={(value) => updateCurrentDay({ workoutName: value })}
           maxLength={50}
@@ -330,10 +473,11 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
       {/* Exercises Header */}
       <View style={styles.exercisesSection}>
         <View style={styles.exercisesHeader}>
-          <Text style={styles.sectionLabel}>Exercises</Text>
-          <View style={styles.exerciseCounter}>
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>Exercises</Text>
+          <View style={[styles.exerciseCounter, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
             <Text style={[
               styles.exerciseCounterText,
+              { color: colors.text },
               (currentDay.exercises?.length >= 20) && styles.exerciseCounterTextLimit
             ]}>
               {currentDay.exercises?.length || 0}/20
@@ -344,15 +488,17 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
         <TouchableOpacity
           style={[
             styles.addExerciseButton,
-            (currentDay.exercises?.length >= 20) && styles.addExerciseButtonDisabled
+            { backgroundColor: colors.primary, shadowColor: colors.primary },
+            (currentDay.exercises?.length >= 20) && [styles.addExerciseButtonDisabled, { backgroundColor: colors.borderLight }]
           ]}
           onPress={() => setExercisePickerVisible(true)}
           disabled={currentDay.exercises?.length >= 20}
         >
-          <Ionicons name="add-circle" size={20} color={currentDay.exercises?.length >= 20 ? Colors.light.secondaryText : Colors.light.onPrimary} />
+          <Ionicons name="add-circle" size={20} color={currentDay.exercises?.length >= 20 ? colors.secondaryText : colors.onPrimary} />
           <Text style={[
             styles.addExerciseText,
-            (currentDay.exercises?.length >= 20) && styles.addExerciseTextDisabled
+            { color: colors.onPrimary },
+            (currentDay.exercises?.length >= 20) && [styles.addExerciseTextDisabled, { color: colors.secondaryText }]
           ]}>
             Add Exercise
           </Text>
@@ -362,7 +508,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   );
 
   const renderFooter = () => (
-    <Text style={styles.dragHint}>Hold and drag to reorder exercises</Text>
+    <Text style={[styles.dragHint, { color: colors.secondaryText }]}>Hold and drag to reorder exercises</Text>
   );
 
   const renderEmptyList = () => (
@@ -376,16 +522,16 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   const renderExerciseItem = useCallback(({ item: exercise, drag, isActive, getIndex }) => {
     const index = getIndex();
     return (
-      <ScaleDecorator>
-        <TouchableOpacity
-          activeOpacity={1}
-          onLongPress={drag}
-          disabled={isActive}
-          style={[
-            styles.exerciseCard,
-            isActive && styles.exerciseCardDragging
-          ]}
-        >
+      <TouchableOpacity
+        activeOpacity={1}
+        onLongPress={drag}
+        disabled={isActive}
+        style={[
+          styles.exerciseCard,
+          { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
+          isActive && [styles.exerciseCardDragging, { backgroundColor: colors.cardBackground, shadowColor: colors.primary, borderColor: colors.primary }]
+        ]}
+      >
           <View style={styles.exerciseCardHeader}>
             <TouchableOpacity
               onPressIn={drag}
@@ -395,18 +541,18 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
               <View style={styles.dragDots}>
                 {[0, 1].map((row) => (
                   <View key={row} style={styles.dragDotsRow}>
-                    <View style={styles.dragDot} />
-                    <View style={styles.dragDot} />
-                    <View style={styles.dragDot} />
-                    <View style={styles.dragDot} />
+                    <View style={[styles.dragDot, { backgroundColor: colors.secondaryText }]} />
+                    <View style={[styles.dragDot, { backgroundColor: colors.secondaryText }]} />
+                    <View style={[styles.dragDot, { backgroundColor: colors.secondaryText }]} />
+                    <View style={[styles.dragDot, { backgroundColor: colors.secondaryText }]} />
                   </View>
                 ))}
               </View>
             </TouchableOpacity>
-            <View style={styles.exerciseNumber}>
-              <Text style={styles.exerciseNumberText}>{index + 1}</Text>
+            <View style={[styles.exerciseNumber, { backgroundColor: colors.primary + '20' }]}>
+              <Text style={[styles.exerciseNumberText, { color: colors.primary }]}>{index + 1}</Text>
             </View>
-            <Text style={styles.exerciseName}>{exercise.name}</Text>
+            <Text style={[styles.exerciseName, { color: colors.text }]}>{exercise.name}</Text>
             <TouchableOpacity
               style={styles.removeButton}
               onPress={() => removeExerciseFromWorkout(index)}
@@ -415,99 +561,107 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.exerciseDivider} />
+          <View style={[styles.exerciseDivider, { backgroundColor: colors.borderLight }]} />
 
           <View style={styles.exerciseInputs}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputGroupLabel}>Sets</Text>
+              <Text style={[styles.inputGroupLabel, { color: colors.text }]}>Sets</Text>
               <TextInput
-                style={styles.smallInput}
+                style={[styles.smallInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                 placeholder="3"
                 value={exercise.sets}
-                onChangeText={(value) => updateExercise(index, 'sets', value)}
-                keyboardType="numeric"
-                placeholderTextColor={Colors.light.secondaryText}
+                onChangeText={(value) => updateExercise(index, 'sets', value.replace(/[^0-9]/g, ''))}
+                keyboardType="number-pad"
+                maxLength={2}
+                contextMenuHidden={true}
+                placeholderTextColor={colors.placeholder}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputGroupLabel}>Reps</Text>
+              <Text style={[styles.inputGroupLabel, { color: colors.text }]}>Reps</Text>
               <TextInput
-                style={styles.smallInput}
-                placeholder="8-10"
+                style={[styles.smallInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                placeholder="8-12"
                 value={exercise.reps}
-                onChangeText={(value) => updateExercise(index, 'reps', value)}
-                placeholderTextColor={Colors.light.secondaryText}
+                onChangeText={(value) => updateExercise(index, 'reps', value.replace(/[^0-9\-]/g, ''))}
+                keyboardType="numbers-and-punctuation"
+                maxLength={7}
+                contextMenuHidden={true}
+                placeholderTextColor={colors.placeholder}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputGroupLabel}>Weight</Text>
+              <Text style={[styles.inputGroupLabel, { color: colors.text }]}>Weight</Text>
               <TextInput
-                style={styles.smallInput}
-                placeholder="135 lbs"
+                style={[styles.smallInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                placeholder="135"
                 value={exercise.weight}
-                onChangeText={(value) => updateExercise(index, 'weight', value)}
-                placeholderTextColor={Colors.light.secondaryText}
+                onChangeText={(value) => updateExercise(index, 'weight', value.replace(/[^0-9.]/g, ''))}
+                keyboardType="decimal-pad"
+                maxLength={6}
+                contextMenuHidden={true}
+                placeholderTextColor={colors.placeholder}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputGroupLabel}>Rest</Text>
+              <Text style={[styles.inputGroupLabel, { color: colors.text }]}>Rest</Text>
               <RestTimerInput
                 value={exercise.restSeconds || ''}
                 onChange={(value) => updateExercise(index, 'restSeconds', value)}
+                colors={colors}
               />
             </View>
           </View>
         </TouchableOpacity>
-      </ScaleDecorator>
     );
-  }, [currentDay.exercises, removeExerciseFromWorkout, updateExercise]);
+  }, [currentDay.exercises, removeExerciseFromWorkout, updateExercise, colors]);
 
   // Rest day view uses ScrollView
   if (currentDay.isRest) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.title}>Day {editingDayIndex + 1}</Text>
-            <Text style={styles.subtitle}>Configure this workout day</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Day {editingDayIndex + 1}</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Configure this workout day</Text>
           </View>
 
           {/* Rest Day Toggle */}
-          <View style={styles.toggleSection}>
+          <View style={[styles.toggleSection, { backgroundColor: colors.borderLight }]}>
             <TouchableOpacity
-              style={[styles.toggleOption, !currentDay.isRest && styles.toggleOptionActive]}
+              style={[styles.toggleOption, !currentDay.isRest && [styles.toggleOptionActive, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]]}
               onPress={() => currentDay.isRest && toggleRestDay()}
               activeOpacity={0.8}
             >
               <Text style={styles.toggleIcon}>💪</Text>
-              <Text style={[styles.toggleText, !currentDay.isRest && styles.toggleTextActive]}>
+              <Text style={[styles.toggleText, { color: colors.secondaryText }, !currentDay.isRest && [styles.toggleTextActive, { color: colors.text }]]}>
                 Workout
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.toggleOption, currentDay.isRest && styles.toggleOptionActive]}
+              style={[styles.toggleOption, currentDay.isRest && [styles.toggleOptionActive, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]]}
               onPress={() => !currentDay.isRest && toggleRestDay()}
               activeOpacity={0.8}
             >
               <Text style={styles.toggleIcon}>😴</Text>
-              <Text style={[styles.toggleText, currentDay.isRest && styles.toggleTextActive]}>
+              <Text style={[styles.toggleText, { color: colors.secondaryText }, currentDay.isRest && [styles.toggleTextActive, { color: colors.text }]]}>
                 Rest
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.restDayContainer}>
+          <View style={[styles.restDayContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
             <Text style={styles.restDayEmoji}>😴</Text>
-            <Text style={styles.restDayTitle}>Rest Day</Text>
-            <Text style={styles.restDayText}>Take time to recover and let your muscles grow</Text>
+            <Text style={[styles.restDayTitle, { color: colors.text }]}>Rest Day</Text>
+            <Text style={[styles.restDayText, { color: colors.secondaryText }]}>Take time to recover and let your muscles grow</Text>
           </View>
         </ScrollView>
 
@@ -517,7 +671,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
 
   // Workout day view uses DraggableFlatList as main scroll container
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <DraggableFlatList
         data={currentDay.exercises || []}
         extraData={currentDay.exercises}
@@ -537,25 +691,31 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modal, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
             <TouchableOpacity onPress={() => setExercisePickerVisible(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
+              <Text style={[styles.modalCancel, { color: colors.primary }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Add Exercise</Text>
-            <View style={styles.modalPlaceholder} />
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Add Exercise</Text>
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={openCreateCustomModal}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+              <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Search */}
           <View style={styles.searchSection}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search" size={18} color={Colors.light.secondaryText} />
+            <View style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <Ionicons name="search" size={18} color={colors.secondaryText} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: colors.text }]}
                 placeholder="Search exercises..."
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholderTextColor={Colors.light.secondaryText}
+                placeholderTextColor={colors.placeholder}
               />
             </View>
           </View>
@@ -572,14 +732,16 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
                   key={muscle.id}
                   style={[
                     styles.filterPill,
-                    selectedMuscleFilter === muscle.id && styles.filterPillActive
+                    { backgroundColor: colors.borderLight },
+                    selectedMuscleFilter === muscle.id && [styles.filterPillActive, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => setSelectedMuscleFilter(muscle.id)}
                   activeOpacity={0.8}
                 >
                   <Text style={[
                     styles.filterPillText,
-                    selectedMuscleFilter === muscle.id && styles.filterPillTextActive
+                    { color: colors.text },
+                    selectedMuscleFilter === muscle.id && [styles.filterPillTextActive, { color: colors.onPrimary }]
                   ]}>
                     {muscle.name}
                   </Text>
@@ -590,17 +752,60 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
 
           {/* Exercise List */}
           <ScrollView style={styles.exercisePickerList} contentContainerStyle={styles.exercisePickerContent}>
-            {getFilteredExercises().map((exercise) => (
-              <ExerciseCard
-                key={exercise.id}
-                exercise={exercise}
-                onPress={() => addExerciseToWorkout(exercise)}
-                compact={true}
-              />
-            ))}
+            {getFilteredExercises().length === 0 && selectedMuscleFilter === 'my_exercises' ? (
+              <View style={styles.emptyCustomExercises}>
+                <Text style={[styles.emptyCustomText, { color: colors.secondaryText }]}>
+                  No custom exercises yet
+                </Text>
+                <TouchableOpacity
+                  style={[styles.createFirstButton, { backgroundColor: colors.primary }]}
+                  onPress={openCreateCustomModal}
+                >
+                  <Ionicons name="add" size={18} color={colors.onPrimary} />
+                  <Text style={[styles.createFirstButtonText, { color: colors.onPrimary }]}>Create Your First</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              getFilteredExercises().map((exercise) => (
+                <ExerciseCard
+                  key={exercise.id}
+                  exercise={exercise}
+                  onPress={() => addExerciseToWorkout(exercise)}
+                  compact={true}
+                  isCustom={exercise.isCustom}
+                />
+              ))
+            )}
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Saved Workout Picker Modal */}
+      <SavedWorkoutPickerModal
+        visible={savedWorkoutPickerVisible}
+        onClose={() => setSavedWorkoutPickerVisible(false)}
+        savedWorkouts={savedWorkouts}
+        loading={loadingSavedWorkouts}
+        onSelectWorkout={applySavedWorkout}
+      />
+
+      {/* Save Workout Modal */}
+      <SaveWorkoutModal
+        visible={saveWorkoutModalVisible}
+        onClose={() => setSaveWorkoutModalVisible(false)}
+        onSave={saveCurrentDayAsWorkout}
+        defaultName={currentDay.workoutName || ''}
+        defaultDescription={currentDay.workoutDescription || ''}
+        exerciseCount={currentDay.exercises?.length || 0}
+        saving={savingWorkout}
+      />
+
+      {/* Create Custom Exercise Modal */}
+      <CreateCustomExerciseModal
+        visible={createCustomModalVisible}
+        onClose={() => setCreateCustomModalVisible(false)}
+        onSave={handleCreateCustomExercise}
+      />
     </View>
   );
 };
@@ -610,7 +815,6 @@ export default EditDayStep;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   scrollView: {
     flex: 1,
@@ -620,21 +824,36 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  quickActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  quickActionText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
   },
   toggleSection: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.borderLight,
     borderRadius: 12,
     padding: 4,
     gap: 4,
@@ -650,8 +869,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   toggleOptionActive: {
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -663,10 +880,9 @@ const styles = StyleSheet.create({
   toggleText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
   toggleTextActive: {
-    color: Colors.light.text,
+    // color set dynamically
   },
   inputSection: {
     marginBottom: 24,
@@ -674,21 +890,17 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
     marginBottom: 8,
   },
   required: {
-    color: Colors.light.primary,
+    // color set dynamically
   },
   input: {
-    backgroundColor: Colors.light.cardBackground,
     borderWidth: 1.5,
-    borderColor: Colors.light.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.light.text,
     fontWeight: '500',
   },
   exercisesSection: {
@@ -703,12 +915,9 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   exerciseCounter: {
-    backgroundColor: Colors.light.cardBackground,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -716,7 +925,6 @@ const styles = StyleSheet.create({
   exerciseCounterText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   exerciseCounterTextLimit: {
     color: '#EF4444',
@@ -726,54 +934,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.light.primary,
     paddingVertical: 14,
     borderRadius: 12,
     marginBottom: 16,
-    shadowColor: Colors.light.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
   addExerciseButtonDisabled: {
-    backgroundColor: Colors.light.borderLight,
     shadowOpacity: 0,
   },
   addExerciseText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.onPrimary,
   },
   addExerciseTextDisabled: {
-    color: Colors.light.secondaryText,
+    // color set dynamically
   },
   exercisesList: {
     gap: 0,
   },
   dragHint: {
     fontSize: 12,
-    color: Colors.light.secondaryText,
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
   },
   exerciseCard: {
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
     marginBottom: 12,
   },
   exerciseCardDragging: {
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 10,
-    borderColor: Colors.light.primary,
   },
   exerciseCardHeader: {
     flexDirection: 'row',
@@ -797,33 +995,28 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.light.secondaryText,
   },
   exerciseNumber: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.light.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
   exerciseNumberText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.light.primary,
   },
   exerciseName: {
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
   },
   removeButton: {
     padding: 4,
   },
   exerciseDivider: {
     height: 1,
-    backgroundColor: Colors.light.borderLight,
     marginBottom: 12,
   },
   exerciseInputs: {
@@ -836,42 +1029,33 @@ const styles = StyleSheet.create({
   inputGroupLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 6,
     textTransform: 'uppercase',
   },
   smallInput: {
-    backgroundColor: Colors.light.background,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 8,
     fontSize: 14,
-    color: Colors.light.text,
     textAlign: 'center',
     fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
   },
   emptyStateText: {
     fontSize: 15,
-    color: Colors.light.secondaryText,
     fontStyle: 'italic',
   },
   restDayContainer: {
     alignItems: 'center',
     paddingVertical: 60,
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
   },
   restDayEmoji: {
     fontSize: 48,
@@ -880,12 +1064,10 @@ const styles = StyleSheet.create({
   restDayTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 8,
   },
   restDayText: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 20,
@@ -897,12 +1079,10 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
   },
   // Modal styles
   modal: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -911,19 +1091,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: Colors.light.cardBackground,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
   },
   modalCancel: {
     fontSize: 16,
-    color: Colors.light.primary,
     fontWeight: '500',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   modalPlaceholder: {
     width: 60,
@@ -936,9 +1112,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -947,7 +1121,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.light.text,
   },
   filterSection: {
     paddingBottom: 20,
@@ -957,21 +1130,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   filterPill: {
-    backgroundColor: Colors.light.borderLight,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
   },
   filterPillActive: {
-    backgroundColor: Colors.light.primary,
+    // backgroundColor set dynamically
   },
   filterPillText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.text,
   },
   filterPillTextActive: {
-    color: Colors.light.onPrimary,
+    // color set dynamically
   },
   exercisePickerList: {
     flex: 1,
@@ -979,5 +1150,34 @@ const styles = StyleSheet.create({
   },
   exercisePickerContent: {
     paddingBottom: 32,
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyCustomExercises: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyCustomText: {
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  createFirstButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  createFirstButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

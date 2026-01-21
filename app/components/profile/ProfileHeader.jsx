@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import SettingsDropdown from './SettingsDropdown';
 
@@ -15,6 +16,7 @@ const ProfileHeader = ({
   isOwnProfile,
   isFollowing,
   isPrivate,
+  isVerified,
   onSignOut,
   onFollowToggle,
   isFollowLoading,
@@ -59,7 +61,12 @@ const ProfileHeader = ({
           {/* Profile Info */}
           <View style={styles.profileInfo}>
             {/* Username */}
-            <Text style={[styles.username, { color: colors.text }]} numberOfLines={1}>@{username}</Text>
+            <View style={styles.usernameRow}>
+              <Text style={[styles.username, { color: colors.text }]} numberOfLines={1}>@{username}</Text>
+              {isVerified && (
+                <Ionicons name="checkmark-circle" size={20} color="#1D9BF0" style={styles.verifiedBadge} />
+              )}
+            </View>
 
             {/* Edit Profile Button / Follow Button */}
             {isOwnProfile ? (
@@ -142,15 +149,15 @@ const styles = StyleSheet.create({
   container: {
   },
   profileContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 0,
     position: 'relative',
   },
   settingsContainer: {
     position: 'absolute',
-    top: 20,
-    right: 20,
+    top: 12,
+    right: 16,
     zIndex: 1,
   },
   profileSection: {
@@ -158,12 +165,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarContainer: {
-    marginRight: 16,
+    marginRight: 14,
   },
   profileInitialContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     shadowOffset: { width: 0, height: 3 },
@@ -172,33 +179,40 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   profileImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
     elevation: 4,
   },
   profileInitial: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '700',
   },
   profileInfo: {
     flex: 1,
     justifyContent: 'center',
   },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   username: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
-    marginBottom: 12,
     letterSpacing: -0.5,
+  },
+  verifiedBadge: {
+    marginLeft: 6,
   },
   editButton: {
     borderWidth: 1.5,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     alignSelf: 'flex-start',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -206,14 +220,14 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   editButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   followButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     alignSelf: 'flex-start',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -221,7 +235,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   followButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
@@ -238,40 +252,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: -0.5,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   statDivider: {
     width: 1,
-    height: 40,
+    height: 32,
   },
   divider: {
     height: 1,
     marginHorizontal: 12,
   },
   bioContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   bio: {
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '400',
   },
 });

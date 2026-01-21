@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { exercises, searchExercises } from '../../data/exercises/exerciseDatabase';
 import ExerciseCard from '../exercises/ExerciseCard';
 
 const DayBuilder = ({ splitData, updateSplitData }) => {
+  const colors = useThemeColors();
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,17 +154,17 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
   const currentDay = splitData.workoutDays[currentDayIndex] || {};
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background, borderColor: colors.border, shadowColor: colors.shadow }]}>
       {/* Combined Header */}
-      <View style={styles.combinedHeader}>
+      <View style={[styles.combinedHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
         {/* Navigation Row */}
         <View style={styles.navRow}>
           {currentDayIndex > 0 ? (
             <TouchableOpacity
-              style={styles.navButtonSecondary}
+              style={[styles.navButtonSecondary, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
               onPress={goToPreviousDay}
             >
-              <Text style={styles.navButtonSecondaryText}>
+              <Text style={[styles.navButtonSecondaryText, { color: colors.text }]}>
                 ← Prev
               </Text>
             </TouchableOpacity>
@@ -170,9 +172,9 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
             <View style={styles.navButtonPlaceholder} />
           )}
 
-          <View style={styles.dayIndicator}>
-            <Text style={styles.dayNumber}>Day {currentDayIndex + 1}</Text>
-            <Text style={styles.dayProgress}>
+          <View style={[styles.dayIndicator, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '20' }]}>
+            <Text style={[styles.dayNumber, { color: colors.primary }]}>Day {currentDayIndex + 1}</Text>
+            <Text style={[styles.dayProgress, { color: colors.primary }]}>
               {currentDayIndex + 1} of {splitData.totalDays}
             </Text>
           </View>
@@ -181,14 +183,16 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
             <TouchableOpacity
               style={[
                 styles.navButton,
-                !canProceedToNext() && styles.navButtonDisabled
+                { backgroundColor: colors.primary, shadowColor: colors.primary },
+                !canProceedToNext() && [styles.navButtonDisabled, { backgroundColor: colors.borderLight }]
               ]}
               onPress={goToNextDay}
               disabled={!canProceedToNext()}
             >
               <Text style={[
                 styles.navButtonText,
-                !canProceedToNext() && styles.navButtonTextDisabled
+                { color: colors.onPrimary },
+                !canProceedToNext() && [styles.navButtonTextDisabled, { color: colors.secondaryText }]
               ]}>
                 Next →
               </Text>
@@ -204,11 +208,11 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
         <View style={styles.dayContent}>
           {/* Day Type Toggle */}
           <View style={styles.dayTypeToggleContainer}>
-            <View style={styles.dayTypeToggleCard}>
+            <View style={[styles.dayTypeToggleCard, { backgroundColor: colors.borderLight }]}>
               <TouchableOpacity
                 style={[
                   styles.dayTypeOption,
-                  !currentDay.isRest && styles.dayTypeOptionActive
+                  !currentDay.isRest && [styles.dayTypeOptionActive, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]
                 ]}
                 onPress={() => !currentDay.isRest ? null : toggleRestDay()}
                 activeOpacity={0.8}
@@ -216,7 +220,8 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
                 <Text style={styles.dayTypeIcon}>💪</Text>
                 <Text style={[
                   styles.dayTypeText,
-                  !currentDay.isRest && styles.dayTypeTextActive
+                  { color: colors.secondaryText },
+                  !currentDay.isRest && [styles.dayTypeTextActive, { color: colors.text }]
                 ]}>
                   Workout
                 </Text>
@@ -225,7 +230,7 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
               <TouchableOpacity
                 style={[
                   styles.dayTypeOption,
-                  currentDay.isRest && styles.dayTypeOptionActive
+                  currentDay.isRest && [styles.dayTypeOptionActive, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]
                 ]}
                 onPress={() => currentDay.isRest ? null : toggleRestDay()}
                 activeOpacity={0.8}
@@ -233,7 +238,8 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
                 <Text style={styles.dayTypeIcon}>😴</Text>
                 <Text style={[
                   styles.dayTypeText,
-                  currentDay.isRest && styles.dayTypeTextActive
+                  { color: colors.secondaryText },
+                  currentDay.isRest && [styles.dayTypeTextActive, { color: colors.text }]
                 ]}>
                   Rest
                 </Text>
@@ -245,21 +251,21 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
           {!currentDay.isRest && (
             <View style={styles.workoutNameSection}>
               <View style={styles.sectionLabelContainer}>
-                <Text style={styles.sectionLabel}>Workout Name</Text>
-                <Text style={styles.sectionRequiredIndicator}>Required</Text>
+                <Text style={[styles.sectionLabel, { color: colors.text }]}>Workout Name</Text>
+                <Text style={[styles.sectionRequiredIndicator, { color: colors.primary, backgroundColor: colors.primary + '15' }]}>Required</Text>
               </View>
-              <Text style={styles.sectionDescription}>
+              <Text style={[styles.sectionDescription, { color: colors.secondaryText }]}>
                 Give this workout a descriptive name
               </Text>
 
-              <View style={styles.workoutNameCard}>
+              <View style={[styles.workoutNameCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}>
                 <TextInput
-                  style={styles.workoutNameInput}
+                  style={[styles.workoutNameInput, { color: colors.text }]}
                   placeholder="e.g., Push Day, Upper Body, Chest & Triceps"
                   value={currentDay.workoutName}
                   onChangeText={(value) => updateCurrentDay({ workoutName: value })}
                   maxLength={50}
-                  placeholderTextColor={Colors.light.secondaryText}
+                  placeholderTextColor={colors.secondaryText}
                 />
               </View>
             </View>
@@ -267,10 +273,10 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
 
           {/* Rest Day Message */}
           {currentDay.isRest && (
-            <View style={styles.restDayContainer}>
+            <View style={[styles.restDayContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
               <Text style={styles.restDayEmoji}>😴</Text>
-              <Text style={styles.restDayTitle}>Rest Day</Text>
-              <Text style={styles.restDayDescription}>
+              <Text style={[styles.restDayTitle, { color: colors.text }]}>Rest Day</Text>
+              <Text style={[styles.restDayDescription, { color: colors.secondaryText }]}>
                 Take time to recover and let your muscles grow. You can do light stretching or mobility work.
               </Text>
             </View>
@@ -280,10 +286,10 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
           {!currentDay.isRest && (
             <View style={styles.exercisesSection}>
               <View style={styles.sectionLabelContainer}>
-                <Text style={styles.sectionLabel}>Exercises</Text>
-                <Text style={styles.sectionRequiredIndicator}>At least 1 required</Text>
+                <Text style={[styles.sectionLabel, { color: colors.text }]}>Exercises</Text>
+                <Text style={[styles.sectionRequiredIndicator, { color: colors.primary, backgroundColor: colors.primary + '15' }]}>At least 1 required</Text>
               </View>
-              <Text style={styles.sectionDescription}>
+              <Text style={[styles.sectionDescription, { color: colors.secondaryText }]}>
                 Add exercises to complete this workout
               </Text>
 
@@ -291,21 +297,24 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
                 <TouchableOpacity
                   style={[
                     styles.addExerciseButton,
-                    (currentDay.exercises?.length >= 20) && styles.addExerciseButtonDisabled
+                    { backgroundColor: colors.primary, shadowColor: colors.primary },
+                    (currentDay.exercises?.length >= 20) && [styles.addExerciseButtonDisabled, { backgroundColor: colors.borderLight }]
                   ]}
                   onPress={() => setExercisePickerVisible(true)}
                   disabled={currentDay.exercises?.length >= 20}
                 >
                   <Text style={[
                     styles.addExerciseText,
-                    (currentDay.exercises?.length >= 20) && styles.addExerciseTextDisabled
+                    { color: colors.onPrimary },
+                    (currentDay.exercises?.length >= 20) && [styles.addExerciseTextDisabled, { color: colors.secondaryText }]
                   ]}>
                     + Add Exercise
                   </Text>
                 </TouchableOpacity>
-                <View style={styles.exerciseCounter}>
+                <View style={[styles.exerciseCounter, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                   <Text style={[
                     styles.exerciseCounterText,
+                    { color: colors.text },
                     (currentDay.exercises?.length >= 20) && styles.exerciseCounterTextLimit
                   ]}>
                     {currentDay.exercises?.length || 0}/20
@@ -316,56 +325,56 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
               {currentDay.exercises && currentDay.exercises.length > 0 ? (
                 <View style={styles.exercisesList}>
                   {currentDay.exercises.map((exercise, exerciseIndex) => (
-                    <View key={exerciseIndex} style={styles.exerciseCard}>
+                    <View key={exerciseIndex} style={[styles.exerciseCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
                       <View style={styles.exerciseCardHeader}>
-                        <View style={styles.exerciseNumberContainer}>
-                          <Text style={styles.exerciseNumber}>{exerciseIndex + 1}</Text>
+                        <View style={[styles.exerciseNumberContainer, { backgroundColor: colors.primary + '15' }]}>
+                          <Text style={[styles.exerciseNumber, { color: colors.primary }]}>{exerciseIndex + 1}</Text>
                         </View>
-                        <Text style={styles.exerciseName}>
+                        <Text style={[styles.exerciseName, { color: colors.text }]}>
                           {exercise.name}
                         </Text>
                         <TouchableOpacity
-                          style={styles.removeButton}
+                          style={[styles.removeButton, { backgroundColor: colors.borderLight }]}
                           onPress={() => removeExerciseFromWorkout(exerciseIndex)}
                         >
-                          <Text style={styles.removeButtonText}>×</Text>
+                          <Text style={[styles.removeButtonText, { color: colors.secondaryText }]}>×</Text>
                         </TouchableOpacity>
                       </View>
 
-                      <View style={styles.exerciseDivider} />
+                      <View style={[styles.exerciseDivider, { backgroundColor: colors.borderLight }]} />
 
                       <View style={styles.exerciseInputs}>
                         <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>Sets</Text>
+                          <Text style={[styles.inputLabel, { color: colors.text }]}>Sets</Text>
                           <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                             placeholder="3"
                             value={exercise.sets}
                             onChangeText={(value) => updateExercise(exerciseIndex, 'sets', value)}
                             keyboardType="numeric"
-                            placeholderTextColor={Colors.light.secondaryText}
+                            placeholderTextColor={colors.secondaryText}
                           />
                         </View>
 
                         <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>Reps</Text>
+                          <Text style={[styles.inputLabel, { color: colors.text }]}>Reps</Text>
                           <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                             placeholder="8-10"
                             value={exercise.reps}
                             onChangeText={(value) => updateExercise(exerciseIndex, 'reps', value)}
-                            placeholderTextColor={Colors.light.secondaryText}
+                            placeholderTextColor={colors.secondaryText}
                           />
                         </View>
 
                         <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>Weight</Text>
+                          <Text style={[styles.inputLabel, { color: colors.text }]}>Weight</Text>
                           <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                             placeholder="135 lbs"
                             value={exercise.weight}
                             onChangeText={(value) => updateExercise(exerciseIndex, 'weight', value)}
-                            placeholderTextColor={Colors.light.secondaryText}
+                            placeholderTextColor={colors.secondaryText}
                           />
                         </View>
 
@@ -374,8 +383,8 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
                   ))}
                 </View>
               ) : (
-                <View style={styles.emptyExercises}>
-                  <Text style={styles.emptyExercisesText}>
+                <View style={[styles.emptyExercises, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
+                  <Text style={[styles.emptyExercisesText, { color: colors.secondaryText }]}>
                     No exercises added yet. Tap "Add Exercise" to get started.
                   </Text>
                 </View>
@@ -387,23 +396,23 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
           {!currentDay.isRest && (
             <View style={styles.descriptionSection}>
               <View style={styles.sectionLabelContainer}>
-                <Text style={styles.sectionLabel}>Description</Text>
-                <Text style={styles.sectionOptionalIndicator}>Optional</Text>
+                <Text style={[styles.sectionLabel, { color: colors.text }]}>Description</Text>
+                <Text style={[styles.sectionOptionalIndicator, { color: colors.secondaryText, backgroundColor: colors.borderLight }]}>Optional</Text>
               </View>
-              <Text style={styles.sectionDescription}>
+              <Text style={[styles.sectionDescription, { color: colors.secondaryText }]}>
                 Add any notes or focus areas for this workout
               </Text>
 
-              <View style={styles.descriptionCard}>
+              <View style={[styles.descriptionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}>
                 <TextInput
-                  style={styles.descriptionInput}
+                  style={[styles.descriptionInput, { color: colors.text }]}
                   placeholder="Describe this workout..."
                   value={currentDay.workoutDescription}
                   onChangeText={(value) => updateCurrentDay({ workoutDescription: value })}
                   maxLength={200}
                   multiline={true}
                   numberOfLines={3}
-                  placeholderTextColor={Colors.light.secondaryText}
+                  placeholderTextColor={colors.secondaryText}
                   textAlignVertical="top"
                 />
               </View>
@@ -418,33 +427,33 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modal, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight, shadowColor: colors.shadow }]}>
             <TouchableOpacity onPress={() => setExercisePickerVisible(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
+              <Text style={[styles.modalCancel, { color: colors.primary }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Add Exercise</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Add Exercise</Text>
             <View style={styles.modalPlaceholder} />
           </View>
 
           {/* Search Section */}
           <View style={styles.searchSection}>
             <View style={styles.searchBarContainer}>
-              <View style={styles.searchBar}>
-                <Text style={styles.searchIcon}>🔍</Text>
+              <View style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}>
+                <Text style={[styles.searchIcon, { color: colors.secondaryText }]}>🔍</Text>
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { color: colors.text }]}
                   placeholder="Search exercises..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholderTextColor={Colors.light.secondaryText}
+                  placeholderTextColor={colors.secondaryText}
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity
                     style={styles.clearButton}
                     onPress={() => setSearchQuery('')}
                   >
-                    <Text style={styles.clearButtonText}>✕</Text>
+                    <Text style={[styles.clearButtonText, { color: colors.secondaryText }]}>✕</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -464,7 +473,8 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
                   key={muscle.id}
                   style={[
                     styles.filterPill,
-                    selectedMuscleFilter === muscle.id && styles.filterPillActive
+                    { backgroundColor: colors.borderLight + '80' },
+                    selectedMuscleFilter === muscle.id && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary, shadowColor: colors.primary }]
                   ]}
                   onPress={() => {
                     setSelectedMuscleFilter(muscle.id);
@@ -477,7 +487,8 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
                 >
                   <Text style={[
                     styles.filterPillText,
-                    selectedMuscleFilter === muscle.id && styles.filterPillTextActive
+                    { color: colors.text },
+                    selectedMuscleFilter === muscle.id && [styles.filterPillTextActive, { color: colors.onPrimary }]
                   ]}>
                     {muscle.name}
                   </Text>

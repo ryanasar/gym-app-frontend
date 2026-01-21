@@ -167,7 +167,7 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
         description: finalDescription || null,
         imageUrl: imageUrl,
         published: true, // Make sure post is visible
-        streak: streak || null, // Include current streak
+        streak: streak > 1 ? streak : null, // Only include streak if > 1
         // Don't send type or restActivities to avoid backend errors
         // The backend will treat this as a regular post
       };

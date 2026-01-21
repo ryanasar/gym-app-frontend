@@ -65,6 +65,35 @@
  * @property {boolean} pendingSync
  */
 
+/**
+ * @typedef {Object} SavedWorkout
+ * @property {string} id - Local ID (e.g., "saved_123456789_abc")
+ * @property {string} name
+ * @property {string} [description]
+ * @property {string} [emoji]
+ * @property {string} [workoutType]
+ * @property {Object[]} exercises - Exercise configurations
+ * @property {number} createdAt
+ * @property {number} updatedAt
+ * @property {boolean} [pendingSync] - Needs backend upload
+ * @property {number} [backendId] - ID from backend after sync
+ */
+
+/**
+ * @typedef {Object} CustomExercise
+ * @property {string} id - Local ID (e.g., "custom_123456789_abc")
+ * @property {string} name
+ * @property {string} [category] - 'compound' or 'isolation'
+ * @property {string[]} [primaryMuscles]
+ * @property {string[]} [secondaryMuscles]
+ * @property {string} [equipment] - 'barbell', 'dumbbells', 'cable', 'machine', 'bodyweight', 'pull_up_bar', 'trap_bar'
+ * @property {string} [difficulty] - 'beginner', 'intermediate', 'advanced'
+ * @property {number} createdAt
+ * @property {number} updatedAt
+ * @property {boolean} [pendingSync] - Needs backend upload
+ * @property {number} [backendId] - ID from backend after sync
+ */
+
 // Storage Keys
 export const STORAGE_KEYS = {
   ACTIVE_SPLIT: '@gymvy/active_split',
@@ -74,4 +103,6 @@ export const STORAGE_KEYS = {
   EXERCISE_DATABASE: '@gymvy/exercise_database',
   LAST_SYNC: '@gymvy/last_sync',
   WORKOUT_ID_MAP: '@gymvy/workout_id_map',
+  SAVED_WORKOUTS: '@gymvy/saved_workouts',
+  CUSTOM_EXERCISES: '@gymvy/custom_exercises',
 };

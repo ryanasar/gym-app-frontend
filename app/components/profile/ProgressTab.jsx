@@ -157,8 +157,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,

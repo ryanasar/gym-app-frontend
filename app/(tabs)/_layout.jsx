@@ -1,24 +1,50 @@
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useColorScheme, View, Text, StyleSheet } from "react-native";
+import { useEffect, useState } from "react";
 import { Colors } from '../constants/colors'
-import { useAuth } from '../auth/auth'
 import { Ionicons } from '@expo/vector-icons';
 import { useNotifications } from '../contexts/NotificationContext';
+import { getActiveWorkout } from '../../storage';
 
 export default function TabsLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { unreadCount } = useNotifications();
+  const router = useRouter();
+  const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  // Check for active workout on mount
+  useEffect(() => {
+    const checkActiveWorkout = async () => {
+      try {
+        const activeWorkout = await getActiveWorkout();
+        setHasActiveWorkout(!!activeWorkout);
+      } catch (error) {
+        console.error('Error checking active workout:', error);
+      } finally {
+        setChecked(true);
+      }
+    };
+    checkActiveWorkout();
+  }, []);
+
+  // Navigate to workout tab if there's an active workout
+  useEffect(() => {
+    if (checked && hasActiveWorkout) {
+      router.replace('/(tabs)/workout');
+    }
+  }, [checked, hasActiveWorkout]);
 
   return (
     <Tabs
-      initialRouteName="workout"
+      initialRouteName="index"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopWidth: 1,
-          borderTopColor: colors.icon,
+          borderTopColor: colors.borderLight,
           height: 100,
           paddingBottom: 25,
           paddingTop: 10,
@@ -34,6 +60,29 @@ export default function TabsLayout() {
         },
       }}
     >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Home",
+          tabBarIcon: ({ color, focused }) => (
+            <View>
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={24}
+                color={color}
+              />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="workout"
         options={{
@@ -63,20 +112,6 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="index"
-        options={{
-          title: "Following",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "people" : "people-outline"}
-              size={24}
-              color={color}
-            />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
         name="explore"
         options={{
           title: "Explore",
@@ -95,20 +130,11 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color, focused }) => (
-            <View>
-              <Ionicons
-                name={focused ? "person" : "person-outline"}
-                size={24}
-                color={color}
-              />
-              {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </View>
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />

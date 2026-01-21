@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import { getFollowingPosts } from '../api/postsApi';
 import Activity from '../components/common/Activity';
 import EmptyState from '../components/common/EmptyState';
 import { useThemeColors } from '../hooks/useThemeColors';
 
-export default function FollowingScreen() {
+export default function HomeScreen() {
   const colors = useThemeColors();
+  const router = useRouter();
   const { user } = useAuth();
   const { manualSync } = useSync();
+  const { unreadCount } = useNotifications();
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -112,8 +116,20 @@ export default function FollowingScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
-          <Text style={[styles.title, { color: colors.text }]}>Following</Text>
-          <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Friends' workouts</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/notifications')}
+            style={styles.notificationButton}
+          >
+            <Ionicons name="notifications-outline" size={24} color={colors.text} />
+            {unreadCount > 0 && (
+              <View style={[styles.notificationBadge, { borderColor: colors.cardBackground }]}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -126,8 +142,20 @@ export default function FollowingScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Following</Text>
-        <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Friends' workouts</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/notifications')}
+          style={styles.notificationButton}
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.text} />
+          {unreadCount > 0 && (
+            <View style={[styles.notificationBadge, { borderColor: colors.cardBackground }]}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -163,19 +191,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 16,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    letterSpacing: -0.5,
-    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 13,
-    fontWeight: '500',
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,
@@ -184,8 +235,8 @@ const styles = StyleSheet.create({
     paddingVertical: 100,
   },
   listContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 8,
+    paddingTop: 8,
     paddingBottom: 20,
   },
   emptyListContainer: {

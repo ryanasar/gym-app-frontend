@@ -1,19 +1,118 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { exercises } from '../data/exercises/exerciseDatabase';
 import { muscleGroups } from '../data/exercises/muscleGroups';
+import { createSavedWorkout } from '../api/savedWorkoutsApi';
+import { getSplitById } from '../api/splitsApi';
+import { useAuth } from '../auth/auth';
 
 const WorkoutDetailScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const colors = useThemeColors();
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loadingSplit, setLoadingSplit] = useState(false);
 
   // Parse workout data from params
   const workoutData = params.workoutData ? JSON.parse(params.workoutData) : null;
   const splitData = params.splitData ? JSON.parse(params.splitData) : null;
+
+  // Check if this split is viewable (public and has an ID)
+  const canViewFullSplit = splitData?.id && splitData?.isPublic;
+
+  // Save workout to library
+  const handleSaveWorkout = async () => {
+    if (!workoutData?.exercises || workoutData.exercises.length === 0) {
+      Alert.alert('Error', 'No exercises to save');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Convert workout session exercises to saved workout format
+      const exercisesToSave = workoutData.exercises.map(exercise => {
+        // If sets is an array (from completed workout), extract the template info
+        if (Array.isArray(exercise.sets) && exercise.sets.length > 0) {
+          return {
+            ...exercise,
+            sets: exercise.sets.length.toString(),
+            reps: exercise.sets[0]?.reps?.toString() || '',
+            weight: exercise.sets[0]?.weight?.toString() || '',
+            restSeconds: '',
+            notes: ''
+          };
+        }
+        // Already in template format
+        return {
+          ...exercise,
+          sets: exercise.sets?.toString() || '',
+          reps: exercise.reps?.toString() || '',
+          weight: exercise.weight?.toString() || '',
+          restSeconds: exercise.restSeconds?.toString() || '',
+          notes: exercise.notes || ''
+        };
+      });
+
+      await createSavedWorkout({
+        name: workoutData.dayName || 'Saved Workout',
+        description: splitData?.name ? `From ${splitData.name}` : '',
+        emoji: splitData?.emoji || '💪',
+        workoutType: '',
+        exercises: exercisesToSave
+      });
+
+      setSaved(true);
+    } catch (error) {
+      console.error('Failed to save workout:', error);
+      Alert.alert('Error', 'Failed to save workout');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle viewing the full split
+  const handleViewFullSplit = async () => {
+    if (!splitData?.id) return;
+
+    // Check if it's the user's own split
+    const isOwnSplit = user?.id && splitData.userId === user.id;
+
+    // If split already has workoutDays, use it directly
+    if (splitData.workoutDays && splitData.workoutDays.length > 0) {
+      router.push({
+        pathname: '/split/view',
+        params: {
+          splitData: JSON.stringify(splitData),
+          canSave: (!isOwnSplit).toString(),
+        }
+      });
+      return;
+    }
+
+    // Otherwise, fetch the full split data
+    setLoadingSplit(true);
+    try {
+      const fullSplitData = await getSplitById(splitData.id, splitData.userId);
+
+      router.push({
+        pathname: '/split/view',
+        params: {
+          splitData: JSON.stringify(fullSplitData),
+          canSave: (!isOwnSplit).toString(),
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load split:', error);
+      Alert.alert('Error', 'Failed to load split details');
+    } finally {
+      setLoadingSplit(false);
+    }
+  };
 
   if (!workoutData) {
     return (
@@ -77,8 +176,28 @@ const WorkoutDetailScreen = () => {
         >
           <Ionicons name="close" size={28} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Workout Details</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Workout Details</Text>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            { backgroundColor: colors.primary + '15' },
+            saved && { backgroundColor: colors.accent + '15' }
+          ]}
+          onPress={handleSaveWorkout}
+          disabled={saving || saved}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={saved ? "checkmark-circle" : "bookmark-outline"}
+            size={18}
+            color={saved ? colors.accent : colors.primary}
+          />
+          <Text style={[styles.saveButtonText, { color: saved ? colors.accent : colors.primary }]}>
+            {saving ? '...' : saved ? 'Saved' : 'Save'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -89,13 +208,34 @@ const WorkoutDetailScreen = () => {
         {/* Workout Name */}
         <Text style={[styles.workoutName, { color: colors.text }]}>{workoutData.dayName}</Text>
 
-        {/* Program Name */}
+        {/* Program Name - Clickable when split is public */}
         {splitData?.name && (
-          <View style={styles.programSection}>
-            <Text style={[styles.programName, { color: colors.accent }]}>
-              {splitData.emoji && `${splitData.emoji} `}{splitData.name}
-            </Text>
-          </View>
+          canViewFullSplit ? (
+            <TouchableOpacity
+              style={[styles.programSection, styles.programSectionClickable, { backgroundColor: colors.accent + '10', borderColor: colors.accent + '30' }]}
+              onPress={handleViewFullSplit}
+              disabled={loadingSplit}
+              activeOpacity={0.7}
+            >
+              <View style={styles.programSectionContent}>
+                <Text style={[styles.programName, { color: colors.accent }]}>
+                  {splitData.emoji && `${splitData.emoji} `}{splitData.name}
+                </Text>
+                <Text style={[styles.viewSplitHint, { color: colors.accent }]}>View full split</Text>
+              </View>
+              {loadingSplit ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.programSection}>
+              <Text style={[styles.programName, { color: colors.accent }]}>
+                {splitData.emoji && `${splitData.emoji} `}{splitData.name}
+              </Text>
+            </View>
+          )
         )}
 
         {/* Week and Day */}
@@ -193,17 +333,6 @@ const WorkoutDetailScreen = () => {
             ))}
           </View>
         </View>
-
-        {/* View Full Split Button */}
-        <TouchableOpacity
-          style={[styles.viewSplitButton, { backgroundColor: colors.borderLight + '20', borderColor: colors.borderLight }]}
-          disabled
-          activeOpacity={0.7}
-        >
-          <Ionicons name="list-outline" size={20} color={colors.secondaryText} />
-          <Text style={[styles.viewSplitButtonText, { color: colors.secondaryText }]}>View full split</Text>
-          <Text style={[styles.comingSoonBadge, { color: colors.secondaryText, backgroundColor: colors.borderLight + '40' }]}>Coming soon</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -232,13 +361,33 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
+  },
+  headerTitleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 60,
+    bottom: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
   },
-  headerSpacer: {
-    width: 40,
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    zIndex: 1,
+  },
+  saveButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -260,9 +409,27 @@ const styles = StyleSheet.create({
   programSection: {
     marginBottom: 16,
   },
+  programSectionClickable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  programSectionContent: {
+    flex: 1,
+  },
   programName: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  viewSplitHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+    opacity: 0.8,
   },
 
   // Metadata Section
@@ -400,32 +567,6 @@ const styles = StyleSheet.create({
   setDetails: {
     fontSize: 13,
     fontWeight: '500',
-  },
-
-  // View Split Button
-  viewSplitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    gap: 8,
-    marginTop: 8,
-  },
-  viewSplitButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  comingSoonBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
 
   // Error State

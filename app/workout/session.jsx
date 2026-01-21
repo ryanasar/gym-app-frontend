@@ -8,9 +8,11 @@ import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '../constants/colors';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useWorkout } from '../contexts/WorkoutContext';
+import ExerciseCard from '../components/exercises/ExerciseCard';
 import { useSync } from '../contexts/SyncContext';
 import { startWorkout, updateWorkoutSet, completeWorkout, cancelWorkout, getActiveWorkout, calculateStreakFromLocal, storage } from '../../storage';
 import LiveActivity from '../modules/LiveActivity';
+import { getCustomExercises } from '../api/customExercisesApi';
 
 const WorkoutSessionScreen = () => {
   const colors = useThemeColors();
@@ -32,6 +34,7 @@ const WorkoutSessionScreen = () => {
   // Add Exercise Modal state
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
   const [addExerciseSearch, setAddExerciseSearch] = useState('');
+  const [addExerciseMuscleFilter, setAddExerciseMuscleFilter] = useState('all');
   const [selectedNewExercise, setSelectedNewExercise] = useState(null);
   const [newExerciseSets, setNewExerciseSets] = useState('3');
   const [newExerciseReps, setNewExerciseReps] = useState('10');
@@ -40,6 +43,22 @@ const WorkoutSessionScreen = () => {
   // Swap Exercise Modal state
   const [showSwapExerciseModal, setShowSwapExerciseModal] = useState(false);
   const [swapExerciseSearch, setSwapExerciseSearch] = useState('');
+
+  // Muscle groups for filtering
+  const muscleGroups = [
+    { id: 'all', name: 'All Exercises' },
+    { id: 'chest', name: 'Chest' },
+    { id: 'lats', name: 'Back' },
+    { id: 'front_delts', name: 'Shoulders' },
+    { id: 'biceps', name: 'Biceps' },
+    { id: 'triceps', name: 'Triceps' },
+    { id: 'quadriceps', name: 'Legs' },
+    { id: 'core', name: 'Core' },
+    { id: 'hamstrings', name: 'Hamstrings' },
+    { id: 'glutes', name: 'Glutes' },
+    { id: 'calves', name: 'Calves' },
+    { id: 'forearms', name: 'Forearms' }
+  ];
 
   // Reorder Exercises Modal state
   const [showReorderModal, setShowReorderModal] = useState(false);
@@ -93,12 +112,18 @@ const WorkoutSessionScreen = () => {
     }
   }, [workoutData?.dayName]);
 
-  // Load exercise database on mount
+  // Load exercise database on mount (bundled + custom exercises)
   useEffect(() => {
     const loadExerciseDatabase = async () => {
       try {
-        const exercises = await storage.getExercises();
-        setExerciseDatabase(exercises || []);
+        const bundledExercises = await storage.getExercises();
+        const customExercises = await getCustomExercises();
+        // Merge bundled and custom exercises, marking custom ones
+        const allExercises = [
+          ...(bundledExercises || []),
+          ...(customExercises || []).map(ex => ({ ...ex, isCustom: true })),
+        ];
+        setExerciseDatabase(allExercises);
       } catch (error) {
         console.error('[Session] Error loading exercise database:', error);
       }
@@ -125,13 +150,18 @@ const WorkoutSessionScreen = () => {
             // Restore the workout state from storage
             setWorkoutSessionId(activeWorkout.id);
 
-            // Load exercise database to get exercise names
-            const exercises = await storage.getExercises();
+            // Load exercise database to get exercise names (bundled + custom)
+            const bundledExercises = await storage.getExercises();
+            const customExercises = await getCustomExercises();
             const exerciseMap = {};
-            exercises.forEach(ex => {
+            bundledExercises.forEach(ex => {
               exerciseMap[ex.id] = ex;
               // Also map by string version for flexibility
               exerciseMap[String(ex.id)] = ex;
+            });
+            customExercises.forEach(ex => {
+              exerciseMap[ex.id] = { ...ex, isCustom: true };
+              exerciseMap[String(ex.id)] = { ...ex, isCustom: true };
             });
 
             // Convert storage format to UI format
@@ -196,12 +226,17 @@ const WorkoutSessionScreen = () => {
           const newWorkout = await startWorkout(splitId, dayIndex);
           setWorkoutSessionId(newWorkout.id);
 
-          // Load exercise database to get exercise names
-          const exercises = await storage.getExercises();
+          // Load exercise database to get exercise names (bundled + custom)
+          const bundledEx = await storage.getExercises();
+          const customEx = await getCustomExercises();
           const exerciseMap = {};
-          exercises.forEach(ex => {
+          bundledEx.forEach(ex => {
             exerciseMap[ex.id] = ex;
             exerciseMap[String(ex.id)] = ex;
+          });
+          customEx.forEach(ex => {
+            exerciseMap[ex.id] = { ...ex, isCustom: true };
+            exerciseMap[String(ex.id)] = { ...ex, isCustom: true };
           });
 
           // Use exercises from the workout storage (not from workoutData)
@@ -543,6 +578,7 @@ const WorkoutSessionScreen = () => {
   const openAddExerciseModal = () => {
     setShowOptionsMenu(false);
     setAddExerciseSearch('');
+    setAddExerciseMuscleFilter('all');
     setSelectedNewExercise(null);
     setNewExerciseSets('3');
     setNewExerciseReps('10');
@@ -650,11 +686,31 @@ const WorkoutSessionScreen = () => {
     setShowReorderModal(true);
   };
 
-  // Filter exercises for search
-  const filteredExercisesForAdd = exerciseDatabase.filter(ex =>
-    ex.name.toLowerCase().includes(addExerciseSearch.toLowerCase()) &&
-    !exercises.some(e => e.id === ex.id)
-  );
+  // Filter exercises for search with muscle group filter
+  const filteredExercisesForAdd = exerciseDatabase.filter(ex => {
+    // Exclude exercises already in workout
+    if (exercises.some(e => e.id === ex.id)) return false;
+
+    // Apply muscle filter first (only primary muscles)
+    if (addExerciseMuscleFilter !== 'all') {
+      const primaryMatch = ex.primaryMuscles && ex.primaryMuscles.includes(addExerciseMuscleFilter);
+      if (!primaryMatch) return false;
+    }
+
+    // Then apply search filter
+    if (addExerciseSearch.trim()) {
+      const lowercaseQuery = addExerciseSearch.toLowerCase();
+      return (
+        ex.name.toLowerCase().includes(lowercaseQuery) ||
+        ex.primaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
+        ex.secondaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
+        ex.equipment?.toLowerCase().includes(lowercaseQuery) ||
+        ex.category?.toLowerCase().includes(lowercaseQuery)
+      );
+    }
+
+    return true;
+  });
 
   const filteredExercisesForSwap = exerciseDatabase.filter(ex =>
     ex.name.toLowerCase().includes(swapExerciseSearch.toLowerCase()) &&
@@ -1204,7 +1260,7 @@ const WorkoutSessionScreen = () => {
                       ]}
                       placeholder={currentExercise.weight || "0"}
                       value={currentSet?.weight !== undefined ? currentSet.weight : '0'}
-                      onChangeText={(value) => updateSetData('weight', value)}
+                      onChangeText={(value) => updateSetData('weight', value.replace(/[^0-9.]/g, ''))}
                       onFocus={() => {
                         if (currentSet?.weight === '0') {
                           updateSetData('weight', '');
@@ -1215,7 +1271,9 @@ const WorkoutSessionScreen = () => {
                           updateSetData('weight', '0');
                         }
                       }}
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
+                      maxLength={6}
+                      contextMenuHidden={true}
                       placeholderTextColor={colors.secondaryText + '80'}
                       selectionColor={colors.primary}
                     />
@@ -1230,7 +1288,7 @@ const WorkoutSessionScreen = () => {
                       style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, color: colors.text }]}
                       placeholder={currentExercise.reps || "0"}
                       value={currentSet?.reps !== undefined ? currentSet.reps : '0'}
-                      onChangeText={(value) => updateSetData('reps', value)}
+                      onChangeText={(value) => updateSetData('reps', value.replace(/[^0-9]/g, ''))}
                       onFocus={() => {
                         if (currentSet?.reps === '0') {
                           updateSetData('reps', '');
@@ -1241,7 +1299,9 @@ const WorkoutSessionScreen = () => {
                           updateSetData('reps', '0');
                         }
                       }}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      contextMenuHidden={true}
                       placeholderTextColor={colors.secondaryText + '80'}
                       selectionColor={colors.primary}
                     />
@@ -1443,6 +1503,43 @@ const WorkoutSessionScreen = () => {
             )}
           </View>
 
+          {/* Muscle Group Filter Pills */}
+          <View style={styles.filterSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScrollView}
+              contentContainerStyle={styles.filterScrollContent}
+            >
+              {muscleGroups.map((muscle) => (
+                <TouchableOpacity
+                  key={muscle.id}
+                  style={[
+                    styles.filterPill,
+                    { backgroundColor: colors.borderLight + '80' },
+                    addExerciseMuscleFilter === muscle.id && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary, shadowColor: colors.primary }]
+                  ]}
+                  onPress={() => {
+                    setAddExerciseMuscleFilter(muscle.id);
+                    // Clear search when switching muscle filters for better UX
+                    if (muscle.id !== 'all' && addExerciseSearch.trim()) {
+                      setAddExerciseSearch('');
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.filterPillText,
+                    { color: colors.text },
+                    addExerciseMuscleFilter === muscle.id && [styles.filterPillTextActive, { color: colors.onPrimary }]
+                  ]}>
+                    {muscle.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {selectedNewExercise && (
             <View style={[styles.selectedExerciseConfig, { backgroundColor: colors.cardBackground, borderColor: colors.primary + '40' }]}>
               <View style={styles.selectedExerciseBadge}>
@@ -1490,27 +1587,22 @@ const WorkoutSessionScreen = () => {
             </View>
           )}
 
-          <ScrollView style={styles.exerciseList}>
+          <ScrollView style={styles.exerciseList} contentContainerStyle={styles.exerciseListContent}>
             {filteredExercisesForAdd.map(exercise => (
-              <TouchableOpacity
-                key={exercise.id}
-                style={[
-                  styles.exerciseListItem,
-                  { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
-                  selectedNewExercise?.id === exercise.id && { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primary + '08' }
-                ]}
-                onPress={() => setSelectedNewExercise(exercise)}
-              >
-                <Text style={[styles.exerciseListItemName, { color: colors.text }]}>{exercise.name}</Text>
-                {exercise.primaryMuscles && (
-                  <Text style={[styles.exerciseListItemMuscles, { color: colors.secondaryText }]}>
-                    {exercise.primaryMuscles.join(', ')}
-                  </Text>
-                )}
+              <View key={exercise.id} style={selectedNewExercise?.id === exercise.id ? [styles.selectedExerciseWrapper, { borderColor: colors.primary }] : undefined}>
+                <ExerciseCard
+                  exercise={exercise}
+                  onPress={() => setSelectedNewExercise(exercise)}
+                  compact={true}
+                  showMuscles={false}
+                  showCategory={false}
+                />
                 {selectedNewExercise?.id === exercise.id && (
-                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                  <View style={[styles.selectedCheckmark, { backgroundColor: colors.primary }]}>
+                    <Ionicons name="checkmark" size={16} color={colors.onPrimary} />
+                  </View>
                 )}
-              </TouchableOpacity>
+              </View>
             ))}
             {filteredExercisesForAdd.length === 0 && (
               <Text style={[styles.noExercisesText, { color: colors.secondaryText }]}>No exercises found</Text>
@@ -1557,23 +1649,16 @@ const WorkoutSessionScreen = () => {
             )}
           </View>
 
-          <ScrollView style={styles.exerciseList}>
+          <ScrollView style={styles.exerciseList} contentContainerStyle={styles.exerciseListContent}>
             {filteredExercisesForSwap.map(exercise => (
-              <TouchableOpacity
+              <ExerciseCard
                 key={exercise.id}
-                style={[styles.exerciseListItem, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}
+                exercise={exercise}
                 onPress={() => handleSwapExercise(exercise)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.exerciseListItemName, { color: colors.text }]}>{exercise.name}</Text>
-                  {exercise.primaryMuscles && (
-                    <Text style={[styles.exerciseListItemMuscles, { color: colors.secondaryText }]}>
-                      {exercise.primaryMuscles.join(', ')}
-                    </Text>
-                  )}
-                </View>
-                <Ionicons name="swap-horizontal" size={20} color={colors.primary} />
-              </TouchableOpacity>
+                compact={true}
+                showMuscles={false}
+                showCategory={false}
+              />
             ))}
             {filteredExercisesForSwap.length === 0 && (
               <Text style={[styles.noExercisesText, { color: colors.secondaryText }]}>No exercises found</Text>
@@ -2120,6 +2205,43 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
   },
 
+  // Filter Section
+  filterSection: {
+    paddingBottom: 12,
+  },
+  filterScrollView: {
+    paddingHorizontal: 16,
+  },
+  filterScrollContent: {
+    paddingRight: 16,
+    gap: 10,
+  },
+  filterPill: {
+    backgroundColor: Colors.light.borderLight + '80',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  filterPillActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  filterPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  filterPillTextActive: {
+    color: Colors.light.onPrimary,
+  },
+
   // Selected Exercise Config
   selectedExerciseConfig: {
     backgroundColor: Colors.light.cardBackground,
@@ -2174,6 +2296,28 @@ const styles = StyleSheet.create({
   exerciseList: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+  exerciseListContent: {
+    paddingTop: 4,
+    paddingBottom: 24,
+  },
+  selectedExerciseWrapper: {
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: Colors.light.primary,
+    marginBottom: 4,
+    position: 'relative',
+  },
+  selectedCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseListItem: {
     flexDirection: 'row',

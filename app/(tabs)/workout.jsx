@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { ActivityIndicator, Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View, RefreshControl, Modal } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, RefreshControl, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import CelebrationAnimation from '../components/animations/CelebrationAnimation'
 import RestDayCard from '../components/workout/RestDayCard';
 import BeginSplitCard from '../components/workout/BeginSplitCard';
 import EmptyState from '../components/common/EmptyState';
+import ExerciseCard from '../components/exercises/ExerciseCard';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
@@ -18,6 +19,8 @@ import { clearLocalSplit, debugLocalSplit } from '../utils/clearLocalSplit';
 import { updateSplit } from '../api/splitsApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColors } from '../hooks/useThemeColors';
+import { getCustomExercises, createCustomExercise } from '../api/customExercisesApi';
+import CreateCustomExerciseModal from '../components/exercises/CreateCustomExerciseModal';
 
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -96,6 +99,34 @@ const WorkoutScreen = () => {
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [localExercises, setLocalExercises] = useState([]);
 
+  // Add Exercise Modal state
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [exerciseDatabase, setExerciseDatabase] = useState([]);
+  const [customExercises, setCustomExercises] = useState([]);
+  const [addExerciseSearch, setAddExerciseSearch] = useState('');
+  const [addExerciseMuscleFilter, setAddExerciseMuscleFilter] = useState('all');
+  const [selectedNewExercise, setSelectedNewExercise] = useState(null);
+  const [newExerciseSets, setNewExerciseSets] = useState('3');
+  const [newExerciseReps, setNewExerciseReps] = useState('10');
+  const [showCreateCustomModal, setShowCreateCustomModal] = useState(false);
+
+  // Muscle groups for filtering
+  const muscleGroups = [
+    { id: 'all', name: 'All Exercises' },
+    { id: 'my_exercises', name: 'My Exercises' },
+    { id: 'chest', name: 'Chest' },
+    { id: 'lats', name: 'Back' },
+    { id: 'front_delts', name: 'Shoulders' },
+    { id: 'biceps', name: 'Biceps' },
+    { id: 'triceps', name: 'Triceps' },
+    { id: 'quadriceps', name: 'Legs' },
+    { id: 'core', name: 'Core' },
+    { id: 'hamstrings', name: 'Hamstrings' },
+    { id: 'glutes', name: 'Glutes' },
+    { id: 'calves', name: 'Calves' },
+    { id: 'forearms', name: 'Forearms' }
+  ];
+
   // Calculate if card would exceed screen height
   const { shouldCollapse, maxVisibleExercises } = useMemo(() => {
     if (!todaysWorkout?.exercises) return { shouldCollapse: false, maxVisibleExercises: 0 };
@@ -148,10 +179,20 @@ const WorkoutScreen = () => {
 
   // Handle returning from completed workout session
   useEffect(() => {
-    if (params.completed === 'true') {
-      // Show celebration animation when returning from completed workout
-      setShowCelebration(true);
-    }
+    const handleCompletedSession = async () => {
+      if (params.completed === 'true') {
+        // Calculate streak when returning from completed workout
+        try {
+          const streak = await calculateStreakFromLocal();
+          setCurrentStreak(streak);
+        } catch (error) {
+          console.error('[Workout Tab] Error calculating streak after session:', error);
+        }
+        // Show celebration animation when returning from completed workout
+        setShowCelebration(true);
+      }
+    };
+    handleCompletedSession();
   }, [params.completed]);
 
   // Check for active workout and auto-resume
@@ -185,6 +226,9 @@ const WorkoutScreen = () => {
 
   // Check if it's a rest day
   const isRestDay = todaysWorkout?.isRest || (todaysWorkout?.exercises && todaysWorkout.exercises.length === 0 && todaysWorkout?.dayName === 'Rest Day');
+
+  // Check if workout has exercises
+  const hasExercises = todaysWorkout?.exercises?.length > 0;
 
   // Automatically mark rest days as completed (doesn't increase streak)
   useEffect(() => {
@@ -267,9 +311,12 @@ const WorkoutScreen = () => {
 
     // Update the split in local storage
     try {
-      if (activeSplit) {
+      // Read fresh from storage to avoid stale data
+      const currentSplit = await storage.getSplit();
+      if (currentSplit) {
         const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
-        const updatedSplit = { ...activeSplit };
+        // Deep copy the split to avoid mutation issues
+        const updatedSplit = JSON.parse(JSON.stringify(currentSplit));
         const days = updatedSplit.days || updatedSplit.workoutDays;
 
         if (days && days[currentDayIndex]) {
@@ -287,13 +334,201 @@ const WorkoutScreen = () => {
       console.error('[Workout] Error saving reordered exercises:', error);
       Alert.alert('Error', 'Failed to save exercise order. Please try again.');
     }
-  }, [activeSplit, todaysWorkout, refreshTodaysWorkout]);
+  }, [todaysWorkout, refreshTodaysWorkout]);
 
   const openReorderModal = () => {
     setShowOptionsMenu(false);
     setLocalExercises(todaysWorkout?.exercises || []);
     setShowReorderModal(true);
   };
+
+  // Handle removing an exercise from the workout
+  const handleRemoveExercise = useCallback(async (exerciseIndex) => {
+    const updatedExercises = localExercises.filter((_, index) => index !== exerciseIndex);
+    setLocalExercises(updatedExercises);
+
+    // Update the split in local storage
+    try {
+      // Read fresh from storage to avoid stale data
+      const currentSplit = await storage.getSplit();
+      if (currentSplit) {
+        const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
+        // Deep copy the split to avoid mutation issues
+        const updatedSplit = JSON.parse(JSON.stringify(currentSplit));
+        const days = updatedSplit.days || updatedSplit.workoutDays;
+
+        if (days && days[currentDayIndex]) {
+          days[currentDayIndex].exercises = updatedExercises;
+          await storage.saveSplit(updatedSplit);
+          await refreshTodaysWorkout();
+        }
+      }
+    } catch (error) {
+      console.error('[Workout] Error removing exercise:', error);
+      Alert.alert('Error', 'Failed to remove exercise. Please try again.');
+    }
+  }, [localExercises, todaysWorkout, refreshTodaysWorkout]);
+
+  // Load exercise database (bundled + custom)
+  useEffect(() => {
+    const loadExerciseDatabase = async () => {
+      try {
+        const exercises = await storage.getExercises();
+        setExerciseDatabase(exercises || []);
+        const custom = await getCustomExercises();
+        setCustomExercises(custom || []);
+      } catch (error) {
+        console.error('[Workout] Error loading exercise database:', error);
+      }
+    };
+    loadExerciseDatabase();
+  }, []);
+
+  // Open add exercise modal (close reorder modal first to avoid stacking issues on iOS)
+  const openAddExerciseModal = () => {
+    setShowReorderModal(false);
+    setAddExerciseSearch('');
+    setAddExerciseMuscleFilter('all');
+    setSelectedNewExercise(null);
+    setNewExerciseSets('3');
+    setNewExerciseReps('10');
+    // Small delay to let the reorder modal close first
+    setTimeout(() => {
+      setShowAddExerciseModal(true);
+    }, 100);
+  };
+
+  // Close add exercise modal and return to edit workout
+  const closeAddExerciseModal = () => {
+    setShowAddExerciseModal(false);
+    // Small delay before reopening edit modal
+    setTimeout(() => {
+      setShowReorderModal(true);
+    }, 100);
+  };
+
+  // Filter exercises for search with muscle group filter
+  const filteredExercisesForAdd = useMemo(() => {
+    // Handle "My Exercises" filter - only show custom exercises
+    if (addExerciseMuscleFilter === 'my_exercises') {
+      let filtered = customExercises.map(ex => ({ ...ex, isCustom: true }));
+
+      // Exclude exercises already in workout
+      filtered = filtered.filter(ex =>
+        !localExercises.some(e => e.id === ex.id || e.name === ex.name)
+      );
+
+      if (addExerciseSearch.trim()) {
+        const lowercaseQuery = addExerciseSearch.toLowerCase();
+        filtered = filtered.filter(ex =>
+          ex.name.toLowerCase().includes(lowercaseQuery) ||
+          ex.primaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
+          ex.equipment?.toLowerCase().includes(lowercaseQuery)
+        );
+      }
+
+      return filtered;
+    }
+
+    // Merge bundled and custom exercises
+    const allExercises = [
+      ...exerciseDatabase,
+      ...customExercises.map(ex => ({ ...ex, isCustom: true }))
+    ];
+
+    return allExercises.filter(ex => {
+      // Exclude exercises already in workout
+      if (localExercises.some(e => e.id === ex.id || e.name === ex.name)) return false;
+
+      // Apply muscle filter first (only primary muscles)
+      if (addExerciseMuscleFilter !== 'all') {
+        const primaryMatch = ex.primaryMuscles && ex.primaryMuscles.includes(addExerciseMuscleFilter);
+        if (!primaryMatch) return false;
+      }
+
+      // Then apply search filter
+      if (addExerciseSearch.trim()) {
+        const lowercaseQuery = addExerciseSearch.toLowerCase();
+        return (
+          ex.name.toLowerCase().includes(lowercaseQuery) ||
+          ex.primaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
+          ex.secondaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
+          ex.equipment?.toLowerCase().includes(lowercaseQuery) ||
+          ex.category?.toLowerCase().includes(lowercaseQuery)
+        );
+      }
+
+      return true;
+    });
+  }, [exerciseDatabase, customExercises, localExercises, addExerciseMuscleFilter, addExerciseSearch]);
+
+  // Handle opening create custom exercise modal
+  const openCreateCustomModal = () => {
+    setShowAddExerciseModal(false);
+    setTimeout(() => {
+      setShowCreateCustomModal(true);
+    }, 300);
+  };
+
+  // Handle creating a new custom exercise
+  const handleCreateCustomExercise = async (exerciseData) => {
+    const newExercise = await createCustomExercise(exerciseData);
+    setCustomExercises([...customExercises, newExercise]);
+    setAddExerciseMuscleFilter('my_exercises');
+    // Re-open add exercise modal after creating
+    setTimeout(() => {
+      setShowAddExerciseModal(true);
+    }, 300);
+  };
+
+  // Handle adding an exercise to today's workout
+  const handleAddExercise = useCallback(async () => {
+    if (!selectedNewExercise) {
+      Alert.alert('Select Exercise', 'Please select an exercise to add.');
+      return;
+    }
+
+    const sets = parseInt(newExerciseSets) || 3;
+    const reps = parseInt(newExerciseReps) || 10;
+
+    // Create new exercise object matching the workout format
+    const newExercise = {
+      id: selectedNewExercise.id,
+      name: selectedNewExercise.name,
+      sets: sets.toString(),
+      reps: reps.toString(),
+      primaryMuscles: selectedNewExercise.primaryMuscles,
+      secondaryMuscles: selectedNewExercise.secondaryMuscles,
+      equipment: selectedNewExercise.equipment,
+    };
+
+    const updatedExercises = [...localExercises, newExercise];
+    setLocalExercises(updatedExercises);
+
+    // Update the split in local storage
+    try {
+      // Read fresh from storage to avoid stale data
+      const currentSplit = await storage.getSplit();
+      if (currentSplit) {
+        const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
+        // Deep copy the split to avoid mutation issues
+        const updatedSplit = JSON.parse(JSON.stringify(currentSplit));
+        const days = updatedSplit.days || updatedSplit.workoutDays;
+
+        if (days && days[currentDayIndex]) {
+          days[currentDayIndex].exercises = updatedExercises;
+          await storage.saveSplit(updatedSplit);
+          await refreshTodaysWorkout();
+        }
+      }
+    } catch (error) {
+      console.error('[Workout] Error adding exercise:', error);
+      Alert.alert('Error', 'Failed to add exercise. Please try again.');
+    }
+
+    // Close and return to edit workout modal
+    closeAddExerciseModal();
+  }, [selectedNewExercise, newExerciseSets, newExerciseReps, localExercises, todaysWorkout, refreshTodaysWorkout]);
 
   // Show loading state while context initializes
   if (!isInitialized) {
@@ -574,13 +809,17 @@ const WorkoutScreen = () => {
           const workout = await localStartWorkout(splitId, dayIndex);
 
           // Mark all sets as completed (quick completion)
-          workout.exercises.forEach(exercise => {
-            exercise.sets.forEach(set => {
-              set.completed = true;
-              set.reps = set.reps || 0;
-              set.weight = set.weight || 0;
+          if (workout.exercises && workout.exercises.length > 0) {
+            workout.exercises.forEach(exercise => {
+              if (exercise.sets) {
+                exercise.sets.forEach(set => {
+                  set.completed = true;
+                  set.reps = set.reps || 0;
+                  set.weight = set.weight || 0;
+                });
+              }
             });
-          });
+          }
 
           // Save the updated workout with completed sets back to storage
           await storage.saveActiveWorkout(workout);
@@ -699,8 +938,8 @@ const WorkoutScreen = () => {
                     style={styles.optionsMenuItem}
                     onPress={openReorderModal}
                   >
-                    <Ionicons name="reorder-four-outline" size={18} color={colors.text} />
-                    <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Reorder Exercises</Text>
+                    <Ionicons name="create-outline" size={18} color={colors.text} />
+                    <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Edit Workout</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -750,17 +989,37 @@ const WorkoutScreen = () => {
             <View style={styles.actionButtons}>
               {!isCompleted && (
                 <>
+                  {/* No exercises warning */}
+                  {!hasExercises && (
+                    <View style={[styles.noExercisesWarning, { backgroundColor: colors.borderLight + '40' }]}>
+                      <Ionicons name="alert-circle-outline" size={18} color={colors.secondaryText} />
+                      <Text style={[styles.noExercisesWarningText, { color: colors.secondaryText }]}>
+                        Add exercises to this workout to get started
+                      </Text>
+                    </View>
+                  )}
+
                   {/* Primary CTA: Start/Resume Workout */}
                   <TouchableOpacity
-                    style={[styles.startWorkoutButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
+                    style={[
+                      styles.startWorkoutButton,
+                      { backgroundColor: colors.primary, shadowColor: colors.primary },
+                      !hasExercises && styles.startWorkoutButtonDisabled
+                    ]}
                     onPress={() => router.push({
                       pathname: '/workout/session',
                       params: {
                         workoutData: JSON.stringify(todaysWorkout)
                       }
                     })}
+                    disabled={!hasExercises}
+                    activeOpacity={!hasExercises ? 1 : 0.7}
                   >
-                    <Text style={[styles.startWorkoutText, { color: colors.onPrimary }]}>
+                    <Text style={[
+                      styles.startWorkoutText,
+                      { color: colors.onPrimary },
+                      !hasExercises && styles.startWorkoutTextDisabled
+                    ]}>
                       {hasActiveWorkout ? 'Resume Workout' : 'Start Workout'}
                     </Text>
                   </TouchableOpacity>
@@ -913,13 +1172,23 @@ const WorkoutScreen = () => {
             <TouchableOpacity onPress={() => setShowReorderModal(false)}>
               <Text style={[styles.reorderCancelText, { color: colors.secondaryText }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={[styles.reorderModalTitle, { color: colors.text }]}>Reorder Exercises</Text>
+            <Text style={[styles.reorderModalTitle, { color: colors.text }]}>Edit Workout</Text>
             <TouchableOpacity onPress={() => setShowReorderModal(false)}>
               <Text style={[styles.reorderDoneText, { color: colors.primary }]}>Done</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Press the dots and drag to reorder</Text>
+          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Drag to reorder or tap ✕ to remove</Text>
+
+          {/* Add Exercise Button */}
+          <TouchableOpacity
+            style={[styles.addExerciseButton, { backgroundColor: colors.primary }]}
+            onPress={openAddExerciseModal}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={20} color={colors.onPrimary} />
+            <Text style={[styles.addExerciseButtonText, { color: colors.onPrimary }]}>Add Exercise</Text>
+          </TouchableOpacity>
 
           <DraggableFlatList
             data={localExercises}
@@ -965,6 +1234,13 @@ const WorkoutScreen = () => {
                         {item.reps && `${item.reps} reps`}
                       </Text>
                     </View>
+                    <TouchableOpacity
+                      style={styles.reorderRemoveButton}
+                      onPress={() => handleRemoveExercise(index)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#EF4444" />
+                    </TouchableOpacity>
                   </View>
                 </ScaleDecorator>
               );
@@ -972,6 +1248,189 @@ const WorkoutScreen = () => {
           />
         </GestureHandlerRootView>
       </Modal>
+
+      {/* Add Exercise Modal */}
+      <Modal
+        visible={showAddExerciseModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeAddExerciseModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[styles.addExerciseModalContainer, { backgroundColor: colors.background }]}
+        >
+          {/* Header */}
+          <View style={[styles.addExerciseModalHeader, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+            <View style={styles.addExerciseModalHeaderContent}>
+              <Text style={[styles.addExerciseModalTitle, { color: colors.text }]}>Add Exercise</Text>
+              <View style={styles.addExerciseHeaderActions}>
+                <TouchableOpacity
+                  style={styles.createCustomButton}
+                  onPress={openCreateCustomModal}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.createCustomButtonText, { color: colors.primary }]}>Create</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addExerciseModalCloseButton}
+                  onPress={closeAddExerciseModal}
+                >
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Search */}
+          <View style={[styles.addExerciseSearchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
+            <Ionicons name="search" size={20} color={colors.secondaryText} />
+            <TextInput
+              style={[styles.addExerciseSearchInput, { color: colors.text }]}
+              placeholder="Search exercises..."
+              placeholderTextColor={colors.secondaryText}
+              value={addExerciseSearch}
+              onChangeText={setAddExerciseSearch}
+              autoCapitalize="none"
+            />
+            {addExerciseSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setAddExerciseSearch('')}>
+                <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Muscle Group Filter Pills */}
+          <View style={styles.addExerciseFilterSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.addExerciseFilterScrollView}
+              contentContainerStyle={styles.addExerciseFilterScrollContent}
+            >
+              {muscleGroups.map((muscle) => (
+                <TouchableOpacity
+                  key={muscle.id}
+                  style={[
+                    styles.addExerciseFilterPill,
+                    { backgroundColor: colors.borderLight + '80' },
+                    addExerciseMuscleFilter === muscle.id && [styles.addExerciseFilterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary, shadowColor: colors.primary }]
+                  ]}
+                  onPress={() => {
+                    setAddExerciseMuscleFilter(muscle.id);
+                    if (muscle.id !== 'all' && addExerciseSearch.trim()) {
+                      setAddExerciseSearch('');
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.addExerciseFilterPillText,
+                    { color: colors.text },
+                    addExerciseMuscleFilter === muscle.id && [styles.addExerciseFilterPillTextActive, { color: colors.onPrimary }]
+                  ]}>
+                    {muscle.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Selected Exercise Config */}
+          {selectedNewExercise && (
+            <View style={[styles.addExerciseSelectedConfig, { backgroundColor: colors.cardBackground, borderColor: colors.primary + '40' }]}>
+              <View style={styles.addExerciseSelectedBadge}>
+                <Text style={[styles.addExerciseSelectedName, { color: colors.text }]}>{selectedNewExercise.name}</Text>
+                <TouchableOpacity onPress={() => setSelectedNewExercise(null)}>
+                  <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.addExerciseConfigRow}>
+                <View style={styles.addExerciseConfigItem}>
+                  <Text style={[styles.addExerciseConfigLabel, { color: colors.secondaryText }]}>Sets</Text>
+                  <TextInput
+                    style={[styles.addExerciseConfigInput, { color: colors.text, borderColor: colors.borderLight }]}
+                    value={newExerciseSets}
+                    onChangeText={setNewExerciseSets}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                </View>
+                <View style={styles.addExerciseConfigItem}>
+                  <Text style={[styles.addExerciseConfigLabel, { color: colors.secondaryText }]}>Reps</Text>
+                  <TextInput
+                    style={[styles.addExerciseConfigInput, { color: colors.text, borderColor: colors.borderLight }]}
+                    value={newExerciseReps}
+                    onChangeText={setNewExerciseReps}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                  />
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.addExerciseModalSaveButton, { backgroundColor: colors.primary, marginTop: 12 }]}
+                onPress={handleAddExercise}
+              >
+                <Text style={[styles.addExerciseModalSaveText, { color: colors.onPrimary }]}>
+                  Add to Workout
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Exercise List */}
+          <ScrollView style={styles.addExerciseList} contentContainerStyle={styles.addExerciseListContent}>
+            {filteredExercisesForAdd.length === 0 && addExerciseMuscleFilter === 'my_exercises' ? (
+              <View style={styles.emptyCustomExercises}>
+                <Text style={[styles.emptyCustomText, { color: colors.secondaryText }]}>
+                  No custom exercises yet
+                </Text>
+                <TouchableOpacity
+                  style={[styles.createFirstButton, { backgroundColor: colors.primary }]}
+                  onPress={openCreateCustomModal}
+                >
+                  <Ionicons name="add" size={18} color={colors.onPrimary} />
+                  <Text style={[styles.createFirstButtonText, { color: colors.onPrimary }]}>Create Your First</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {filteredExercisesForAdd.map(exercise => {
+                  const isSelected = selectedNewExercise?.id === exercise.id;
+                  return (
+                    <View key={exercise.id} style={isSelected ? [styles.addExerciseSelectedWrapper, { borderColor: colors.primary }] : styles.addExerciseCardWrapper}>
+                      <ExerciseCard
+                        exercise={exercise}
+                        onPress={() => setSelectedNewExercise(exercise)}
+                        compact={true}
+                        showMuscles={false}
+                        showCategory={false}
+                        isCustom={exercise.isCustom}
+                        style={isSelected ? { marginBottom: 0, borderWidth: 0 } : undefined}
+                      />
+                      {isSelected && (
+                        <View style={[styles.addExerciseSelectedCheckmark, { backgroundColor: colors.primary }]}>
+                          <Ionicons name="checkmark" size={16} color={colors.onPrimary} />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+                {filteredExercisesForAdd.length === 0 && (
+                  <Text style={[styles.addExerciseNoResults, { color: colors.secondaryText }]}>No exercises found</Text>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Create Custom Exercise Modal */}
+      <CreateCustomExerciseModal
+        visible={showCreateCustomModal}
+        onClose={() => setShowCreateCustomModal(false)}
+        onSave={handleCreateCustomExercise}
+      />
 
       {/* Celebration Animation */}
       {showCelebration && (
@@ -1025,23 +1484,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contentContainer: {
-    padding: 16,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 20,
     flex: 1,
     alignItems: 'stretch',
   },
 
-  // Workout Card (using SplitReview styling)
+  // Workout Card (matching Activity card styling)
   workoutCard: {
     backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
     padding: 20,
+    marginBottom: 16,
     shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 2,
-    borderColor: Colors.light.borderLight,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
     width: '100%',
   },
   workoutCardCompleted: {
@@ -1195,6 +1657,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+  // No exercises warning
+  noExercisesWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  noExercisesWarningText: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+
   // Primary CTA - Start Workout Button
   startWorkoutButton: {
     backgroundColor: Colors.light.primary,
@@ -1206,11 +1684,18 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  startWorkoutButtonDisabled: {
+    opacity: 0.4,
+    shadowOpacity: 0,
+  },
   startWorkoutText: {
     color: Colors.light.onPrimary,
     fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  startWorkoutTextDisabled: {
+    opacity: 0.8,
   },
 
   // Secondary Action Button (Mark Complete / Un-complete)
@@ -1536,5 +2021,259 @@ const styles = StyleSheet.create({
   reorderExerciseDetails: {
     fontSize: 13,
     color: Colors.light.secondaryText,
+  },
+  reorderRemoveButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+
+  // Add Exercise Button in Edit Modal
+  addExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primary,
+  },
+  addExerciseButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.onPrimary,
+  },
+
+  // Add Exercise Modal
+  addExerciseModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  addExerciseModalHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  addExerciseModalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  addExerciseModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  addExerciseModalCloseButton: {
+    padding: 4,
+  },
+  addExerciseModalSaveButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  addExerciseModalSaveButtonDisabled: {
+    opacity: 0.4,
+  },
+  addExerciseModalSaveText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.onPrimary,
+  },
+  addExerciseModalSaveTextDisabled: {
+    opacity: 0.6,
+  },
+
+  // Add Exercise Search
+  addExerciseSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    gap: 8,
+  },
+  addExerciseSearchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.light.text,
+  },
+
+  // Add Exercise Filter Section
+  addExerciseFilterSection: {
+    paddingBottom: 12,
+  },
+  addExerciseFilterScrollView: {
+    paddingHorizontal: 16,
+  },
+  addExerciseFilterScrollContent: {
+    paddingRight: 16,
+    gap: 10,
+  },
+  addExerciseFilterPill: {
+    backgroundColor: Colors.light.borderLight + '80',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  addExerciseFilterPillActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  addExerciseFilterPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  addExerciseFilterPillTextActive: {
+    color: Colors.light.onPrimary,
+  },
+
+  // Add Exercise Selected Config
+  addExerciseSelectedConfig: {
+    backgroundColor: Colors.light.cardBackground,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.primary + '40',
+  },
+  addExerciseSelectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  addExerciseSelectedName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  addExerciseConfigRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  addExerciseConfigItem: {
+    flex: 1,
+  },
+  addExerciseConfigLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addExerciseConfigInput: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    textAlign: 'center',
+  },
+
+  // Add Exercise List
+  addExerciseList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  addExerciseListContent: {
+    paddingTop: 4,
+    paddingBottom: 24,
+  },
+  addExerciseCardWrapper: {
+    // Non-selected cards - no special styling needed
+  },
+  addExerciseSelectedWrapper: {
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: Colors.light.primary,
+    marginBottom: 8,
+    position: 'relative',
+  },
+  addExerciseSelectedCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addExerciseNoResults: {
+    fontSize: 15,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    paddingVertical: 40,
+  },
+
+  // Create Custom Exercise Button in Header
+  addExerciseHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  createCustomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  createCustomButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Empty Custom Exercises State
+  emptyCustomExercises: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyCustomText: {
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  createFirstButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  createFirstButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

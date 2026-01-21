@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
@@ -17,6 +18,7 @@ import SplitReview from '../components/splitCreation/SplitReview';
 const CreateSplitScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const colors = useThemeColors();
   const { activeSplit, updateActiveSplit, changeActiveSplit } = useWorkout();
   const { user } = useAuth();
   const { manualSync } = useSync();
@@ -332,16 +334,16 @@ const CreateSplitScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <TouchableOpacity onPress={handleCancel}>
-          <Text style={styles.cancelButton}>Cancel</Text>
+          <Text style={[styles.cancelButton, { color: colors.primary }]}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{isEditMode ? 'Edit Split' : 'Create Split'}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isEditMode ? 'Edit Split' : 'Create Split'}</Text>
         {isEditMode ? (
           <TouchableOpacity onPress={handleSave}>
-            <Text style={styles.saveButton}>Save</Text>
+            <Text style={[styles.saveButton, { color: colors.primary }]}>Save</Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.placeholder} />
@@ -349,7 +351,7 @@ const CreateSplitScreen = () => {
       </View>
 
       {/* Progress Indicator - Hide step 4 (Edit Day) as it's accessed via step 3 */}
-      <View style={styles.progressContainer}>
+      <View style={[styles.progressContainer, { backgroundColor: colors.cardBackground }]}>
         {steps.filter(step => step.id !== 4).map((step, index) => {
           // Adjust displayed step number for step 5 (Review) to show as step 4
           const displayStepId = step.id > 4 ? step.id - 1 : step.id;
@@ -359,18 +361,21 @@ const CreateSplitScreen = () => {
             <View key={step.id} style={styles.progressStep}>
               <View style={[
                 styles.progressCircle,
-                isActive && styles.progressCircleActive
+                { backgroundColor: colors.borderLight },
+                isActive && [styles.progressCircleActive, { backgroundColor: colors.primary }]
               ]}>
                 <Text style={[
                   styles.progressNumber,
-                  isActive && styles.progressNumberActive
+                  { color: colors.secondaryText },
+                  isActive && [styles.progressNumberActive, { color: colors.onPrimary }]
                 ]}>
                   {displayStepId}
                 </Text>
               </View>
               <Text style={[
                 styles.progressLabel,
-                isActive && styles.progressLabelActive
+                { color: colors.secondaryText },
+                isActive && [styles.progressLabelActive, { color: colors.primary }]
               ]}>
                 {step.title}
               </Text>
@@ -391,22 +396,22 @@ const CreateSplitScreen = () => {
       </View>
 
       {/* Main Navigation Buttons */}
-      <View style={styles.mainNavigation}>
+      <View style={[styles.mainNavigation, { backgroundColor: colors.background, borderTopColor: colors.borderLight, shadowColor: colors.shadow }]}>
         <TouchableOpacity
-          style={styles.mainPreviousButton}
+          style={[styles.mainPreviousButton, { borderColor: colors.border, backgroundColor: colors.cardBackground }]}
           onPress={handlePrevious}
         >
-          <Text style={styles.mainPreviousButtonText}>
+          <Text style={[styles.mainPreviousButtonText, { color: colors.text }]}>
             {currentStep === 1 ? 'Cancel' : 'Previous'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.mainNextButton, !canProceed() && styles.mainNextButtonDisabled]}
+          style={[styles.mainNextButton, { backgroundColor: colors.primary, shadowColor: colors.primary }, !canProceed() && [styles.mainNextButtonDisabled, { backgroundColor: colors.borderLight }]]}
           onPress={handleNext}
           disabled={!canProceed()}
         >
-          <Text style={[styles.mainNextButtonText, !canProceed() && styles.mainNextButtonTextDisabled]}>
+          <Text style={[styles.mainNextButtonText, { color: colors.onPrimary }, !canProceed() && [styles.mainNextButtonTextDisabled, { color: colors.secondaryText }]]}>
             {currentStep === 4 ? 'Save Day' : currentStep === steps.length ? (isEditMode ? 'Save' : 'Create Split') : 'Continue'}
           </Text>
         </TouchableOpacity>

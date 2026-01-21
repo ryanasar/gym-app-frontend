@@ -14,13 +14,15 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '../auth/auth';
 import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { checkUsernameAvailability, updateUserProfile } from '../api/usersApi';
 
 export default function ProfileSetup() {
   const router = useRouter();
   const { user, setUser } = useAuth();
+  const colors = useThemeColors();
   const [loading, setLoading] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: user?.name || '',
     username: user?.username || '',
@@ -65,85 +67,90 @@ export default function ProfileSetup() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>Set up your profile</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.text }]}>Set up your profile</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
               This information will be visible to other users
             </Text>
           </View>
 
           <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '50%' }]} />
+            <View style={[styles.progressBar, { backgroundColor: colors.borderLight }]}>
+              <View style={[styles.progressFill, { backgroundColor: colors.primary, width: '50%' }]} />
             </View>
-            <Text style={styles.progressText}>Step 2 of 4</Text>
+            <Text style={[styles.progressText, { color: colors.secondaryText }]}>Step 2 of 4</Text>
           </View>
 
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name *</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Full Name *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
                 autoCorrect={false}
                 placeholder="Enter your full name"
-                placeholderTextColor={Colors.light.placeholder}
+                placeholderTextColor={colors.secondaryText}
                 value={formData.name}
-                onChangeText={(text) => setFormData({ ...formData, name: text })}
+                onChangeText={(text) => setFormData({ ...formData, name: text.replace(/[^a-zA-Z\s'-]/g, '') })}
+                maxLength={50}
               />
+              <Text style={[styles.charCount, { color: colors.secondaryText }]}>{formData.name.length}/50</Text>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Username *</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Username *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
                 autoCorrect={false}
                 placeholder="Choose a unique username"
-                placeholderTextColor={Colors.light.placeholder}
+                placeholderTextColor={colors.secondaryText}
                 value={formData.username}
-                onChangeText={(text) => setFormData({ ...formData, username: text })}
+                onChangeText={(text) => setFormData({ ...formData, username: text.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() })}
                 autoCapitalize="none"
+                maxLength={20}
               />
-              <Text style={styles.helperText}>
-                This will be your unique identifier in the app
+              <Text style={[styles.helperText, { color: colors.secondaryText }]}>
+                Letters, numbers, and underscores only ({formData.username.length}/20)
               </Text>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Bio (Optional)</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Bio (Optional)</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
                 placeholder="Tell others about yourself..."
-                placeholderTextColor={Colors.light.placeholder}
+                placeholderTextColor={colors.secondaryText}
                 value={formData.bio}
                 onChangeText={(text) => setFormData({ ...formData, bio: text })}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
+                maxLength={150}
               />
+              <Text style={[styles.charCount, { color: colors.secondaryText }]}>{formData.bio.length}/150</Text>
             </View>
           </View>
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
             onPress={() => router.back()}
           >
-            <Text style={styles.secondaryButtonText}>Back</Text>
+            <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.disabledButton]}
+            style={[styles.primaryButton, { backgroundColor: colors.primary, shadowColor: colors.primary }, loading && styles.disabledButton]}
             onPress={handleNext}
             disabled={loading}
           >
-            <Text style={styles.primaryButtonText}>
+            <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>
               {loading ? 'Saving...' : 'Next'}
             </Text>
           </TouchableOpacity>
@@ -156,7 +163,6 @@ export default function ProfileSetup() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   flex: {
     flex: 1,
@@ -173,14 +179,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -191,18 +195,15 @@ const styles = StyleSheet.create({
   progressBar: {
     width: '100%',
     height: 4,
-    backgroundColor: Colors.light.border,
     borderRadius: 2,
     marginBottom: 8,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.light.primary,
     borderRadius: 2,
   },
   progressText: {
     fontSize: 12,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
   form: {
@@ -214,18 +215,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: Colors.light.inputBackground,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.light.text,
   },
   textArea: {
     minHeight: 100,
@@ -233,36 +230,41 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 12,
-    color: Colors.light.secondaryText,
-    marginTop: 4,
+    marginTop: 6,
+  },
+  charCount: {
+    fontSize: 12,
+    marginTop: 6,
+    textAlign: 'right',
   },
   footer: {
     flexDirection: 'row',
     padding: 24,
     gap: 12,
+    borderTopWidth: 1,
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: Colors.light.primary,
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButtonText: {
-    color: Colors.light.onPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 18,
     textAlign: 'center',
   },
   secondaryButton: {
     flex: 1,
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderWidth: 1.5,
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   secondaryButtonText: {
-    color: Colors.light.text,
     fontWeight: '600',
     fontSize: 18,
     textAlign: 'center',

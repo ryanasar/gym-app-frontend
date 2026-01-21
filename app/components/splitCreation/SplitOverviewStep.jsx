@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import DraggableFlatList from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 const generateDayId = () => `day_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
+  const colors = useThemeColors();
   const [showReorderModal, setShowReorderModal] = useState(false);
 
   // Initialize workout days if not already done
@@ -48,7 +49,7 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
 
   const getDayStatus = (day) => {
     if (day.isRest) {
-      return { label: 'Rest Day', color: Colors.light.secondaryText, icon: 'moon' };
+      return { label: 'Rest Day', color: colors.secondaryText, icon: 'moon' };
     }
     if (day.workoutName && day.exercises && day.exercises.length > 0) {
       return { label: 'Configured', color: '#4CAF50', icon: 'checkmark-circle' };
@@ -56,7 +57,7 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
     if (day.workoutName) {
       return { label: 'In Progress', color: '#FF9800', icon: 'time' };
     }
-    return { label: 'Not Set', color: Colors.light.secondaryText, icon: 'add-circle-outline' };
+    return { label: 'Not Set', color: colors.secondaryText, icon: 'add-circle-outline' };
   };
 
   const handleReorderDays = ({ data }) => {
@@ -70,23 +71,23 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>Build your split</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Build your split</Text>
           <TouchableOpacity
-            style={styles.reorderButton}
+            style={[styles.reorderButton, { backgroundColor: colors.primary + '15' }]}
             onPress={() => setShowReorderModal(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="reorder-four-outline" size={20} color={Colors.light.primary} />
-            <Text style={styles.reorderButtonText}>Reorder</Text>
+            <Ionicons name="reorder-four-outline" size={20} color={colors.primary} />
+            <Text style={[styles.reorderButtonText, { color: colors.primary }]}>Reorder</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
           Tap each day to configure its workout
         </Text>
       </View>
@@ -98,13 +99,13 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
           return (
             <TouchableOpacity
               key={index}
-              style={styles.dayCard}
+              style={[styles.dayCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}
               onPress={() => onEditDay(index)}
               activeOpacity={0.7}
             >
               <View style={styles.dayCardHeader}>
                 <View style={styles.dayInfo}>
-                  <Text style={styles.dayNumber}>Day {index + 1}</Text>
+                  <Text style={[styles.dayNumber, { color: colors.text }]}>Day {index + 1}</Text>
                   {day.emoji && <Text style={styles.dayEmoji}>{day.emoji}</Text>}
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: status.color + '15' }]}>
@@ -118,31 +119,31 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
               <View style={styles.dayCardContent}>
                 {day.workoutName ? (
                   <>
-                    <Text style={styles.dayName}>{day.workoutName}</Text>
+                    <Text style={[styles.dayName, { color: colors.text }]}>{day.workoutName}</Text>
                     {day.exercises && day.exercises.length > 0 && (
-                      <Text style={styles.exerciseCount}>
+                      <Text style={[styles.exerciseCount, { color: colors.secondaryText }]}>
                         {day.exercises.length} {day.exercises.length === 1 ? 'exercise' : 'exercises'}
                       </Text>
                     )}
                   </>
                 ) : (
-                  <Text style={styles.placeholder}>
+                  <Text style={[styles.placeholder, { color: colors.secondaryText }]}>
                     {day.isRest ? 'Rest and recovery' : 'Tap to configure'}
                   </Text>
                 )}
               </View>
 
               <View style={styles.dayCardFooter}>
-                <Ionicons name="chevron-forward" size={20} color={Colors.light.primary} />
+                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
               </View>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      <View style={styles.infoBox}>
+      <View style={[styles.infoBox, { backgroundColor: colors.primary + '10' }]}>
         <Text style={styles.infoIcon}>💡</Text>
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: colors.primary }]}>
           Configure all days to continue to the review step
         </Text>
       </View>
@@ -154,24 +155,24 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowReorderModal(false)}
       >
-        <GestureHandlerRootView style={styles.reorderModalContainer}>
-          <View style={styles.reorderModalHeader}>
+        <GestureHandlerRootView style={[styles.reorderModalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.reorderModalHeader, { borderBottomColor: colors.border }]}>
             <TouchableOpacity
               onPress={() => setShowReorderModal(false)}
               style={styles.reorderModalClose}
             >
-              <Ionicons name="close" size={24} color={Colors.light.text} />
+              <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.reorderModalTitle}>Reorder Days</Text>
+            <Text style={[styles.reorderModalTitle, { color: colors.text }]}>Reorder Days</Text>
             <TouchableOpacity
               onPress={() => setShowReorderModal(false)}
               style={styles.reorderModalDone}
             >
-              <Text style={styles.reorderModalDoneText}>Done</Text>
+              <Text style={[styles.reorderModalDoneText, { color: colors.primary }]}>Done</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.reorderHint}>Press and drag to reorder days</Text>
+          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Press and drag to reorder days</Text>
 
           <DraggableFlatList
             data={splitData.workoutDays}
@@ -185,49 +186,48 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
               const status = getDayStatus(item);
 
               return (
-                <ScaleDecorator>
-                  <View
-                    style={[
-                      styles.reorderItem,
-                      isActive && styles.reorderItemDragging
-                    ]}
+                <View
+                  style={[
+                    styles.reorderItem,
+                    { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                    isActive && [styles.reorderItemDragging, { backgroundColor: colors.cardBackground, shadowColor: colors.primary, borderColor: colors.primary }]
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPressIn={drag}
+                    disabled={isActive}
+                    style={styles.reorderDragHandle}
                   >
-                    <TouchableOpacity
-                      onPressIn={drag}
-                      disabled={isActive}
-                      style={styles.reorderDragHandle}
-                    >
-                      <View style={styles.reorderDragDots}>
-                        {[0, 1].map((row) => (
-                          <View key={row} style={styles.reorderDragDotsRow}>
-                            <View style={styles.reorderDragDot} />
-                            <View style={styles.reorderDragDot} />
-                            <View style={styles.reorderDragDot} />
-                            <View style={styles.reorderDragDot} />
-                          </View>
-                        ))}
-                      </View>
-                    </TouchableOpacity>
-                    <View style={styles.reorderDayNumber}>
-                      <Text style={styles.reorderDayNumberText}>{currentIndex + 1}</Text>
+                    <View style={styles.reorderDragDots}>
+                      {[0, 1].map((row) => (
+                        <View key={row} style={styles.reorderDragDotsRow}>
+                          <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText + '60' }]} />
+                          <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText + '60' }]} />
+                          <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText + '60' }]} />
+                          <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText + '60' }]} />
+                        </View>
+                      ))}
                     </View>
-                    <View style={styles.reorderDayInfo}>
-                      <View style={styles.reorderDayHeader}>
-                        <Text style={styles.reorderDayName}>
-                          {item.workoutName || (item.isRest ? 'Rest Day' : 'Not configured')}
-                        </Text>
-                        {item.emoji && <Text style={styles.reorderDayEmoji}>{item.emoji}</Text>}
-                      </View>
-                      <Text style={styles.reorderDayDetails}>
-                        {item.isRest
-                          ? 'Rest and recovery'
-                          : item.exercises?.length
-                            ? `${item.exercises.length} ${item.exercises.length === 1 ? 'exercise' : 'exercises'}`
-                            : 'No exercises'}
-                      </Text>
-                    </View>
+                  </TouchableOpacity>
+                  <View style={[styles.reorderDayNumber, { backgroundColor: colors.primary + '15' }]}>
+                    <Text style={[styles.reorderDayNumberText, { color: colors.primary }]}>{currentIndex + 1}</Text>
                   </View>
-                </ScaleDecorator>
+                  <View style={styles.reorderDayInfo}>
+                    <View style={styles.reorderDayHeader}>
+                      <Text style={[styles.reorderDayName, { color: colors.text }]}>
+                        {item.workoutName || (item.isRest ? 'Rest Day' : 'Not configured')}
+                      </Text>
+                      {item.emoji && <Text style={styles.reorderDayEmoji}>{item.emoji}</Text>}
+                    </View>
+                    <Text style={[styles.reorderDayDetails, { color: colors.secondaryText }]}>
+                      {item.isRest
+                        ? 'Rest and recovery'
+                        : item.exercises?.length
+                          ? `${item.exercises.length} ${item.exercises.length === 1 ? 'exercise' : 'exercises'}`
+                          : 'No exercises'}
+                    </Text>
+                  </View>
+                </View>
               );
             }}
           />
@@ -242,7 +242,6 @@ export default SplitOverviewStep;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   contentContainer: {
     padding: 24,
@@ -260,7 +259,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   reorderButton: {
     flexDirection: 'row',
@@ -269,28 +267,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: Colors.light.primary + '15',
   },
   reorderButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.primary,
   },
   subtitle: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
     lineHeight: 22,
   },
   daysContainer: {
     gap: 12,
   },
   dayCard: {
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: Colors.light.border,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -310,7 +302,6 @@ const styles = StyleSheet.create({
   dayNumber: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   dayEmoji: {
     fontSize: 20,
@@ -333,17 +324,14 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.light.text,
     marginBottom: 4,
   },
   exerciseCount: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
   placeholder: {
     fontSize: 16,
-    color: Colors.light.secondaryText,
     fontStyle: 'italic',
   },
   dayCardFooter: {
@@ -352,7 +340,6 @@ const styles = StyleSheet.create({
   infoBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.primary + '10',
     borderRadius: 12,
     padding: 16,
     marginTop: 24,
@@ -364,14 +351,12 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: Colors.light.primary,
     fontWeight: '500',
     lineHeight: 20,
   },
   // Reorder Modal Styles
   reorderModalContainer: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   reorderModalHeader: {
     flexDirection: 'row',
@@ -380,12 +365,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
   },
   reorderModalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   reorderModalClose: {
     padding: 4,
@@ -399,11 +382,9 @@ const styles = StyleSheet.create({
   reorderModalDoneText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.primary,
   },
   reorderHint: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     textAlign: 'center',
     paddingVertical: 16,
   },
@@ -413,21 +394,16 @@ const styles = StyleSheet.create({
   reorderItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.light.border,
   },
   reorderItemDragging: {
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: Colors.light.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
-    borderColor: Colors.light.primary,
   },
   reorderDragHandle: {
     padding: 12,
@@ -446,13 +422,11 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.light.secondaryText + '60',
   },
   reorderDayNumber: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.light.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -460,7 +434,6 @@ const styles = StyleSheet.create({
   reorderDayNumberText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.light.primary,
   },
   reorderDayInfo: {
     flex: 1,
@@ -473,7 +446,6 @@ const styles = StyleSheet.create({
   reorderDayName: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
     marginBottom: 2,
   },
   reorderDayEmoji: {
@@ -481,6 +453,5 @@ const styles = StyleSheet.create({
   },
   reorderDayDetails: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
   },
 });

@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import { backgroundSync, getSyncStatus } from '../../storage';
 import { useAuth } from '../auth/auth';
+import { subscribeToNetworkChanges } from '../../services/networkService';
 
 /**
  * Hook to manage background sync
@@ -125,6 +126,28 @@ export function useSyncManager(options = {}) {
       updatePendingCount();
     }
   }, [user?.id, updatePendingCount]);
+
+  // Sync when network comes back online
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    let wasOffline = false;
+
+    const unsubscribe = subscribeToNetworkChanges((isOnline) => {
+      if (isOnline && wasOffline) {
+        // Network restored - trigger sync
+        console.log('[useSyncManager] Network restored, triggering sync');
+        performSync();
+      }
+      wasOffline = !isOnline;
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.id, performSync]);
 
   return {
     isSyncing,

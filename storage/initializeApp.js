@@ -27,6 +27,8 @@ function convertExercisesToStorageFormat() {
     primaryMuscles: exercise.primaryMuscles || [],
     secondaryMuscles: exercise.secondaryMuscles || [],
     equipment: exercise.equipment || 'unknown',
+    category: exercise.category || 'compound',
+    difficulty: exercise.difficulty || 'intermediate',
   }));
 }
 

@@ -183,6 +183,7 @@ export default function UserProfileScreen() {
         isOwnProfile={isOwnProfile}
         isFollowing={isFollowing}
         isPrivate={user.profile?.isPrivate}
+        isVerified={user.profile?.isVerified}
         onFollowToggle={handleFollowToggle}
         isFollowLoading={isFollowLoading}
         onFollowersPress={handleOpenFollowersModal}

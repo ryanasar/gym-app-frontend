@@ -71,7 +71,12 @@ const FollowListModal = ({ visible, onClose, username, type }) => {
       </View>
 
       <View style={styles.userInfo}>
-        <Text style={[styles.userName, { color: colors.text }]}>{item.name || 'Unknown'}</Text>
+        <View style={styles.nameRow}>
+          <Text style={[styles.userName, { color: colors.text }]}>{item.name || 'Unknown'}</Text>
+          {item.profile?.isVerified && (
+            <Ionicons name="checkmark-circle" size={16} color="#1D9BF0" style={styles.verifiedBadge} />
+          )}
+        </View>
         <Text style={[styles.username, { color: colors.secondaryText }]}>@{item.username}</Text>
         {item.profile?.bio && (
           <Text style={[styles.bio, { color: colors.secondaryText }]} numberOfLines={1}>
@@ -186,9 +191,17 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   userName: {
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 2,
+  },
+  verifiedBadge: {
+    marginLeft: 4,
     marginBottom: 2,
   },
   username: {

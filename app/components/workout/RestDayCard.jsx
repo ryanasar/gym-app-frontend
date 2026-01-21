@@ -1,10 +1,13 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import RestDayPostModal from './RestDayPostModal';
 
 const RestDayCard = ({ splitName, splitEmoji, weekNumber, dayNumber, onRestLogged, onChangeWorkout }) => {
+  const colors = useThemeColors();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [showPostModal, setShowPostModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
@@ -26,36 +29,29 @@ const RestDayCard = ({ splitName, splitEmoji, weekNumber, dayNumber, onRestLogge
     }
   };
 
-  const recoveryMessages = [
-    "Recovery is part of progress",
-    "Let your body rebuild",
-    "Rest today, grow tomorrow",
-    "Your muscles are rebuilding",
-  ];
-
-  // Memoize the random message so it doesn't change on every render
-  const randomMessage = useMemo(() => {
-    return recoveryMessages[Math.floor(Math.random() * recoveryMessages.length)];
-  }, []);
+  // Theme-aware green colors
+  const greenPrimary = isDark ? '#4ADE80' : '#4CAF50';
+  const greenBackground = isDark ? 'rgba(74, 222, 128, 0.1)' : 'rgba(76, 175, 80, 0.08)';
+  const iconBackground = isDark ? 'rgba(74, 222, 128, 0.15)' : '#E8F5E9';
 
   return (
     <>
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: greenBackground, borderColor: greenPrimary }]}>
         {/* Icon and Title */}
         <View style={styles.header}>
-          <View style={styles.iconCircle}>
+          <View style={[styles.iconCircle, { backgroundColor: iconBackground }]}>
             <Text style={styles.iconText}>🌿</Text>
           </View>
           <View style={styles.titleContainer}>
-            <Text style={styles.title}>Rest & Recover</Text>
-            <Text style={styles.subtitle}>Planned Rest Day</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Rest & Recover</Text>
+            <Text style={[styles.subtitle, { color: greenPrimary }]}>Planned Rest Day</Text>
           </View>
           <TouchableOpacity
             style={styles.optionsButton}
             onPress={() => setShowOptionsMenu(!showOptionsMenu)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color={Colors.light.secondaryText} />
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
           </TouchableOpacity>
         </View>
 
@@ -67,30 +63,25 @@ const RestDayCard = ({ splitName, splitEmoji, weekNumber, dayNumber, onRestLogge
               activeOpacity={1}
               onPress={() => setShowOptionsMenu(false)}
             />
-            <View style={styles.optionsMenuOverlay}>
+            <View style={[styles.optionsMenuOverlay, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
               <TouchableOpacity
                 style={styles.optionsMenuItem}
                 onPress={handleChangeWorkout}
               >
-                <Ionicons name="calendar-outline" size={18} color={Colors.light.text} />
-                <Text style={styles.optionsMenuItemText}>Change Today's Workout</Text>
+                <Ionicons name="calendar-outline" size={18} color={colors.text} />
+                <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Change Today's Workout</Text>
               </TouchableOpacity>
             </View>
           </>
         )}
 
-        {/* Motivational Message */}
-        <View style={styles.messageContainer}>
-          <Text style={styles.message}>{randomMessage}</Text>
-        </View>
-
         {/* Split Info */}
         {splitName && (
           <View style={styles.splitInfo}>
-            <Text style={styles.splitText}>
+            <Text style={[styles.splitText, { color: colors.primary }]}>
               {splitEmoji && `${splitEmoji} `}{splitName}
             </Text>
-            <Text style={styles.cycleInfo}>
+            <Text style={[styles.cycleInfo, { color: colors.secondaryText }]}>
               Cycle {weekNumber} · Day {dayNumber}
             </Text>
           </View>
@@ -100,12 +91,12 @@ const RestDayCard = ({ splitName, splitEmoji, weekNumber, dayNumber, onRestLogge
         <View style={styles.actionsContainer}>
           {/* Post Rest Day Button */}
           <TouchableOpacity
-            style={styles.postRestDayButton}
+            style={[styles.postRestDayButton, { backgroundColor: greenPrimary, shadowColor: greenPrimary }]}
             onPress={handlePostRestDay}
           >
             <View style={styles.postRestDayContent}>
-              <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.postRestDayText}>Post Rest Day</Text>
+              <Ionicons name="cloud-upload-outline" size={20} color={isDark ? '#111827' : '#FFFFFF'} />
+              <Text style={[styles.postRestDayText, { color: isDark ? '#111827' : '#FFFFFF' }]}>Post Rest Day</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -129,17 +120,14 @@ export default RestDayCard;
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#4CAF50' + '08',
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    shadowColor: '#4CAF50',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
     borderWidth: 2,
-    borderColor: '#4CAF50',
   },
   header: {
     flexDirection: 'row',
@@ -150,7 +138,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -164,29 +151,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 4,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#4CAF50',
-  },
-  messageContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: '#81C784',
-  },
-  message: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.secondaryText,
-    fontStyle: 'italic',
-    lineHeight: 20,
   },
   splitInfo: {
     marginBottom: 20,
@@ -194,22 +164,18 @@ const styles = StyleSheet.create({
   splitText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.primary,
     marginBottom: 4,
   },
   cycleInfo: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
   },
   actionsContainer: {
-    marginTop: 20,
+    marginTop: 4,
   },
   postRestDayButton: {
-    backgroundColor: '#4CAF50',
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: '#4CAF50',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -222,7 +188,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   postRestDayText: {
-    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
   },
@@ -248,10 +213,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 40,
     right: 20,
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     padding: 8,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -274,6 +237,5 @@ const styles = StyleSheet.create({
   optionsMenuItemText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.light.text,
   },
 });

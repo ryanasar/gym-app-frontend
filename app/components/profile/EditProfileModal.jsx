@@ -16,11 +16,13 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { updateProfile } from '../../api/profileApi';
 import { uploadImage } from '../../api/storageApi';
 import { prepareProfileImage } from '../../utils/imageUpload';
 
 const EditProfileModal = ({ visible, onClose, userId, currentBio, currentAvatarUrl, userName, onProfileUpdated }) => {
+  const colors = useThemeColors();
   const [bio, setBio] = useState(currentBio || '');
   const [selectedImage, setSelectedImage] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -225,24 +227,24 @@ const EditProfileModal = ({ visible, onClose, userId, currentBio, currentAvatarU
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
           <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-            <Ionicons name="close" size={28} color={Colors.light.text} />
+            <Ionicons name="close" size={28} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Profile</Text>
           <TouchableOpacity
             onPress={handleSave}
             style={[styles.headerButton, styles.saveButton]}
             disabled={isSaving}
           >
             {isSaving ? (
-              <ActivityIndicator size="small" color={Colors.light.primary} />
+              <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={[styles.saveButtonText, !hasChanges && styles.saveButtonTextDisabled]}>
+              <Text style={[styles.saveButtonText, { color: colors.primary }, !hasChanges && [styles.saveButtonTextDisabled, { color: colors.secondaryText }]]}>
                 Save
               </Text>
             )}
@@ -266,13 +268,13 @@ const EditProfileModal = ({ visible, onClose, userId, currentBio, currentAvatarU
                   transition={200}
                 />
               ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitial}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.avatarInitial, { color: colors.onPrimary }]}>
                     {userName ? userName.charAt(0).toUpperCase() : '?'}
                   </Text>
                 </View>
               )}
-              <View style={styles.avatarEditBadge}>
+              <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
                 <Ionicons name="camera" size={16} color="#FFFFFF" />
               </View>
               {isUploadingImage && (
@@ -281,7 +283,7 @@ const EditProfileModal = ({ visible, onClose, userId, currentBio, currentAvatarU
                 </View>
               )}
             </TouchableOpacity>
-            <Text style={styles.changePhotoText}>Tap to change photo</Text>
+            <Text style={[styles.changePhotoText, { color: colors.secondaryText }]}>Tap to change photo</Text>
             {(avatarSource || currentAvatarUrl) && selectedImage !== 'remove' && (
               <TouchableOpacity onPress={handleRemoveImage} style={styles.removePhotoButton}>
                 <Text style={styles.removePhotoText}>Remove photo</Text>
@@ -291,18 +293,18 @@ const EditProfileModal = ({ visible, onClose, userId, currentBio, currentAvatarU
 
           {/* Bio Section */}
           <View style={styles.section}>
-            <Text style={styles.label}>Bio</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Bio</Text>
             <TextInput
-              style={styles.bioInput}
+              style={[styles.bioInput, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, color: colors.text }]}
               placeholder="Tell people about yourself..."
-              placeholderTextColor={Colors.light.placeholder}
+              placeholderTextColor={colors.placeholder}
               value={bio}
               onChangeText={setBio}
               multiline
               maxLength={150}
               textAlignVertical="top"
             />
-            <Text style={styles.charCount}>{bio.length}/150</Text>
+            <Text style={[styles.charCount, { color: colors.secondaryText }]}>{bio.length}/150</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -2,10 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/auth';
 import { useWorkout } from '../contexts/WorkoutContext';
-import { useNotifications } from '../contexts/NotificationContext';
 import ActivitiesTab from '../components/profile/PostsTab';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import ProgressTab from '../components/profile/ProgressTab';
@@ -24,7 +22,6 @@ const ProfileScreen = () => {
   const [progressKey, setProgressKey] = useState(0);
   const { user, profile, posts, signOut, refreshPosts, refreshProfile } = useAuth();
   const { lastWorkoutCompleted } = useWorkout();
-  const { unreadCount } = useNotifications();
 
   // Force ProgressTab to refresh when workout completion changes
   useEffect(() => {
@@ -60,6 +57,7 @@ const ProfileScreen = () => {
   const isOwnProfile = true;
   const isFollowing = false;
   const isPrivate = profile?.isPrivate;
+  const isVerified = profile?.isVerified;
 
   const handleOpenFollowersModal = () => {
     setModalType('followers');
@@ -113,19 +111,6 @@ const ProfileScreen = () => {
       {/* Header */}
       <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/notifications')}
-          style={styles.notificationButton}
-        >
-          <Ionicons name="notifications-outline" size={24} color={colors.text} />
-          {unreadCount > 0 && (
-            <View style={[styles.notificationBadge, { borderColor: colors.cardBackground }]}>
-              <Text style={styles.notificationBadgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
       </View>
 
       <ProfileHeader
@@ -140,6 +125,7 @@ const ProfileScreen = () => {
         isOwnProfile={isOwnProfile}
         isFollowing={isFollowing}
         isPrivate={isPrivate}
+        isVerified={isVerified}
         onSignOut={signOut}
         onFollowersPress={handleOpenFollowersModal}
         onFollowingPress={handleOpenFollowingModal}
@@ -204,12 +190,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
+    paddingTop: 56,
+    paddingBottom: 12,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -219,32 +202,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
   },
-  notificationButton: {
-    position: 'relative',
-    padding: 4,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-  },
-  notificationBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-  },
   tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingTop: 8,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -253,15 +214,15 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     position: 'relative',
   },
   activeTabText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   inactiveTabText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
   },
   activeTabIndicator: {

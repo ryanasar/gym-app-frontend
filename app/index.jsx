@@ -8,7 +8,7 @@ export default function Index() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#6366F1' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
         <Image
           source={require('../assets/images/icon.png')}
           style={{ width: 200, height: 200, marginBottom: 20 }}
@@ -30,6 +30,7 @@ export default function Index() {
     return <Redirect href="/(onboarding)" />;
   }
 
-  // Logged in and completed onboarding - go to workout screen
-  return <Redirect href="/(tabs)/workout" />;
+  // Logged in and completed onboarding - go to home screen
+  // The tabs layout will redirect to workout tab if there's an active workout
+  return <Redirect href="/(tabs)" />;
 }

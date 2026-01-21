@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useAuth } from '../auth/auth';
+import { useNetwork } from '../contexts/NetworkContext';
 import { supabase } from '../../supabase';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
 
 export default function LoginScreen() {
-  const { user, signIn, isLoading } = useAuth();
+  const { user, signIn, isLoading, error: authError } = useAuth();
+  const { isOffline } = useNetwork();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -38,6 +40,13 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setError('');
+
+    // Check for offline status
+    if (isOffline) {
+      setError('You are offline. Please connect to the internet to sign in.');
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -51,7 +60,7 @@ export default function LoginScreen() {
       // No need to manually navigate - auth state change will handle it
     } catch (networkError) {
       console.error('Network error during login:', networkError);
-      setError('Network error. Please try again.');
+      setError('Network error. Please check your connection and try again.');
     }
   };
 
@@ -94,8 +103,14 @@ export default function LoginScreen() {
               onChangeText={setPassword}
             />
 
-            {error ? (
-              <Text style={styles.errorText}>{error}</Text>
+            {isOffline && (
+              <View style={styles.offlineWarning}>
+                <Text style={styles.offlineText}>You are offline</Text>
+              </View>
+            )}
+
+            {(error || authError) ? (
+              <Text style={styles.errorText}>{error || authError?.error_description || 'An error occurred'}</Text>
             ) : null}
 
             <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
@@ -234,5 +249,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
+  },
+  offlineWarning: {
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineText: {
+    color: '#FCD34D',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

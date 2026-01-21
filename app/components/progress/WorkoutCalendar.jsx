@@ -254,7 +254,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
         <View style={[styles.statsContainer, { borderTopColor: colors.borderLight }]}>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: colors.text }]}>{stats.totalWorkouts}</Text>
-            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Total Workouts</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Total{'\n'}Workouts</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.statItem}>
@@ -280,11 +280,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
     shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   header: {
     marginBottom: 16,
