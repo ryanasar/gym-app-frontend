@@ -62,25 +62,49 @@ export const NotificationProvider = ({ children }) => {
   useEffect(() => {
     if (!user?.id) return;
 
-    const channel = supabase
-      .channel('notifications-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'Notifications',
-          filter: `recipient_id=eq.${user.id}`,
-        },
-        (payload) => {
-          // Add new notification to the beginning of the list
-          setNotifications(prev => [payload.new, ...prev]);
-        }
-      )
-      .subscribe();
+    let channel = null;
+    let isSubscribed = false;
+
+    const setupSubscription = () => {
+      // Remove existing channel if any
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+
+      channel = supabase
+        .channel(`notifications-${user.id}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'Notifications',
+            filter: `recipient_id=eq.${user.id}`,
+          },
+          (payload) => {
+            // Add new notification to the beginning of the list
+            setNotifications(prev => [payload.new, ...prev]);
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            isSubscribed = true;
+          }
+          if (status === 'CLOSED' && isSubscribed) {
+            // Reconnect if closed unexpectedly
+            isSubscribed = false;
+            setTimeout(setupSubscription, 1000);
+          }
+        });
+    };
+
+    setupSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      isSubscribed = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [user?.id]);
 

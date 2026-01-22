@@ -44,3 +44,5 @@ eas.json
 
 
 .env
+
+generate_apple_jwt.js

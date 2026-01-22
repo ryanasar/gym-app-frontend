@@ -1234,8 +1234,6 @@ const WorkoutScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Drag to reorder or tap ✕ to remove</Text>
-
           {/* Add Exercise Button */}
           <TouchableOpacity
             style={[styles.addExerciseButton, { backgroundColor: colors.primary }]}

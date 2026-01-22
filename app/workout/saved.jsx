@@ -267,14 +267,6 @@ const CreateSavedWorkoutScreen = () => {
     </>
   );
 
-  const renderFooter = () => (
-    selectedExercises.length > 0 ? (
-      <Text style={[styles.dragHint, { color: colors.secondaryText }]}>
-        Hold and drag to reorder exercises
-      </Text>
-    ) : null
-  );
-
   const renderEmpty = () => (
     <EmptyState
       emoji="💪"

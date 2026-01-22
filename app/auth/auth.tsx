@@ -1,14 +1,10 @@
 import * as React from "react";
 import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { supabase } from "../../supabase";
-import { BACKEND_API_URL, GOOGLE_CLIENT_ID } from "@/constants";
 import { getOrCreateUserBySupabaseId, getUserProfile, getUserWorkoutPlans, getUserPosts } from "../api/usersApi";
 import { getWorkoutsByUserId } from "../api/workoutsApi";
-import {
-  AuthError,
-  AuthRequestConfig,
-  useAuthRequest,
-} from "expo-auth-session";
+import { AuthError } from "expo-auth-session/build/Errors";
 import { router } from 'expo-router';
 import {
   saveSessionSecurely,
@@ -54,6 +50,7 @@ interface AuthContextType {
   refreshPosts: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   signIn: () => void;
+  signInWithApple: () => void;
   signOut: () => Promise<void>;
   isLoading: boolean;
   error: AuthError | null;
@@ -77,6 +74,7 @@ const AuthContext = React.createContext<AuthContextType>({
   refreshPosts: () => Promise.resolve(),
   refreshProfile: () => Promise.resolve(),
   signIn: () => {},
+  signInWithApple: () => {},
   signOut: () => Promise.resolve(),
   isLoading: false,
   error: null,
@@ -86,17 +84,8 @@ const AuthContext = React.createContext<AuthContextType>({
   refreshSession: () => Promise.resolve(false),
 });
 
-const config: AuthRequestConfig = {
-  clientId: GOOGLE_CLIENT_ID,
-  scopes: ["openid", "profile", "email"],
-  redirectUri: "https://auth.expo.io/@ryanasar/gymapp",
-};
-
-const discovery = {
-  authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-  tokenEndpoint: "https://oauth2.googleapis.com/token",
-  revocationEndpoint: "https://oauth2.googleapis.com/revoke",
-};
+// Supabase OAuth redirect URL
+const redirectUrl = Linking.createURL("auth/callback");
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<any | null>(null);
@@ -112,8 +101,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isOffline, setIsOffline] = React.useState(false);
   const [isTokenExpired, setIsTokenExpired] = React.useState(false);
   const [isOfflineSession, setIsOfflineSession] = React.useState(false);
-
-  const [request, response, promptAsync] = useAuthRequest(config, discovery);
 
   // Subscribe to network changes
   React.useEffect(() => {
@@ -348,10 +335,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  React.useEffect(() => {
-    handleResponse();
-  }, [response]);
-
   // Fetch related data when user is set
   React.useEffect(() => {
     if (user?.id && !isOfflineSession) {
@@ -388,55 +371,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [user, isOfflineSession]);
 
-  const handleResponse = async () => {
-    if (response?.type === "success") {
-      setIsLoading(true);
-      try {
-        const { code } = response.params;
-
-        const tokenResponse = await fetch(`${BACKEND_API_URL}/auth/token`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code }),
-        });
-
-        const tokenData = await tokenResponse.json();
-
-        if (tokenResponse.ok && tokenData.user) {
-          setAuthUser(tokenData.user);
-
-          if (tokenData.user.supabaseID) {
-            const userData = await getOrCreateUserBySupabaseId(tokenData.user.supabaseID, tokenData.user.email);
-            setUser(userData);
-
-            // Save session for offline access
-            await saveSessionSecurely({
-              userId: userData.id,
-              supabaseId: tokenData.user.supabaseID,
-              email: tokenData.user.email,
-              accessTokenExpiry: Date.now() + 3600000, // 1 hour default
-              userData: userData,
-              authUserData: tokenData.user,
-            });
-          }
-        } else {
-          throw new Error(tokenData.error || "Failed to sign in");
-        }
-      } catch (e) {
-        setError(
-          new AuthError({
-            error: "token_exchange_error",
-            error_description: "Failed to exchange code for token",
-          })
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    } else if (response?.type === "error") {
-      setError(response.error as AuthError);
-    }
-  };
-
   const signIn = async () => {
     // Don't allow sign in while offline
     const online = await checkNetworkStatus();
@@ -452,15 +386,168 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       setIsLoading(true);
-      if (!request) {
-        return;
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) {
+        throw error;
       }
-      await promptAsync();
-    } catch (e) {
+
+      if (data?.url) {
+        // Open the OAuth URL in a web browser
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        console.log('[Auth] Google OAuth result:', result);
+
+        if (result.type === 'success') {
+          const url = result.url;
+          console.log('[Auth] Google callback URL:', url);
+
+          // Extract tokens - try hash fragment first, then query params
+          let tokenPart = '';
+          if (url.includes('#')) {
+            tokenPart = url.split('#')[1];
+          } else if (url.includes('?')) {
+            tokenPart = url.split('?')[1];
+          }
+
+          console.log('[Auth] Token part:', tokenPart);
+
+          const params = new URLSearchParams(tokenPart);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          console.log('[Auth] Access token found:', !!accessToken);
+          console.log('[Auth] Refresh token found:', !!refreshToken);
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              console.error('[Auth] Error setting session:', sessionError);
+              throw sessionError;
+            }
+            console.log('[Auth] Session set successfully');
+          } else {
+            console.error('[Auth] Missing tokens in callback URL');
+            throw new Error('Authentication failed - no tokens received');
+          }
+        } else if (result.type === 'cancel') {
+          console.log('[Auth] User cancelled Google sign-in');
+        } else {
+          console.log('[Auth] Google OAuth result type:', result.type);
+        }
+      }
+    } catch (e: any) {
+      console.error('[Auth] Google sign-in error:', e);
       setError(
         new AuthError({
           error: "sign_in_error",
-          error_description: "Failed to initiate sign in",
+          error_description: e.message || "Failed to sign in with Google",
+        })
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithApple = async () => {
+    // Don't allow sign in while offline
+    const online = await checkNetworkStatus();
+    if (!online) {
+      setError(
+        new AuthError({
+          error: "offline_error",
+          error_description: "Cannot sign in while offline. Please check your internet connection.",
+        })
+      );
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.url) {
+        // Open the OAuth URL in a web browser
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        console.log('[Auth] Apple OAuth result:', result);
+
+        if (result.type === 'success') {
+          const url = result.url;
+          console.log('[Auth] Apple callback URL:', url);
+
+          // Extract tokens - try hash fragment first, then query params
+          let tokenPart = '';
+          if (url.includes('#')) {
+            tokenPart = url.split('#')[1];
+          } else if (url.includes('?')) {
+            tokenPart = url.split('?')[1];
+          }
+
+          console.log('[Auth] Token part:', tokenPart);
+
+          const params = new URLSearchParams(tokenPart);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          console.log('[Auth] Access token found:', !!accessToken);
+          console.log('[Auth] Refresh token found:', !!refreshToken);
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              console.error('[Auth] Error setting session:', sessionError);
+              throw sessionError;
+            }
+            console.log('[Auth] Session set successfully');
+          } else {
+            console.error('[Auth] Missing tokens in callback URL');
+            throw new Error('Authentication failed - no tokens received');
+          }
+        } else if (result.type === 'cancel') {
+          console.log('[Auth] User cancelled Apple sign-in');
+        } else {
+          console.log('[Auth] Apple OAuth result type:', result.type);
+        }
+      }
+    } catch (e: any) {
+      console.error('[Auth] Apple sign-in error:', e);
+      setError(
+        new AuthError({
+          error: "sign_in_error",
+          error_description: e.message || "Failed to sign in with Apple",
         })
       );
     } finally {
@@ -571,6 +658,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         refreshPosts,
         refreshProfile,
         signIn,
+        signInWithApple,
         signOut,
         isLoading,
         error,

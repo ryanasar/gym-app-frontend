@@ -20,7 +20,7 @@ export default function OnboardingWelcome() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Welcome to GymApp!</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Welcome to Gymvy!</Text>
           <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
             Let's set up your profile to get you started on your fitness journey.
           </Text>
@@ -35,7 +35,7 @@ export default function OnboardingWelcome() {
 
         <View style={styles.welcomeContent}>
           <Text style={[styles.welcomeText, { color: colors.text }]}>
-            Hi {user?.name || user?.email}! 👋
+            Hi 👋
           </Text>
           <Text style={[styles.description, { color: colors.secondaryText }]}>
             We'll help you customize your experience with a few quick questions.

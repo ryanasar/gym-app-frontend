@@ -18,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
 
 export default function LoginScreen() {
-  const { user, signIn, isLoading, error: authError } = useAuth();
+  const { user, signIn, signInWithApple, isLoading, error: authError } = useAuth();
   const { isOffline } = useNetwork();
   const router = useRouter();
 
@@ -80,6 +80,11 @@ export default function LoginScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.formContainer}>
+            <Image
+              source={require('../../assets/images/logo-transparent.png')}
+              style={styles.logo}
+              contentFit="contain"
+            />
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Log in to continue</Text>
 
@@ -121,7 +126,6 @@ export default function LoginScreen() {
               <Text style={styles.primaryButtonText}>Login</Text>
             </TouchableOpacity>
 
-            {/* Hidden for now
             <View style={styles.dividerContainer}>
               <View style={styles.divider} />
               <Text style={styles.dividerText}>OR</Text>
@@ -136,7 +140,15 @@ export default function LoginScreen() {
               />
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
-            */}
+
+            <TouchableOpacity style={styles.appleButton} onPress={signInWithApple}>
+              <Image
+                source={require('../../assets/images/apple.png')}
+                style={styles.appleIcon}
+                contentFit="contain"
+              />
+              <Text style={styles.appleButtonText}>Continue with Apple</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity onPress={handleSignupNavigate}>
               <Text style={styles.signupText}>
@@ -164,6 +176,12 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     padding: 24,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    alignSelf: 'center',
+    marginBottom: 24,
   },
   title: {
     fontSize: 32,
@@ -220,6 +238,26 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     color: Colors.light.placeholder,
+    fontWeight: '600',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+    paddingVertical: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 18,
     textAlign: 'center',
