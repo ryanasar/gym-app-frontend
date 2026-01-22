@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 const SplitCard = ({ split, onPress, onDelete, showDelete = false }) => {
+  const colors = useThemeColors();
   const { name, totalDays, emoji, isActive, workoutDays } = split;
 
   // Get list of workout names
@@ -17,7 +19,11 @@ const SplitCard = ({ split, onPress, onDelete, showDelete = false }) => {
 
   return (
     <TouchableOpacity
-      style={[styles.card, isActive && styles.activeCard]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow },
+        isActive && [styles.activeCard, { borderColor: colors.primary }]
+      ]}
       onPress={onPress}
       activeOpacity={0.8}
     >
@@ -26,11 +32,11 @@ const SplitCard = ({ split, onPress, onDelete, showDelete = false }) => {
           <Text style={styles.emoji}>{emoji}</Text>
           <View style={styles.splitText}>
             <View style={styles.splitHeader}>
-              <Text style={styles.splitName}>{name}</Text>
-              {isActive && <Text style={styles.activeBadge}>ACTIVE</Text>}
+              <Text style={[styles.splitName, { color: colors.text }]}>{name}</Text>
+              {isActive && <Text style={[styles.activeBadge, { color: colors.primary, backgroundColor: colors.primary + '20' }]}>ACTIVE</Text>}
             </View>
-            <Text style={styles.splitDays}>{totalDays} days</Text>
-            {workoutNames && <Text style={styles.workoutNames} numberOfLines={1}>{workoutNames}</Text>}
+            <Text style={[styles.splitDays, { color: colors.secondaryText }]}>{totalDays} days</Text>
+            {workoutNames && <Text style={[styles.workoutNames, { color: colors.secondaryText }]} numberOfLines={1}>{workoutNames}</Text>}
           </View>
         </View>
 
@@ -45,7 +51,7 @@ const SplitCard = ({ split, onPress, onDelete, showDelete = false }) => {
             </TouchableOpacity>
           )}
           <View style={styles.arrow}>
-            <Text style={styles.arrowText}>→</Text>
+            <Text style={[styles.arrowText, { color: colors.secondaryText }]}>→</Text>
           </View>
         </View>
       </View>

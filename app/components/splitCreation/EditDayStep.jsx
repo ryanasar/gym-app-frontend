@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert } from 'react-native';
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,49 @@ import SaveWorkoutModal from './SaveWorkoutModal';
 import CreateCustomExerciseModal from '../exercises/CreateCustomExerciseModal';
 import { getSavedWorkouts, createSavedWorkout } from '../../api/savedWorkoutsApi';
 import { getCustomExercises, createCustomExercise } from '../../api/customExercisesApi';
+
+// Isolated component for workout name input to prevent keyboard dismissal
+const WorkoutNameInput = memo(({ initialValue, onChangeComplete, colors }) => {
+  const [value, setValue] = useState(initialValue);
+  const lastSavedRef = useRef(initialValue);
+  const onChangeCompleteRef = useRef(onChangeComplete);
+  onChangeCompleteRef.current = onChangeComplete;
+
+  // Only update from props when the external value actually changes (e.g., saved workout applied)
+  useEffect(() => {
+    if (initialValue !== lastSavedRef.current) {
+      setValue(initialValue);
+      lastSavedRef.current = initialValue;
+    }
+  }, [initialValue]);
+
+  const handleChange = (text) => {
+    setValue(text);
+    lastSavedRef.current = text;
+  };
+
+  const handleBlur = () => {
+    onChangeCompleteRef.current(lastSavedRef.current);
+  };
+
+  return (
+    <View style={styles.inputSection}>
+      <Text style={[styles.inputLabel, { color: colors.text }]}>Workout Name <Text style={[styles.required, { color: colors.primary }]}>*</Text></Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
+        placeholder="e.g., Push Day, Leg Day"
+        placeholderTextColor={colors.placeholder}
+        value={value}
+        onChangeText={handleChange}
+        onBlur={handleBlur}
+        maxLength={24}
+      />
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.initialValue === nextProps.initialValue &&
+         prevProps.colors.text === nextProps.colors.text;
+});
 
 // Rest Timer Input Component with digit selection
 const RestTimerInput = ({ value, onChange, colors }) => {
@@ -229,16 +272,16 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
 
   const currentDay = splitData.workoutDays[editingDayIndex];
 
-  const updateCurrentDay = (updates) => {
+  const updateCurrentDay = useCallback((updates) => {
     const updatedWorkoutDays = [...splitData.workoutDays];
     updatedWorkoutDays[editingDayIndex] = {
       ...updatedWorkoutDays[editingDayIndex],
       ...updates
     };
     updateSplitData({ workoutDays: updatedWorkoutDays });
-  };
+  }, [splitData.workoutDays, editingDayIndex, updateSplitData]);
 
-  const toggleRestDay = () => {
+  const toggleRestDay = useCallback(() => {
     const isCurrentlyRest = currentDay.isRest;
     updateCurrentDay({
       isRest: !isCurrentlyRest,
@@ -247,7 +290,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
       emoji: !isCurrentlyRest ? '😴' : '💪',
       exercises: []
     });
-  };
+  }, [currentDay.isRest, updateCurrentDay]);
 
   const addExerciseToWorkout = (exercise) => {
     const currentExerciseCount = currentDay.exercises?.length || 0;
@@ -275,17 +318,17 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
     setExercisePickerVisible(false);
   };
 
-  const removeExerciseFromWorkout = (exerciseIndex) => {
+  const removeExerciseFromWorkout = useCallback((exerciseIndex) => {
     const updatedExercises = [...currentDay.exercises];
     updatedExercises.splice(exerciseIndex, 1);
     updateCurrentDay({ exercises: updatedExercises });
-  };
+  }, [currentDay.exercises, updateCurrentDay]);
 
-  const updateExercise = (exerciseIndex, field, value) => {
+  const updateExercise = useCallback((exerciseIndex, field, value) => {
     const updatedExercises = [...currentDay.exercises];
     updatedExercises[exerciseIndex][field] = value;
     updateCurrentDay({ exercises: updatedExercises });
-  };
+  }, [currentDay.exercises, updateCurrentDay]);
 
   const handleReorderExercises = useCallback(({ data }) => {
     updateCurrentDay({ exercises: data });
@@ -354,7 +397,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   };
 
   // Load saved workouts from local storage
-  const loadSavedWorkouts = async () => {
+  const loadSavedWorkouts = useCallback(async () => {
     setLoadingSavedWorkouts(true);
     try {
       const workouts = await getSavedWorkouts();
@@ -365,7 +408,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
     } finally {
       setLoadingSavedWorkouts(false);
     }
-  };
+  }, []);
 
   // Apply a saved workout to current day
   const applySavedWorkout = (savedWorkout) => {
@@ -458,17 +501,11 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
       </View>
 
       {/* Workout Name */}
-      <View style={styles.inputSection}>
-        <Text style={[styles.inputLabel, { color: colors.text }]}>Workout Name <Text style={[styles.required, { color: colors.primary }]}>*</Text></Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
-          placeholder="e.g., Push Day, Leg Day"
-          placeholderTextColor={colors.placeholder}
-          value={currentDay.workoutName}
-          onChangeText={(value) => updateCurrentDay({ workoutName: value })}
-          maxLength={50}
-        />
-      </View>
+      <WorkoutNameInput
+        initialValue={currentDay.workoutName || ''}
+        onChangeComplete={(value) => updateCurrentDay({ workoutName: value })}
+        colors={colors}
+      />
 
       {/* Exercises Header */}
       <View style={styles.exercisesSection}>
@@ -507,17 +544,13 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
     </>
   );
 
-  const renderFooter = () => (
-    <Text style={[styles.dragHint, { color: colors.secondaryText }]}>Hold and drag to reorder exercises</Text>
-  );
-
-  const renderEmptyList = () => (
+  const renderEmptyList = useCallback(() => (
     <EmptyState
       emoji="💪"
       title="No exercises added"
       message="Add exercises to build your workout"
     />
-  );
+  ), []);
 
   const renderExerciseItem = useCallback(({ item: exercise, drag, isActive, getIndex }) => {
     const index = getIndex();
@@ -679,7 +712,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
         onDragEnd={handleReorderExercises}
         renderItem={renderExerciseItem}
         ListHeaderComponent={renderHeader}
-        ListFooterComponent={currentDay.exercises?.length > 0 ? renderFooter : null}
+        ListFooterComponent={null}
         ListEmptyComponent={renderEmptyList}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -936,7 +969,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 4,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,

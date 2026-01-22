@@ -13,10 +13,12 @@ import ExerciseCard from '../components/exercises/ExerciseCard';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
+import { useAuth } from '../auth/auth';
 import { getActiveWorkout, storage, calculateStreakFromLocal, unmarkTodayCompleted } from '../../storage';
 import { getCalendarData } from '../../storage/calendarStorage';
 import { clearLocalSplit, debugLocalSplit } from '../utils/clearLocalSplit';
 import { updateSplit } from '../api/splitsApi';
+import { getTodaysWorkoutPost } from '../api/postsApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { getCustomExercises, createCustomExercise } from '../api/customExercisesApi';
@@ -29,6 +31,7 @@ const WorkoutScreen = () => {
   const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user } = useAuth();
   const {
     todaysWorkout,
     activeSplit,
@@ -46,6 +49,28 @@ const WorkoutScreen = () => {
     useCallback(() => {
       manualSync();
     }, [manualSync])
+  );
+
+  // Check if workout has been posted when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      const checkIfPosted = async () => {
+        // Only check if workout is completed today and user is logged in
+        if (todaysWorkoutCompleted && user?.id) {
+          try {
+            // Check the API for a workout post created today
+            const post = await getTodaysWorkoutPost(user.id);
+            setHasPosted(!!post);
+          } catch (error) {
+            console.error('Error checking if posted:', error);
+            setHasPosted(false);
+          }
+        } else {
+          setHasPosted(false);
+        }
+      };
+      checkIfPosted();
+    }, [todaysWorkoutCompleted, user?.id])
   );
 
   // Handle pull-to-refresh
@@ -92,6 +117,7 @@ const WorkoutScreen = () => {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [isToggling, setIsToggling] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [hasPosted, setHasPosted] = useState(false);
   const [isExercisesExpanded, setIsExercisesExpanded] = useState(false);
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -1042,45 +1068,75 @@ const WorkoutScreen = () => {
 
               {isCompleted && (
                 <>
-                  {/* Share Button */}
-                  <TouchableOpacity
-                    style={[
-                      styles.postWorkoutButton,
-                      isToggling && styles.postWorkoutButtonDisabled
-                    ]}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/post/create',
-                        params: {
-                          workoutData: JSON.stringify(todaysWorkout),
-                          workoutSessionId: completedSessionId?.toString() || '',
-                          splitId: activeSplit?.id?.toString() || '',
-                          streak: currentStreak.toString(),
-                        },
-                      })
-                    }
-                    disabled={isToggling}
-                    activeOpacity={isToggling ? 1 : 0.7}
-                  >
-                    <View style={styles.postWorkoutContent}>
-                      <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.postWorkoutText}>Post Workout</Text>
+                  {hasPosted ? (
+                    /* Workout Posted - Show completed state */
+                    <View style={styles.workoutCompletedContainer}>
+                      <View style={styles.workoutCompletedBadge}>
+                        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                        <Text style={[styles.workoutCompletedText, { color: colors.text }]}>Workout Completed</Text>
+                      </View>
                     </View>
-                  </TouchableOpacity>
+                  ) : (
+                    <>
+                      {/* Share Button */}
+                      <TouchableOpacity
+                        style={[
+                          styles.postWorkoutButton,
+                          isToggling && styles.postWorkoutButtonDisabled
+                        ]}
+                        onPress={() => {
+                          // Calculate if this workout completes the split
+                          // (last workout day, or only rest days remaining)
+                          let isSplitCompleted = false;
+                          if (activeSplit?.days && todaysWorkout?.dayNumber) {
+                            const currentDayIndex = todaysWorkout.dayNumber - 1;
+                            const totalDays = activeSplit.days.length;
+                            isSplitCompleted = true;
+                            // Check if there are any workout days after this one
+                            for (let i = currentDayIndex + 1; i < totalDays; i++) {
+                              const day = activeSplit.days[i];
+                              if (day && !day.isRest) {
+                                isSplitCompleted = false;
+                                break;
+                              }
+                            }
+                          }
 
-                  {/* Un-complete action */}
-                  <TouchableOpacity
-                    style={[
-                      styles.secondaryActionButton,
-                      { borderColor: colors.borderLight },
-                      isToggling && styles.secondaryActionButtonDisabled
-                    ]}
-                    onPress={handleToggleCompletion}
-                    disabled={isToggling}
-                    activeOpacity={isToggling ? 1 : 0.7}
-                  >
-                    <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Un-complete</Text>
-                  </TouchableOpacity>
+                          router.push({
+                            pathname: '/post/create',
+                            params: {
+                              workoutData: JSON.stringify(todaysWorkout),
+                              workoutSessionId: completedSessionId?.toString() || '',
+                              splitId: activeSplit?.id?.toString() || '',
+                              streak: currentStreak.toString(),
+                              isSplitCompleted: isSplitCompleted.toString(),
+                            },
+                          });
+                        }}
+                        disabled={isToggling}
+                        activeOpacity={isToggling ? 1 : 0.7}
+                      >
+                        <View style={styles.postWorkoutContent}>
+                          <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
+                          <Text style={styles.postWorkoutText}>Post Workout</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Un-complete action */}
+                      <TouchableOpacity
+                        style={[
+                          styles.secondaryActionButton,
+                          { borderColor: colors.borderLight },
+                          isToggling && styles.secondaryActionButtonDisabled
+                        ]}
+                        onPress={handleToggleCompletion}
+                        disabled={isToggling}
+                        activeOpacity={isToggling ? 1 : 0.7}
+                      >
+                        <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Un-complete</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </>
               )}
             </View>
@@ -1740,6 +1796,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+
+  // Workout Completed State
+  workoutCompletedContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  workoutCompletedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  workoutCompletedText: {
+    fontSize: 18,
+    fontWeight: '600',
   },
 
   // Header Actions (exercise count + options button)

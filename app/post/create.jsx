@@ -22,6 +22,7 @@ import { createPost, updatePost } from '../api/postsApi';
 import { uploadImage, deleteImage } from '../api/storageApi';
 import { storage } from '../../storage';
 import { preparePostImage } from '../utils/imageUpload';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import TagUsersModal from '../components/post/TagUsersModal';
 import { createTagNotification } from '../api/notificationsApi';
 
@@ -40,6 +41,7 @@ const CreatePostScreen = () => {
   const workoutSessionId = params.workoutSessionId;
   const splitId = params.splitId;
   const streak = params.streak ? parseInt(params.streak) : null;
+  const isSplitCompleted = params.isSplitCompleted === 'true';
   const initialDescription = params.description || '';
 
   const [description, setDescription] = useState(initialDescription);
@@ -235,6 +237,7 @@ const CreatePostScreen = () => {
           workoutSessionId: databaseWorkoutSessionId,
           splitId: splitId ? parseInt(splitId) : null,
           streak: streak > 1 ? streak : null,
+          isSplitCompleted: isSplitCompleted || false,
           taggedUserIds: taggedUsers.map(u => u.id),
         };
 
@@ -247,6 +250,11 @@ const CreatePostScreen = () => {
               createTagNotification(taggedUser.id, user.id, createdPost.id)
             )
           );
+        }
+
+        // Mark this workout session as posted
+        if (workoutSessionId) {
+          await AsyncStorage.setItem(`posted_${workoutSessionId}`, 'true');
         }
 
         // Refresh posts to show the new post
@@ -297,7 +305,7 @@ const CreatePostScreen = () => {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
@@ -355,25 +363,6 @@ const CreatePostScreen = () => {
             </View>
           )}
 
-          {/* Description Input */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.text }]}>
-              Description <Text style={[styles.optionalText, { color: colors.placeholder }]}>(optional)</Text>
-            </Text>
-            <TextInput
-              style={[styles.descriptionInput, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, color: colors.text }]}
-              placeholder="How did your workout go? Share your thoughts..."
-              placeholderTextColor={colors.placeholder}
-              multiline
-              numberOfLines={4}
-              value={description}
-              onChangeText={setDescription}
-              textAlignVertical="top"
-              maxLength={500}
-            />
-            <Text style={[styles.charCount, { color: colors.secondaryText }]}>{description.length}/500</Text>
-          </View>
-
           {/* Image Upload Section */}
           <View style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.text }]}>Photo</Text>
@@ -424,6 +413,20 @@ const CreatePostScreen = () => {
 
         </View>
       </ScrollView>
+
+      {/* Description Input - Fixed at bottom like comments */}
+      <View style={[styles.descriptionInputContainer, { backgroundColor: colors.cardBackground, borderTopColor: colors.borderLight }]}>
+        <TextInput
+          style={[styles.descriptionInput, { backgroundColor: colors.borderLight + '30', color: colors.text }]}
+          placeholder="How did your workout go? Share your thoughts..."
+          placeholderTextColor={colors.placeholder}
+          multiline
+          value={description}
+          onChangeText={setDescription}
+          maxLength={500}
+        />
+        <Text style={[styles.charCount, { color: colors.secondaryText }]}>{description.length}/500</Text>
+      </View>
 
       {/* Tag Users Modal */}
       <TagUsersModal
@@ -570,16 +573,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Description Input
-  descriptionInput: {
+  // Description Input Container - Fixed at bottom
+  descriptionInputContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderLight,
     backgroundColor: Colors.light.cardBackground,
-    borderRadius: 12,
-    padding: 16,
+  },
+  descriptionInput: {
+    backgroundColor: Colors.light.borderLight + '30',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     fontSize: 15,
     color: Colors.light.text,
-    minHeight: 120,
-    borderWidth: 1,
-    borderColor: Colors.light.borderLight,
+    maxHeight: 100,
+    minHeight: 44,
   },
   charCount: {
     fontSize: 12,

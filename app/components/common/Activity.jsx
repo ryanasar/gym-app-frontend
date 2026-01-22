@@ -22,6 +22,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
     workoutSession,
     split,
     streak,
+    isSplitCompleted,
     _count,
     likes = [],
     taggedUsers = [],
@@ -427,10 +428,22 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
 
       {/* Metadata Section */}
       <View style={[styles.metadataSection, !imageUrl && styles.metadataSectionNoImage]}>
-        {/* Streak Badge */}
-        {streak && streak > 1 && (
-          <View style={[styles.streakBadge, { backgroundColor: colors.warning + '20' }]}>
-            <Text style={[styles.streakText, { color: colors.warning }]}>🔥 {streak}-day streak</Text>
+        {/* Badges Row - Streak and Split Completed */}
+        {(streak > 1 || isSplitCompleted) && (
+          <View style={styles.topBadgesRow}>
+            {/* Streak Badge */}
+            {streak && streak > 1 && (
+              <View style={[styles.streakBadge, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.streakText, { color: colors.warning }]}>🔥 {streak}-day streak</Text>
+              </View>
+            )}
+
+            {/* Split Completed Badge */}
+            {isSplitCompleted && (
+              <View style={[styles.splitCompletedBadge, { backgroundColor: '#8B5CF6' + '20' }]}>
+                <Text style={[styles.splitCompletedText, { color: '#8B5CF6' }]}>🎉 Split Completed</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -532,8 +545,8 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
       >
         <KeyboardAvoidingView
           style={[styles.modalContainer, { backgroundColor: colors.background }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
         >
           {/* Modal Header */}
           <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
@@ -579,7 +592,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
                         {comment.author?.name || comment.author?.username || 'Unknown User'}
                       </Text>
                       {comment.author?.profile?.isVerified && (
-                        <Ionicons name="checkmark-circle" size={14} color="#1D9BF0" style={styles.verifiedBadge} />
+                        <Ionicons name="checkmark-circle" size={14} color="#1D9BF0" style={{ marginLeft: -4 }} />
                       )}
                       <Text style={[styles.modalCommentTimestamp, { color: colors.secondaryText }]}>
                         {formatDate(comment.timestamp)}
@@ -807,18 +820,38 @@ const styles = StyleSheet.create({
     paddingTop: 6,
   },
 
+  // Top Badges Row (Streak + Split Completed)
+  topBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+  },
+
   // Streak Badge
   streakBadge: {
     backgroundColor: '#FFF4ED',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    alignSelf: 'flex-start',
   },
   streakText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#EA580C',
+  },
+
+  // Split Completed Badge
+  splitCompletedBadge: {
+    backgroundColor: '#8B5CF6' + '20',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  splitCompletedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8B5CF6',
   },
 
   // Tagged Users Badges

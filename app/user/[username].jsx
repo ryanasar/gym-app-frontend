@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { getUserByUsername, followUser, unfollowUser } from '../api/usersApi';
@@ -10,8 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import PostsTab from '../components/profile/PostsTab';
 import ProgressTab from '../components/profile/ProgressTab';
+import WorkoutPlansTab from '../components/profile/WorkoutPlansTab';
 import FollowListModal from '../components/profile/FollowListModal';
-import EmptyState from '../components/common/EmptyState';
 
 export default function UserProfileScreen() {
   const { username } = useLocalSearchParams();
@@ -119,24 +119,21 @@ export default function UserProfileScreen() {
     setModalVisible(false);
   };
 
-  const renderTabContent = () => {
-    switch (selectedTab) {
-      case 'Progress':
-        return <ProgressTab userId={user?.id} isViewerMode={!isOwnProfile} />;
-      case 'Posts':
-        return <PostsTab posts={posts} currentUserId={currentUser?.id} onRefresh={loadUserData} />;
-      case 'Splits':
-        // Show empty state for viewer - splits are not shared publicly
-        return (
-          <EmptyState
-            icon="barbell-outline"
-            title="Splits not available"
-            message="This user hasn't shared any workout splits yet"
-          />
-        );
-      default:
-        return null;
-    }
+  // Render all tabs but only show the selected one to prevent unmounting/remounting
+  const renderAllTabs = () => {
+    return (
+      <>
+        <View style={selectedTab === 'Progress' ? styles.tabVisible : styles.tabHidden}>
+          <ProgressTab userId={user?.id} isViewerMode={!isOwnProfile} />
+        </View>
+        <View style={selectedTab === 'Posts' ? styles.tabVisible : styles.tabHidden}>
+          <PostsTab posts={posts} currentUserId={currentUser?.id} onRefresh={loadUserData} />
+        </View>
+        <View style={selectedTab === 'Splits' ? styles.tabVisible : styles.tabHidden}>
+          <WorkoutPlansTab userId={user?.id} isOwnProfile={isOwnProfile} />
+        </View>
+      </>
+    );
   };
 
   if (isLoading) {
@@ -196,34 +193,28 @@ export default function UserProfileScreen() {
           style={styles.tab}
           onPress={() => setSelectedTab('Progress')}
         >
-          <Text style={[styles.tabText, { color: selectedTab === 'Progress' ? colors.primary : colors.secondaryText }]}>
-            Progress
-          </Text>
+          <Text style={selectedTab === 'Progress' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Progress</Text>
           {selectedTab === 'Progress' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Posts')}
         >
-          <Text style={[styles.tabText, { color: selectedTab === 'Posts' ? colors.primary : colors.secondaryText }]}>
-            Posts
-          </Text>
+          <Text style={selectedTab === 'Posts' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Posts</Text>
           {selectedTab === 'Posts' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
           onPress={() => setSelectedTab('Splits')}
         >
-          <Text style={[styles.tabText, { color: selectedTab === 'Splits' ? colors.primary : colors.secondaryText }]}>
-            Splits
-          </Text>
+          <Text style={selectedTab === 'Splits' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Splits</Text>
           {selectedTab === 'Splits' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
       <View style={[styles.tabContentContainer, { backgroundColor: colors.background }]}>
-        {renderTabContent()}
+        {renderAllTabs()}
       </View>
 
       {/* Follow List Modal */}
@@ -276,8 +267,8 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingTop: 8,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -286,12 +277,16 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     position: 'relative',
   },
-  tabText: {
-    fontSize: 15,
+  activeTabText: {
+    fontSize: 14,
     fontWeight: '600',
+  },
+  inactiveTabText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   activeTabIndicator: {
     position: 'absolute',
@@ -302,6 +297,22 @@ const styles = StyleSheet.create({
   },
   tabContentContainer: {
     flex: 1,
-    paddingTop: 16,
+    position: 'relative',
+  },
+  tabVisible: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  tabHidden: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    pointerEvents: 'none',
   },
 });

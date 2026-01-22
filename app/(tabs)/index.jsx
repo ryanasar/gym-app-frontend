@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/auth';
@@ -23,6 +23,16 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+
+  // Ref for FlatList to enable scroll to top
+  const flatListRef = useRef(null);
+
+  // Enable scroll to top when tapping the Home tab while already on it
+  useScrollToTop(flatListRef);
+
+  const scrollToTop = () => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  };
 
   useEffect(() => {
     if (user?.id) {
@@ -142,7 +152,9 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+        <TouchableOpacity onPress={scrollToTop} activeOpacity={0.7}>
+          <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => router.push('/notifications')}
           style={styles.notificationButton}
@@ -159,6 +171,7 @@ export default function HomeScreen() {
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={posts}
         renderItem={({ item }) => (
           <Activity

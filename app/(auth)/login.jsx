@@ -103,6 +103,10 @@ export default function LoginScreen() {
               onChangeText={setPassword}
             />
 
+            <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotPasswordButton}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
             {isOffline && (
               <View style={styles.offlineWarning}>
                 <Text style={styles.offlineText}>You are offline</Text>
@@ -130,7 +134,7 @@ export default function LoginScreen() {
                 style={styles.googleIcon}
                 contentFit="contain"
               />
-              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
             */}
 
@@ -233,6 +237,16 @@ const styles = StyleSheet.create({
   dividerText: {
     marginHorizontal: 12,
     color: Colors.light.secondaryText,
+    fontWeight: '500',
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    marginTop: -8,
+  },
+  forgotPasswordText: {
+    color: Colors.light.primary,
+    fontSize: 14,
     fontWeight: '500',
   },
   signupText: {

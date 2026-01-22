@@ -453,7 +453,7 @@ export const WorkoutProvider = ({ children }) => {
         await AsyncStorage.setItem('currentWeek', '1');
       } else {
         // Clear split data when null
-        await AsyncStorage.removeItem('@gymvy_active_split');
+        await AsyncStorage.removeItem('@gymvy/active_split');
         await AsyncStorage.removeItem('currentDayIndex');
         await AsyncStorage.removeItem('currentWeek');
       }

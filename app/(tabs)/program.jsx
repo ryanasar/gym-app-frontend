@@ -53,6 +53,14 @@ const ProgramScreen = () => {
     }
   }, [activeSplit?.id]);
 
+  // Auto-activate first split if no active split exists but splits are available
+  useEffect(() => {
+    if (!loading && allUserSplits.length > 0 && !activeSplit) {
+      const firstSplit = allUserSplits[0];
+      changeActiveSplit(firstSplit);
+    }
+  }, [loading, allUserSplits, activeSplit]);
+
   const fetchSplits = async () => {
     if (!user?.id) {
       setLoading(false);
@@ -72,6 +80,7 @@ const ProgramScreen = () => {
         isActive: false, // Will be set below
         description: split.description,
         started: split.started,
+        isPublic: split.isPublic,
         workoutDays: split.workoutDays,
         days: split.workoutDays.map((day, index) => ({
           dayIndex: index,
@@ -307,10 +316,10 @@ const ProgramScreen = () => {
                   </View>
                   <View style={styles.activeProgramTextContainer}>
                     <Text style={[styles.activeProgramName, { color: colors.text }]}>{currentActiveSplit.name}</Text>
-                    <Text style={styles.activeProgramDescription}>
+                    <Text style={[styles.activeProgramDescription, { color: colors.secondaryText }]}>
                       Today's Workout: {todaysWorkout?.dayName || 'Rest Day'}
                     </Text>
-                    <Text style={styles.activeProgramSubDescription}>
+                    <Text style={[styles.activeProgramSubDescription, { color: colors.secondaryText }]}>
                       {currentActiveSplit.totalDays} days • Week {currentWeek} Day {currentDayIndex + 1}
                     </Text>
                   </View>
@@ -356,7 +365,7 @@ const ProgramScreen = () => {
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Other Splits</Text>
-              <Text style={styles.sectionSubtitle}>Your saved programs</Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>Your saved programs</Text>
             </View>
 
             {/* Create New Split Button above Other Splits */}
@@ -366,7 +375,7 @@ const ProgramScreen = () => {
 
             <View style={styles.splitsContainer}>
               {loading ? (
-                <Text style={styles.loadingText}>Loading splits...</Text>
+                <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Loading splits...</Text>
               ) : otherSplits.length > 0 ? (
                 otherSplits.map((split) => (
                   <SplitCard
@@ -378,7 +387,7 @@ const ProgramScreen = () => {
                   />
                 ))
               ) : (
-                <Text style={styles.noSplitsText}>No other splits yet.</Text>
+                <Text style={[styles.noSplitsText, { color: colors.secondaryText }]}>No other splits yet.</Text>
               )}
             </View>
           </View>

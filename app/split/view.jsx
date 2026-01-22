@@ -23,7 +23,10 @@ const ViewSplitScreen = () => {
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const splitData = params.splitData ? JSON.parse(params.splitData) : null;
-  const canSave = params.canSave === 'true';
+
+  // Check if this is the user's own split - prevent saving your own split
+  const isOwnSplit = user?.id && splitData?.userId === user.id;
+  const canSave = params.canSave === 'true' && !isOwnSplit;
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -181,10 +184,9 @@ const ViewSplitScreen = () => {
                 <Text style={[styles.splitName, { color: colors.text }]}>{splitData.name}</Text>
                 <Text style={[styles.splitDescription, { color: colors.secondaryText }]}>
                   {splitData.totalDays || splitData.numDays || splitData.workoutDays?.length || 0} day split
-                  {splitData.description ? ` • ${splitData.description}` : ''}
                 </Text>
                 {splitData.workoutDays && splitData.workoutDays.length > 0 && (
-                  <Text style={[styles.workoutNamesList, { color: colors.text }]}>
+                  <Text style={[styles.workoutNamesList, { color: colors.secondaryText }]}>
                     {splitData.workoutDays.map(day => day.name || day.workoutName).filter(Boolean).join(' • ')}
                   </Text>
                 )}
@@ -375,10 +377,10 @@ const styles = StyleSheet.create({
   },
   workoutNamesList: {
     fontSize: 12,
-    color: Colors.light.text,
-    fontWeight: '600',
-    fontStyle: 'italic',
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
     lineHeight: 16,
+    marginTop: 2,
   },
 
   // Workouts Section

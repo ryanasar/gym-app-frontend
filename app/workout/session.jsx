@@ -1685,8 +1685,6 @@ const WorkoutSessionScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Press the dots and drag to reorder</Text>
-
           <DraggableFlatList
             data={exercises}
             keyExtractor={(item, index) => `reorder-${item.id}-${index}`}

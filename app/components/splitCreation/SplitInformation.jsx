@@ -7,7 +7,11 @@ const SplitInformation = ({ splitData, updateSplitData }) => {
   const colors = useThemeColors();
   const [selectedEmoji, setSelectedEmoji] = useState(splitData.emoji || '💪');
 
-  const emojiOptions = ['💪', '🏋️', '🔥', '⚡', '🎯', '🚀', '💯', '🔱', '⭐', '🏆'];
+  const emojiOptions = [
+    '💪', '🏋️', '🔥', '⚡', '🎯', '🚀',
+    '💯', '🔱', '⭐', '🏆', '🦾', '💥',
+    '👊', '🏃', '💎', '🦁', '⚔️', '🌟',
+  ];
   const dayOptions = [3, 4, 5, 6, 7];
 
 
@@ -188,11 +192,12 @@ const styles = StyleSheet.create({
   emojiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    rowGap: 10,
   },
   emojiButton: {
-    width: 50,
-    height: 50,
+    width: '15%',
+    aspectRatio: 1.2,
     backgroundColor: Colors.light.cardBackground,
     borderWidth: 2,
     borderColor: Colors.light.border,

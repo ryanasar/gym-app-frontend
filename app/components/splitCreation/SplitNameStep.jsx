@@ -23,26 +23,6 @@ const SplitNameStep = ({ splitData, updateSplitData }) => {
         </Text>
       </View>
 
-      {/* Emoji Selection */}
-      <View style={styles.inputSection}>
-        <Text style={[styles.inputLabel, { color: colors.text }]}>Choose an Icon</Text>
-        <View style={styles.emojiGrid}>
-          {['💪', '🏋️', '🔥', '⚡', '🎯', '🚀', '💯', '🔱', '⭐', '🏆', '👊', '💥', '🦾', '🎪', '🌟', '✨'].map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[
-                styles.emojiButton,
-                { backgroundColor: colors.cardBackground, borderColor: colors.border },
-                splitData.emoji === emoji && [styles.emojiButtonSelected, { borderColor: colors.primary, backgroundColor: colors.primary + '15' }]
-              ]}
-              onPress={() => updateSplitData({ emoji })}
-            >
-              <Text style={styles.emojiText}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       {/* Split Name Input */}
       <View style={styles.inputSection}>
         <Text style={[styles.inputLabel, { color: colors.text }]}>Split Name <Text style={[styles.required, { color: colors.primary }]}>*</Text></Text>
@@ -57,6 +37,30 @@ const SplitNameStep = ({ splitData, updateSplitData }) => {
         <Text style={[styles.helperText, { color: colors.secondaryText }]}>
           {splitData.name.length}/50 characters
         </Text>
+      </View>
+
+      {/* Emoji Selection */}
+      <View style={styles.inputSection}>
+        <Text style={[styles.inputLabel, { color: colors.text }]}>Choose an Icon</Text>
+        <View style={styles.emojiGrid}>
+          {[
+            '💪', '🏋️', '🔥', '⚡', '🎯', '🚀',
+            '💯', '🔱', '⭐', '🏆', '🦾', '💥',
+            '👊', '🏃', '💎', '🦁', '⚔️', '🌟',
+          ].map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              style={[
+                styles.emojiButton,
+                { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                splitData.emoji === emoji && [styles.emojiButtonSelected, { borderColor: colors.primary, backgroundColor: colors.primary + '15' }]
+              ]}
+              onPress={() => updateSplitData({ emoji })}
+            >
+              <Text style={styles.emojiText}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Description Input */}
@@ -122,7 +126,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   header: {
-    marginBottom: 32,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -134,7 +138,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   inputSection: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 16,
@@ -168,11 +172,12 @@ const styles = StyleSheet.create({
   emojiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    justifyContent: 'space-between',
+    rowGap: 10,
   },
   emojiButton: {
-    width: 52,
-    height: 52,
+    width: '15%',
+    aspectRatio: 1.2,
     borderWidth: 2,
     borderRadius: 12,
     justifyContent: 'center',

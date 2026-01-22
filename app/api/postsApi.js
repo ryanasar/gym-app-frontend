@@ -103,6 +103,33 @@ export const createComment = async (postId, commentData) => {
 };
 
 /**
+ * Check if a workout post exists for today
+ * Returns the post if found, null otherwise
+ */
+export const getTodaysWorkoutPost = async (userId) => {
+  try {
+    const posts = await getPostsByUserId(userId);
+
+    // Get today's date at midnight for comparison
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Find a workout post created today (not a rest day post)
+    const post = posts.find(p => {
+      if (!p.workoutSessionId) return false; // Must have a workout session
+      const postDate = new Date(p.createdAt);
+      postDate.setHours(0, 0, 0, 0);
+      return postDate.getTime() === today.getTime();
+    });
+
+    return post || null;
+  } catch (error) {
+    console.error('Failed to check for today\'s workout post:', error);
+    return null;
+  }
+};
+
+/**
  * Get posts from users that the current user is following (with pagination)
  */
 export const getFollowingPosts = async (userId, cursor = null, limit = 10) => {

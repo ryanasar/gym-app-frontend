@@ -43,14 +43,14 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
     }
   }, [splitData.totalDays]);
 
-  const updateCurrentDay = (updates) => {
+  const updateCurrentDay = React.useCallback((updates) => {
     const updatedWorkoutDays = [...splitData.workoutDays];
     updatedWorkoutDays[currentDayIndex] = {
       ...updatedWorkoutDays[currentDayIndex],
       ...updates
     };
     updateSplitData({ workoutDays: updatedWorkoutDays });
-  };
+  }, [splitData.workoutDays, currentDayIndex, updateSplitData]);
 
   const toggleRestDay = () => {
     const isCurrentlyRest = currentDay.isRest;
@@ -124,12 +124,12 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
     updateCurrentDay({ exercises: updatedExercises });
   };
 
-  const updateExercise = (exerciseIndex, field, value) => {
+  const updateExercise = React.useCallback((exerciseIndex, field, value) => {
     const currentDay = splitData.workoutDays[currentDayIndex];
     const updatedExercises = [...currentDay.exercises];
     updatedExercises[exerciseIndex][field] = value;
     updateCurrentDay({ exercises: updatedExercises });
-  };
+  }, [splitData.workoutDays, currentDayIndex, updateCurrentDay]);
 
   const goToNextDay = () => {
     if (currentDayIndex < splitData.totalDays - 1) {
@@ -261,10 +261,10 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
               <View style={[styles.workoutNameCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}>
                 <TextInput
                   style={[styles.workoutNameInput, { color: colors.text }]}
-                  placeholder="e.g., Push Day, Upper Body, Chest & Triceps"
+                  placeholder="e.g., Push Day, Upper Body"
                   value={currentDay.workoutName}
                   onChangeText={(value) => updateCurrentDay({ workoutName: value })}
-                  maxLength={50}
+                  maxLength={24}
                   placeholderTextColor={colors.secondaryText}
                 />
               </View>
@@ -325,7 +325,7 @@ const DayBuilder = ({ splitData, updateSplitData }) => {
               {currentDay.exercises && currentDay.exercises.length > 0 ? (
                 <View style={styles.exercisesList}>
                   {currentDay.exercises.map((exercise, exerciseIndex) => (
-                    <View key={exerciseIndex} style={[styles.exerciseCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
+                    <View key={`${exercise.id || exercise.name}-${exerciseIndex}`} style={[styles.exerciseCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
                       <View style={styles.exerciseCardHeader}>
                         <View style={[styles.exerciseNumberContainer, { backgroundColor: colors.primary + '15' }]}>
                           <Text style={[styles.exerciseNumber, { color: colors.primary }]}>{exerciseIndex + 1}</Text>

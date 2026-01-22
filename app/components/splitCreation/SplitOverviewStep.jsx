@@ -49,7 +49,7 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
 
   const getDayStatus = (day) => {
     if (day.isRest) {
-      return { label: 'Rest Day', color: colors.secondaryText, icon: 'moon' };
+      return { label: 'Rest Day', color: '#60A5FA', icon: 'moon' };
     }
     if (day.workoutName && day.exercises && day.exercises.length > 0) {
       return { label: 'Configured', color: '#4CAF50', icon: 'checkmark-circle' };
@@ -95,11 +95,13 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
       <View style={styles.daysContainer}>
         {splitData.workoutDays.map((day, index) => {
           const status = getDayStatus(day);
+          const isConfigured = status.label === 'Configured';
+          const cardBorderColor = day.isRest ? '#60A5FA' : isConfigured ? '#4CAF50' : colors.border;
 
           return (
             <TouchableOpacity
               key={index}
-              style={[styles.dayCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}
+              style={[styles.dayCard, { backgroundColor: colors.cardBackground, borderColor: cardBorderColor, shadowColor: colors.shadow }]}
               onPress={() => onEditDay(index)}
               activeOpacity={0.7}
             >
@@ -119,7 +121,7 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
               <View style={styles.dayCardContent}>
                 {day.workoutName ? (
                   <>
-                    <Text style={[styles.dayName, { color: colors.text }]}>{day.workoutName}</Text>
+                    <Text style={[styles.dayName, { color: colors.text }]} numberOfLines={1}>{day.workoutName}</Text>
                     {day.exercises && day.exercises.length > 0 && (
                       <Text style={[styles.exerciseCount, { color: colors.secondaryText }]}>
                         {day.exercises.length} {day.exercises.length === 1 ? 'exercise' : 'exercises'}
@@ -171,8 +173,6 @@ const SplitOverviewStep = ({ splitData, updateSplitData, onEditDay }) => {
               <Text style={[styles.reorderModalDoneText, { color: colors.primary }]}>Done</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={[styles.reorderHint, { color: colors.secondaryText }]}>Press and drag to reorder days</Text>
 
           <DraggableFlatList
             data={splitData.workoutDays}
@@ -287,6 +287,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
+    height: 110,
+    position: 'relative',
   },
   dayCardHeader: {
     flexDirection: 'row',
@@ -319,7 +321,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   dayCardContent: {
-    marginBottom: 12,
   },
   dayName: {
     fontSize: 18,
@@ -335,7 +336,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   dayCardFooter: {
-    alignItems: 'flex-end',
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
   },
   infoBox: {
     flexDirection: 'row',

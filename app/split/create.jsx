@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../constants/colors';
 import { useThemeColors } from '../hooks/useThemeColors';
@@ -79,8 +79,13 @@ const CreateSplitScreen = () => {
 
   // Handle saving day and returning to overview
   const handleSaveDay = () => {
-    setEditingDayIndex(null);
-    setCurrentStep(3);
+    // Dismiss keyboard to trigger blur and save any pending input
+    Keyboard.dismiss();
+    // Small delay to ensure blur handler completes before navigation
+    setTimeout(() => {
+      setEditingDayIndex(null);
+      setCurrentStep(3);
+    }, 50);
   };
 
   const handleNext = () => {
@@ -324,8 +329,10 @@ const CreateSplitScreen = () => {
         // Can proceed if all days are configured
         return splitData.workoutDays.length === splitData.totalDays;
       case 4: // Edit day step
-        // Can always go back to overview from edit day
-        return true;
+        // Require workout name for non-rest days
+        const currentDay = splitData.workoutDays[editingDayIndex];
+        if (currentDay?.isRest) return true;
+        return currentDay?.workoutName?.trim() !== '';
       case 5: // Review step
         return true;
       default:

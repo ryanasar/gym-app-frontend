@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useColorScheme } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
 const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
   const colors = useThemeColors();
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   // Generate calendar data for 4 weeks aligned to actual weekdays
@@ -195,7 +197,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
   const stats = calculateStats();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+    <View style={[styles.container, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Workout Calendar</Text>
         <Text style={[styles.subtitle, { color: colors.secondaryText }]}>{getMonthLabels()} • Last 28 days</Text>
@@ -228,7 +230,8 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                     // Rest days (only if actually logged/completed)
                     day.hasWorkout && day.isRestDay && { backgroundColor: colors.accent + '40' },
                     // Today's border (applied last to override colors if needed)
-                    day.isToday && { borderWidth: 2, borderColor: colors.primary },
+                    // Use white border in dark mode for better visibility
+                    day.isToday && { borderWidth: 2, borderColor: isDarkMode ? '#FFFFFF' : colors.primary },
                   ]}
                 >
                   <Text
@@ -239,7 +242,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                       day.isFuture && { color: colors.secondaryText + '50' },
                       day.hasWorkout && { color: colors.onPrimary },
                       day.hasWorkout && day.isRestDay && { color: colors.text },
-                      day.isToday && !day.hasWorkout && { color: colors.primary, fontWeight: '700' },
+                      day.isToday && !day.hasWorkout && { color: isDarkMode ? '#FFFFFF' : colors.primary, fontWeight: '700' },
                     ]}
                   >
                     {day.day}

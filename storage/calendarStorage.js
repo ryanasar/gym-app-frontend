@@ -37,7 +37,8 @@ export async function getCalendarData() {
     // Clean up old entries (older than DAYS_TO_KEEP)
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
-    const cutoffString = cutoffDate.toISOString().split('T')[0];
+    // Use local date for cutoff to be consistent with how we store dates
+    const cutoffString = `${cutoffDate.getFullYear()}-${String(cutoffDate.getMonth() + 1).padStart(2, '0')}-${String(cutoffDate.getDate()).padStart(2, '0')}`;
 
     const cleaned = {};
     Object.keys(calendar).forEach(dateStr => {
@@ -145,7 +146,9 @@ export async function backfillCalendarFromBackend(workoutSessions) {
 
     workoutSessions.forEach(session => {
       if (session.completedAt) {
-        const date = new Date(session.completedAt).toISOString().split('T')[0];
+        // Use local date instead of UTC to match user's timezone
+        const completedDate = new Date(session.completedAt);
+        const date = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}-${String(completedDate.getDate()).padStart(2, '0')}`;
 
         // Don't overwrite today's data (it might be more recent)
         if (date !== today && !calendar[date]) {

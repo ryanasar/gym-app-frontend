@@ -1,16 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useSync } from '../../contexts/SyncContext';
-import { getPublicSplitsByUserId } from '../../api/splitsApi';
+import { getPublicSplitsByUserId, createSplit } from '../../api/splitsApi';
+import { useAuth } from '../../auth/auth';
 import EmptyState from '../common/EmptyState';
 
-const SplitCard = ({ split, colors }) => {
+const SplitCard = ({ split, colors, isOwnProfile, currentUserId }) => {
   const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSaveSplit = async () => {
+    if (!currentUserId) {
+      Alert.alert('Error', 'You must be logged in to save splits');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Copy the split to the current user's account
+      const newSplitData = {
+        userId: currentUserId,
+        name: split.name,
+        emoji: split.emoji || '',
+        description: split.description ? `Saved from @${split.user?.username || 'user'}. ${split.description}` : `Saved from @${split.user?.username || 'user'}`,
+        numDays: split.numDays,
+        isPublic: false,
+        workoutDays: split.workoutDays?.map(day => ({
+          dayIndex: day.dayIndex,
+          isRest: day.isRest,
+          workoutName: day.workoutName || '',
+          emoji: day.emoji || '',
+          exercises: day.exercises || []
+        })) || []
+      };
+
+      await createSplit(newSplitData);
+      setSaved(true);
+      Alert.alert('Success', 'Split saved to your library!');
+    } catch (error) {
+      console.error('Failed to save split:', error);
+      Alert.alert('Error', 'Failed to save split');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleWorkoutDayPress = (day) => {
     // Format workout day data to match what WorkoutDetailScreen expects
@@ -20,8 +58,13 @@ const SplitCard = ({ split, colors }) => {
     };
 
     const splitData = {
+      id: split.id,
+      userId: split.userId,
       name: split.name,
-      emoji: split.emoji
+      emoji: split.emoji,
+      isPublic: split.isPublic,
+      totalDays: split.numDays,
+      workoutDays: split.workoutDays
     };
 
     router.push({
@@ -34,17 +77,39 @@ const SplitCard = ({ split, colors }) => {
   };
 
   return (
-    <View style={[styles.splitCard, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+    <View style={[styles.splitCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight, shadowColor: colors.shadow }]}>
       {/* Split Header */}
       <View style={styles.splitHeader}>
         <View style={styles.splitTitleRow}>
           {split.emoji && <Text style={styles.splitEmoji}>{split.emoji}</Text>}
           <Text style={[styles.splitName, { color: colors.text }]}>{split.name}</Text>
         </View>
-        <View style={[styles.publicBadge, { backgroundColor: colors.accent + '15' }]}>
-          <Ionicons name="globe-outline" size={12} color={colors.accent} />
-          <Text style={[styles.publicBadgeText, { color: colors.accent }]}>Public</Text>
-        </View>
+        {isOwnProfile ? (
+          <View style={[styles.publicBadge, { backgroundColor: colors.accent + '15' }]}>
+            <Ionicons name="globe-outline" size={12} color={colors.accent} />
+            <Text style={[styles.publicBadgeText, { color: colors.accent }]}>Public</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.saveBadge,
+              { backgroundColor: colors.primary + '15' },
+              saved && { backgroundColor: colors.accent + '15' }
+            ]}
+            onPress={handleSaveSplit}
+            disabled={saving || saved}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={saved ? "checkmark-circle" : "bookmark-outline"}
+              size={14}
+              color={saved ? colors.accent : colors.primary}
+            />
+            <Text style={[styles.saveBadgeText, { color: saved ? colors.accent : colors.primary }]}>
+              {saving ? '...' : saved ? 'Saved' : 'Save'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Description */}
@@ -66,9 +131,9 @@ const SplitCard = ({ split, colors }) => {
         </View>
       </View>
 
-      {/* Workout Days Preview */}
+      {/* Workout Days */}
       <View style={styles.daysPreview}>
-        {split.workoutDays?.slice(0, expanded ? undefined : 3).map((day, index) => (
+        {split.workoutDays?.map((day, index) => (
           <View key={day.id || index} style={styles.dayChip}>
             {day.isRest ? (
               <View style={[styles.restDayChip, { backgroundColor: colors.borderLight + '30' }]}>
@@ -91,41 +156,13 @@ const SplitCard = ({ split, colors }) => {
           </View>
         ))}
       </View>
-
-      {/* Expand/Collapse Button */}
-      {split.workoutDays && split.workoutDays.length > 3 && (
-        <TouchableOpacity
-          style={styles.expandButton}
-          onPress={() => setExpanded(!expanded)}
-        >
-          <Text style={[styles.expandButtonText, { color: colors.primary }]}>
-            {expanded ? 'Show less' : `Show ${split.workoutDays.length - 3} more days`}
-          </Text>
-          <Ionicons
-            name={expanded ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-      )}
-
-      {/* Stats */}
-      <View style={[styles.splitStats, { borderTopColor: colors.borderLight + '40' }]}>
-        <View style={styles.statItem}>
-          <Ionicons name="heart-outline" size={16} color={colors.secondaryText} />
-          <Text style={[styles.statText, { color: colors.secondaryText }]}>{split._count?.likes || 0}</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Ionicons name="chatbubble-outline" size={16} color={colors.secondaryText} />
-          <Text style={[styles.statText, { color: colors.secondaryText }]}>{split._count?.comments || 0}</Text>
-        </View>
-      </View>
     </View>
   );
 };
 
-const WorkoutPlansTab = ({ userId }) => {
+const WorkoutPlansTab = ({ userId, isOwnProfile = true }) => {
   const colors = useThemeColors();
+  const { user: currentUser } = useAuth();
   const [splits, setSplits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -192,7 +229,7 @@ const WorkoutPlansTab = ({ userId }) => {
     <FlatList
       data={splits}
       keyExtractor={(item) => item.id.toString()}
-      renderItem={({ item }) => <SplitCard split={item} colors={colors} />}
+      renderItem={({ item }) => <SplitCard split={item} colors={colors} isOwnProfile={isOwnProfile} currentUserId={currentUser?.id} />}
       contentContainerStyle={styles.listContainer}
       showsVerticalScrollIndicator={false}
       style={{ backgroundColor: colors.background }}
@@ -256,7 +293,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 8,
+    paddingTop: 8,
     paddingBottom: 100,
   },
 
@@ -266,6 +304,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
     shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -308,6 +348,18 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  saveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  saveBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   splitDescription: {
     fontSize: 14,
@@ -373,39 +425,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.primary,
     flex: 1,
-  },
-
-  // Expand Button
-  expandButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  expandButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-
-  // Stats
-  splitStats: {
-    flexDirection: 'row',
-    gap: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.borderLight + '40',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
 });
