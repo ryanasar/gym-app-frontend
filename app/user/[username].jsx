@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { getUserByUsername, followUser, unfollowUser } from '../api/usersApi';
 import { getPostsByUserId } from '../api/postsApi';
@@ -17,6 +18,7 @@ export default function UserProfileScreen() {
   const { username } = useLocalSearchParams();
   const router = useRouter();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { user: currentUser, refreshProfile } = useAuth();
 
   const [selectedTab, setSelectedTab] = useState('Progress');
@@ -157,7 +159,7 @@ export default function UserProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header with back button */}
-      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, paddingTop: 16 }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
@@ -245,7 +247,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 16,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,

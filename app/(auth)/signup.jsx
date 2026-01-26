@@ -32,7 +32,9 @@ export default function SignUpScreen() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: {
+        emailRedirectTo: 'gymvy://auth'
+      } });
 
       if (error) {
         setError(error.message);

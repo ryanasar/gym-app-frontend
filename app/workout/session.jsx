@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Alert, Animated, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, AppState, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Svg, { Circle } from 'react-native-svg';
@@ -72,6 +72,7 @@ const WorkoutSessionScreen = () => {
   const [totalRestTime, setTotalRestTime] = useState(0);
   const [inputSectionHeight, setInputSectionHeight] = useState(null);
   const restTimerRef = useRef(null);
+  const restEndTimeRef = useRef(null);
   const pendingNavigationRef = useRef(null);
 
   // Animation refs
@@ -279,29 +280,29 @@ const WorkoutSessionScreen = () => {
   // Rest timer countdown effect
   useEffect(() => {
     if (showRestTimer && restTimeRemaining > 0) {
-      // Update Live Activity with rest time at start
+      // Set the absolute end time when the timer first starts
       if (restTimeRemaining === totalRestTime) {
+        restEndTimeRef.current = Date.now() + restTimeRemaining * 1000;
         LiveActivity.startRest(restTimeRemaining);
       }
 
       restTimerRef.current = setInterval(() => {
-        setRestTimeRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(restTimerRef.current);
-            setShowRestTimer(false);
-            // End rest on Live Activity
-            LiveActivity.endRest();
-            // Execute pending navigation
-            if (pendingNavigationRef.current) {
-              pendingNavigationRef.current();
-              pendingNavigationRef.current = null;
-            }
-            return 0;
+        const remaining = Math.round((restEndTimeRef.current - Date.now()) / 1000);
+
+        if (remaining <= 0) {
+          clearInterval(restTimerRef.current);
+          restEndTimeRef.current = null;
+          setRestTimeRemaining(0);
+          setShowRestTimer(false);
+          LiveActivity.endRest();
+          if (pendingNavigationRef.current) {
+            pendingNavigationRef.current();
+            pendingNavigationRef.current = null;
           }
-          // Update Live Activity with remaining rest time
-          LiveActivity.updateRest(prev - 1);
-          return prev - 1;
-        });
+        } else {
+          setRestTimeRemaining(remaining);
+          LiveActivity.updateRest(remaining);
+        }
       }, 1000);
 
       return () => {
@@ -310,7 +311,34 @@ const WorkoutSessionScreen = () => {
         }
       };
     }
-  }, [showRestTimer, restTimeRemaining, totalRestTime]);
+  }, [showRestTimer, totalRestTime]);
+
+  // Resume rest timer when app returns to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && restEndTimeRef.current) {
+        const remaining = Math.round((restEndTimeRef.current - Date.now()) / 1000);
+
+        if (remaining <= 0) {
+          // Timer expired while app was backgrounded
+          if (restTimerRef.current) clearInterval(restTimerRef.current);
+          restEndTimeRef.current = null;
+          setRestTimeRemaining(0);
+          setShowRestTimer(false);
+          LiveActivity.endRest();
+          if (pendingNavigationRef.current) {
+            pendingNavigationRef.current();
+            pendingNavigationRef.current = null;
+          }
+        } else {
+          // Update remaining time to stay accurate
+          setRestTimeRemaining(remaining);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   // Cleanup timer and Live Activity on unmount
   useEffect(() => {
@@ -318,6 +346,7 @@ const WorkoutSessionScreen = () => {
       if (restTimerRef.current) {
         clearInterval(restTimerRef.current);
       }
+      restEndTimeRef.current = null;
       // Note: We don't stop the Live Activity here by default
       // because the user might be switching apps temporarily.
       // The Live Activity will be stopped explicitly when the
@@ -337,6 +366,7 @@ const WorkoutSessionScreen = () => {
     if (restTimerRef.current) {
       clearInterval(restTimerRef.current);
     }
+    restEndTimeRef.current = null;
     setShowRestTimer(false);
     setRestTimeRemaining(0);
     // End rest on Live Activity
@@ -348,7 +378,7 @@ const WorkoutSessionScreen = () => {
   };
 
   // useCallback must be before any early returns to follow Rules of Hooks
-  const handleReorderExercises = useCallback(async ({ data }) => {
+  const handleReorderExercises = useCallback(async ({ data, from }) => {
     // Update UI state
     setExercises(data);
 
@@ -356,7 +386,16 @@ const WorkoutSessionScreen = () => {
     const currentExerciseId = exercises[currentExerciseIndex]?.id;
     const newIndex = data.findIndex(ex => ex.id === currentExerciseId);
     if (newIndex !== -1 && newIndex !== currentExerciseIndex) {
-      setCurrentExerciseIndex(newIndex);
+      if (from === currentExerciseIndex && newIndex > currentExerciseIndex) {
+        // The current exercise itself was dragged to a later position —
+        // stay at the same position index (now a different exercise) and
+        // reset the set index since we're on a new exercise.
+        setCurrentSetIndex(0);
+      } else {
+        // Either a different exercise was rearranged, or the current
+        // exercise was moved earlier — follow the current exercise.
+        setCurrentExerciseIndex(newIndex);
+      }
     }
 
     // Update storage
@@ -395,7 +434,7 @@ const WorkoutSessionScreen = () => {
   const currentSet = currentExercise?.sessionSets[currentSetIndex];
   const nextExercise = exercises[currentExerciseIndex + 1];
 
-  const isLastSet = currentSetIndex === currentExercise.totalSets - 1;
+  const isLastSet = currentSetIndex === (currentExercise?.totalSets ?? 0) - 1;
   const isLastExercise = currentExerciseIndex === exercises.length - 1;
 
   const updateSetData = (field, value) => {
@@ -531,9 +570,16 @@ const WorkoutSessionScreen = () => {
   const handleDeleteExercise = async () => {
     setShowOptionsMenu(false);
 
-    // Can't delete if only one exercise remains
+    // If this is the only exercise left, offer to finish the workout
     if (exercises.length <= 1) {
-      Alert.alert('Cannot Delete', 'Your workout must have at least one exercise.');
+      Alert.alert(
+        'Finish Workout?',
+        'This is the last exercise in your workout. Would you like to finish the workout?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Finish', onPress: () => handleWorkoutComplete() }
+        ]
+      );
       return;
     }
 
@@ -546,6 +592,13 @@ const WorkoutSessionScreen = () => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            // Adjust index before removing so all state updates batch together
+            // and avoid a render where currentExerciseIndex is out of bounds.
+            if (currentExerciseIndex >= exercises.length - 1) {
+              setCurrentExerciseIndex(Math.max(0, currentExerciseIndex - 1));
+            }
+            setCurrentSetIndex(0);
+
             // Remove from UI
             setExercises(prev => {
               const updated = [...prev];
@@ -563,12 +616,6 @@ const WorkoutSessionScreen = () => {
             } catch (error) {
               console.error('[Session] Error deleting exercise from storage:', error);
             }
-
-            // Adjust current exercise index if needed
-            if (currentExerciseIndex >= exercises.length - 1) {
-              setCurrentExerciseIndex(Math.max(0, currentExerciseIndex - 1));
-            }
-            setCurrentSetIndex(0);
           }
         }
       ]
@@ -1694,6 +1741,7 @@ const WorkoutSessionScreen = () => {
             renderItem={({ item, drag, isActive, getIndex }) => {
               const index = getIndex();
               const isCurrentExercise = index === currentExerciseIndex;
+              const isCompleted = item.completedSets === item.totalSets && item.totalSets > 0;
               return (
                 <ScaleDecorator>
                   <View
@@ -1701,32 +1749,39 @@ const WorkoutSessionScreen = () => {
                       styles.reorderItem,
                       { backgroundColor: colors.cardBackground, borderColor: colors.borderLight },
                       isActive && [styles.reorderItemDragging, { shadowColor: colors.primary, borderColor: colors.primary }],
-                      isCurrentExercise && { borderColor: colors.primary + '60', backgroundColor: colors.primary + '08' }
+                      isCurrentExercise && { borderColor: colors.primary + '60', backgroundColor: colors.primary + '08' },
+                      isCompleted && { opacity: 0.5 }
                     ]}
                   >
-                    <TouchableOpacity
-                      onPressIn={drag}
-                      disabled={isActive}
-                      style={styles.reorderDragHandle}
-                    >
-                      <View style={styles.reorderDragDots}>
-                        {[0, 1].map((row) => (
-                          <View key={row} style={styles.reorderDragDotsRow}>
-                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
-                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
-                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
-                            <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
-                          </View>
-                        ))}
+                    {isCompleted ? (
+                      <View style={styles.reorderDragHandle}>
+                        <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
                       </View>
-                    </TouchableOpacity>
-                    <View style={[styles.reorderExerciseNumber, { backgroundColor: colors.primary + '15' }]}>
-                      <Text style={[styles.reorderExerciseNumberText, { color: colors.primary }]}>{index + 1}</Text>
+                    ) : (
+                      <TouchableOpacity
+                        onPressIn={drag}
+                        disabled={isActive}
+                        style={styles.reorderDragHandle}
+                      >
+                        <View style={styles.reorderDragDots}>
+                          {[0, 1].map((row) => (
+                            <View key={row} style={styles.reorderDragDotsRow}>
+                              <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                              <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                              <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                              <View style={[styles.reorderDragDot, { backgroundColor: colors.secondaryText }]} />
+                            </View>
+                          ))}
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    <View style={[styles.reorderExerciseNumber, { backgroundColor: isCompleted ? '#4CAF5015' : colors.primary + '15' }]}>
+                      <Text style={[styles.reorderExerciseNumberText, { color: isCompleted ? '#4CAF50' : colors.primary }]}>{index + 1}</Text>
                     </View>
                     <View style={styles.reorderExerciseInfo}>
                       <Text style={[styles.reorderExerciseName, { color: colors.text }]}>{item.name}</Text>
                       <Text style={[styles.reorderExerciseDetails, { color: colors.secondaryText }]}>
-                        {item.completedSets}/{item.totalSets} sets completed
+                        {isCompleted ? 'Completed' : `${item.completedSets}/${item.totalSets} sets completed`}
                       </Text>
                     </View>
                     {isCurrentExercise && (

@@ -220,6 +220,14 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
     setCommentText('');
   };
 
+  const handleCommentAuthorPress = (username) => {
+    if (!username) return;
+    setShowCommentsModal(false);
+    setTimeout(() => {
+      router.push(`/user/${username}`);
+    }, 100);
+  };
+
   const handleCommentSubmit = async () => {
     if (!commentText.trim()) return;
 
@@ -571,26 +579,36 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
               keyExtractor={(item, index) => item.id?.toString() || index.toString()}
               renderItem={({ item: comment }) => (
                 <View style={styles.modalCommentItem}>
-                  {comment.author?.profile?.avatarUrl ? (
-                    <Image
-                      source={{ uri: comment.author.profile.avatarUrl }}
-                      style={[styles.modalCommentAvatar, { backgroundColor: colors.borderLight }]}
-                      contentFit="cover"
-                      transition={200}
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View style={[styles.modalCommentAvatarPlaceholder, { backgroundColor: colors.primary + '20' }]}>
-                      <Text style={[styles.modalCommentAvatarText, { color: colors.primary }]}>
-                        {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+                  <TouchableOpacity
+                    onPress={() => handleCommentAuthorPress(comment.author?.username)}
+                    activeOpacity={0.7}
+                  >
+                    {comment.author?.profile?.avatarUrl ? (
+                      <Image
+                        source={{ uri: comment.author.profile.avatarUrl }}
+                        style={[styles.modalCommentAvatar, { backgroundColor: colors.borderLight }]}
+                        contentFit="cover"
+                        transition={200}
+                        cachePolicy="memory-disk"
+                      />
+                    ) : (
+                      <View style={[styles.modalCommentAvatarPlaceholder, { backgroundColor: colors.primary + '20' }]}>
+                        <Text style={[styles.modalCommentAvatarText, { color: colors.primary }]}>
+                          {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                   <View style={styles.modalCommentContent}>
                     <View style={styles.modalCommentHeader}>
-                      <Text style={[styles.modalCommentAuthor, { color: colors.text }]}>
-                        {comment.author?.name || comment.author?.username || 'Unknown User'}
-                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handleCommentAuthorPress(comment.author?.username)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.modalCommentAuthor, { color: colors.text }]}>
+                          {comment.author?.name || comment.author?.username || 'Unknown User'}
+                        </Text>
+                      </TouchableOpacity>
                       {comment.author?.profile?.isVerified && (
                         <Ionicons name="checkmark-circle" size={14} color="#1D9BF0" style={{ marginLeft: -4 }} />
                       )}
@@ -622,6 +640,9 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
               value={commentText}
               onChangeText={setCommentText}
               multiline
+              blurOnSubmit={true}
+              returnKeyType="send"
+              onSubmitEditing={handleCommentSubmit}
               maxLength={500}
             />
             <TouchableOpacity

@@ -236,21 +236,28 @@ export const WorkoutProvider = ({ children }) => {
           }
 
           if (dateToCheck && dateToCheck < today) {
-            const daysSinceLastCheck = calculateDaysBetween(dateToCheck, today);
+            // Check if the workout on the last check date was completed
+            const wasLastDayCompleted = savedCompletionDate === dateToCheck;
 
-            for (let i = 0; i < daysSinceLastCheck; i++) {
+            // Check if the current day in the split is a rest day
+            const currentDayData = appState.split.days?.[currentDayValue % appState.split.totalDays];
+            const isCurrentDayRest = currentDayData?.isRest === true;
+
+            // Only advance if the last day was completed or was a rest day
+            if (wasLastDayCompleted || isCurrentDayRest) {
               const nextDayIndex = (currentDayValue + 1) % appState.split.totalDays;
               currentDayValue = nextDayIndex;
 
               if (nextDayIndex === 0) {
                 currentWeekValue = currentWeekValue + 1;
               }
-            }
 
-            setCurrentDayIndex(currentDayValue);
-            setCurrentWeek(currentWeekValue);
-            await AsyncStorage.setItem('currentDayIndex', currentDayValue.toString());
-            await AsyncStorage.setItem('currentWeek', currentWeekValue.toString());
+              setCurrentDayIndex(currentDayValue);
+              setCurrentWeek(currentWeekValue);
+              await AsyncStorage.setItem('currentDayIndex', currentDayValue.toString());
+              await AsyncStorage.setItem('currentWeek', currentWeekValue.toString());
+            }
+            // else: workout wasn't completed and wasn't a rest day — stay on same day
 
             setTodaysWorkoutCompleted(false);
             setCompletedSessionId(null);
@@ -284,15 +291,6 @@ export const WorkoutProvider = ({ children }) => {
     return `${year}-${month}-${day}`;
   };
 
-  // Helper to calculate days between dates
-  const calculateDaysBetween = (date1, date2) => {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    const diffTime = Math.abs(d2 - d1);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
   // Check for date changes while app is open
   useEffect(() => {
     if (!isInitialized || !activeSplit) return;
@@ -300,13 +298,36 @@ export const WorkoutProvider = ({ children }) => {
     const checkDateChange = async () => {
       try {
         const savedLastCheckDate = await AsyncStorage.getItem('lastCheckDate');
+        const savedCompletionDate = await AsyncStorage.getItem('lastCompletionDate');
         const today = getLocalDateString();
 
         if (savedLastCheckDate && savedLastCheckDate < today) {
-          const daysSinceLastCheck = calculateDaysBetween(savedLastCheckDate, today);
+          // Check if the workout on the last check date was completed
+          const wasLastDayCompleted = savedCompletionDate === savedLastCheckDate;
 
-          for (let i = 0; i < daysSinceLastCheck; i++) {
-            await advanceToNextDay();
+          // Read current progress from storage to avoid stale state
+          const savedDayIdx = await AsyncStorage.getItem('currentDayIndex');
+          const savedWeekVal = await AsyncStorage.getItem('currentWeek');
+          let tempDayIndex = savedDayIdx ? parseInt(savedDayIdx) : currentDayIndex;
+          let tempWeek = savedWeekVal ? parseInt(savedWeekVal) : currentWeek;
+
+          // Check if the current day is a rest day
+          const currentDayData = activeSplit.days?.[tempDayIndex % activeSplit.totalDays];
+          const isCurrentDayRest = currentDayData?.isRest === true;
+
+          // Only advance if the last day was completed or was a rest day
+          if (wasLastDayCompleted || isCurrentDayRest) {
+            const nextDayIndex = (tempDayIndex + 1) % activeSplit.totalDays;
+            tempDayIndex = nextDayIndex;
+
+            if (nextDayIndex === 0) {
+              tempWeek = tempWeek + 1;
+            }
+
+            setCurrentDayIndex(tempDayIndex);
+            setCurrentWeek(tempWeek);
+            await AsyncStorage.setItem('currentDayIndex', tempDayIndex.toString());
+            await AsyncStorage.setItem('currentWeek', tempWeek.toString());
           }
 
           setTodaysWorkoutCompleted(false);

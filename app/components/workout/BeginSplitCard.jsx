@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 const BeginSplitCard = ({ split, onDaySelected }) => {
+  const colors = useThemeColors();
   const [showDayPicker, setShowDayPicker] = useState(false);
 
   const handleBeginSplit = () => {
@@ -23,32 +24,32 @@ const BeginSplitCard = ({ split, onDaySelected }) => {
 
   return (
     <>
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         {/* Split Header */}
         <View style={styles.header}>
-          <View style={styles.emojiCircle}>
+          <View style={[styles.emojiCircle, { backgroundColor: colors.primary + '15' }]}>
             <Text style={styles.emoji}>{split.emoji || '💪'}</Text>
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.splitName}>{split.name}</Text>
-            <Text style={styles.subtitle}>Ready to get started?</Text>
+            <Text style={[styles.splitName, { color: colors.text }]}>{split.name}</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Ready to get started?</Text>
           </View>
         </View>
 
         {/* Description */}
         {split.description && (
-          <Text style={styles.description}>{split.description}</Text>
+          <Text style={[styles.description, { color: colors.text }]}>{split.description}</Text>
         )}
 
         {/* Split Info */}
         <View style={styles.infoRow}>
           <View style={styles.infoItem}>
-            <Ionicons name="calendar-outline" size={16} color={Colors.light.secondaryText} />
-            <Text style={styles.infoText}>{split.numDays || split.totalDays} days</Text>
+            <Ionicons name="calendar-outline" size={16} color={colors.secondaryText} />
+            <Text style={[styles.infoText, { color: colors.secondaryText }]}>{split.numDays || split.totalDays} days</Text>
           </View>
           <View style={styles.infoItem}>
-            <Ionicons name="barbell-outline" size={16} color={Colors.light.secondaryText} />
-            <Text style={styles.infoText}>
+            <Ionicons name="barbell-outline" size={16} color={colors.secondaryText} />
+            <Text style={[styles.infoText, { color: colors.secondaryText }]}>
               {split.workoutDays?.filter(d => !d.isRest).length || 0} workouts
             </Text>
           </View>
@@ -56,7 +57,7 @@ const BeginSplitCard = ({ split, onDaySelected }) => {
 
         {/* Begin Button */}
         <TouchableOpacity
-          style={styles.beginButton}
+          style={[styles.beginButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
           onPress={handleBeginSplit}
           activeOpacity={0.8}
         >
@@ -73,19 +74,19 @@ const BeginSplitCard = ({ split, onDaySelected }) => {
         onRequestClose={() => setShowDayPicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Starting Day</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Choose Starting Day</Text>
               <TouchableOpacity
                 onPress={() => setShowDayPicker(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="close" size={28} color={Colors.light.text} />
+                <Ionicons name="close" size={28} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSubtitle}>
+            <Text style={[styles.modalSubtitle, { color: colors.secondaryText }]}>
               Select which day you'd like to start with
             </Text>
 
@@ -97,58 +98,58 @@ const BeginSplitCard = ({ split, onDaySelected }) => {
               {split.days?.map((day, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={styles.dayCard}
+                  style={[styles.dayCard, { backgroundColor: colors.background, borderColor: colors.borderLight }]}
                   onPress={() => handleDaySelect(index)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.dayCardContent}>
                     {day.emoji && <Text style={styles.dayEmoji}>{day.emoji}</Text>}
                     <View style={styles.dayInfo}>
-                      <Text style={styles.dayName}>
+                      <Text style={[styles.dayName, { color: colors.text }]}>
                         {day.isRest ? 'Rest Day' : (day.name || `Day ${index + 1}`)}
                       </Text>
                       {!day.isRest && day.exercises && (
-                        <Text style={styles.dayExercises}>
+                        <Text style={[styles.dayExercises, { color: colors.secondaryText }]}>
                           {day.exercises.length} exercises
                         </Text>
                       )}
                     </View>
                   </View>
                   {day.isRest && (
-                    <View style={styles.restBadge}>
-                      <Ionicons name="moon" size={14} color={Colors.light.secondaryText} />
-                      <Text style={styles.restBadgeText}>Rest</Text>
+                    <View style={[styles.restBadge, { backgroundColor: colors.borderLight + '40' }]}>
+                      <Ionicons name="moon" size={14} color={colors.secondaryText} />
+                      <Text style={[styles.restBadgeText, { color: colors.secondaryText }]}>Rest</Text>
                     </View>
                   )}
-                  <Ionicons name="chevron-forward" size={20} color={Colors.light.primary} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.primary} />
                 </TouchableOpacity>
               )) || split.workoutDays?.map((day, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={styles.dayCard}
+                  style={[styles.dayCard, { backgroundColor: colors.background, borderColor: colors.borderLight }]}
                   onPress={() => handleDaySelect(index)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.dayCardContent}>
                     {day.emoji && <Text style={styles.dayEmoji}>{day.emoji}</Text>}
                     <View style={styles.dayInfo}>
-                      <Text style={styles.dayName}>
+                      <Text style={[styles.dayName, { color: colors.text }]}>
                         {day.isRest ? 'Rest Day' : (day.workoutName || `Day ${index + 1}`)}
                       </Text>
                       {!day.isRest && day.exercises && (
-                        <Text style={styles.dayExercises}>
+                        <Text style={[styles.dayExercises, { color: colors.secondaryText }]}>
                           {JSON.parse(day.exercises || '[]').length} exercises
                         </Text>
                       )}
                     </View>
                   </View>
                   {day.isRest && (
-                    <View style={styles.restBadge}>
-                      <Ionicons name="moon" size={14} color={Colors.light.secondaryText} />
-                      <Text style={styles.restBadgeText}>Rest</Text>
+                    <View style={[styles.restBadge, { backgroundColor: colors.borderLight + '40' }]}>
+                      <Ionicons name="moon" size={14} color={colors.secondaryText} />
+                      <Text style={[styles.restBadgeText, { color: colors.secondaryText }]}>Rest</Text>
                     </View>
                   )}
-                  <Ionicons name="chevron-forward" size={20} color={Colors.light.primary} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.primary} />
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -163,11 +164,9 @@ export default BeginSplitCard;
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -183,7 +182,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.light.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -196,17 +194,14 @@ const styles = StyleSheet.create({
   splitName: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
   description: {
     fontSize: 15,
-    color: Colors.light.text,
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -223,17 +218,14 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
   beginButton: {
-    backgroundColor: Colors.light.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: Colors.light.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -253,7 +245,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Colors.light.cardBackground,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 20,
@@ -270,11 +261,9 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.light.text,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     paddingHorizontal: 20,
     marginBottom: 20,
   },
@@ -284,12 +273,10 @@ const styles = StyleSheet.create({
   dayCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
   },
   dayCardContent: {
     flexDirection: 'row',
@@ -306,19 +293,16 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
     marginBottom: 2,
   },
   dayExercises: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
   restBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.light.borderLight + '40',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -327,6 +311,5 @@ const styles = StyleSheet.create({
   restBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
 });

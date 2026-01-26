@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { AppState } from 'react-native';
 import { supabase } from '../../supabase';
 import { getNotifications, markAllNotificationsAsRead } from '../api/notificationsApi';
 import { useAuth } from '../auth/auth';
@@ -64,15 +65,23 @@ export const NotificationProvider = ({ children }) => {
 
     let channel = null;
     let isSubscribed = false;
+    let retryCount = 0;
+    let retryTimeout = null;
+    let unmounted = false;
 
     const setupSubscription = () => {
+      if (unmounted) return;
+
       // Remove existing channel if any
       if (channel) {
         supabase.removeChannel(channel);
       }
 
+      const channelName = `notifications-${user.id}-${Date.now()}`;
+      console.log('[Notifications] Setting up realtime subscription:', channelName);
+
       channel = supabase
-        .channel(`notifications-${user.id}-${Date.now()}`)
+        .channel(channelName)
         .on(
           'postgres_changes',
           {
@@ -82,26 +91,65 @@ export const NotificationProvider = ({ children }) => {
             filter: `recipient_id=eq.${user.id}`,
           },
           (payload) => {
-            // Add new notification to the beginning of the list
+            console.log('[Notifications] Realtime INSERT received:', payload);
             setNotifications(prev => [payload.new, ...prev]);
           }
         )
-        .subscribe((status) => {
+        .subscribe((status, err) => {
+          if (unmounted) return;
+
+          console.log('[Notifications] Subscription status:', status, err || '');
+
           if (status === 'SUBSCRIBED') {
             isSubscribed = true;
+            retryCount = 0;
+            console.log('[Notifications] Successfully subscribed to realtime');
           }
-          if (status === 'CLOSED' && isSubscribed) {
-            // Reconnect if closed unexpectedly
+
+          if (status === 'CHANNEL_ERROR') {
+            console.error('[Notifications] Channel error, will reconnect:', err);
             isSubscribed = false;
-            setTimeout(setupSubscription, 1000);
+            scheduleReconnect();
+          }
+
+          if (status === 'CLOSED' && isSubscribed) {
+            isSubscribed = false;
+            console.log('[Notifications] Channel closed, reconnecting...');
+            scheduleReconnect();
           }
         });
     };
 
+    const scheduleReconnect = () => {
+      if (unmounted) return;
+      if (retryTimeout) clearTimeout(retryTimeout);
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+      const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+      retryCount++;
+      console.log(`[Notifications] Reconnecting in ${delay / 1000}s (attempt ${retryCount})`);
+
+      retryTimeout = setTimeout(setupSubscription, delay);
+    };
+
     setupSubscription();
 
+    // Reconnect when app comes back to foreground
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && !isSubscribed && !unmounted) {
+        console.log('[Notifications] App foregrounded, reconnecting...');
+        retryCount = 0;
+        setupSubscription();
+        // Also refresh notifications in case we missed any while backgrounded
+        refreshNotifications();
+      }
+    });
+
     return () => {
+      unmounted = true;
       isSubscribed = false;
+      if (retryTimeout) clearTimeout(retryTimeout);
+      appStateSubscription.remove();
       if (channel) {
         supabase.removeChannel(channel);
       }

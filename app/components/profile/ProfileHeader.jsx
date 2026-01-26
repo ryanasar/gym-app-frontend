@@ -1,9 +1,11 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Modal, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import SettingsDropdown from './SettingsDropdown';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const ProfileHeader = ({
   username,
@@ -25,6 +27,7 @@ const ProfileHeader = ({
   onEditPress,
 }) => {
   const colors = useThemeColors();
+  const [showExpandedAvatar, setShowExpandedAvatar] = useState(false);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
@@ -40,7 +43,11 @@ const ProfileHeader = ({
         {/* Profile Section */}
         <View style={styles.profileSection}>
           {/* Profile Picture */}
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={avatarUrl ? () => setShowExpandedAvatar(true) : undefined}
+            activeOpacity={avatarUrl ? 0.8 : 1}
+          >
             {avatarUrl ? (
               <Image
                 source={{ uri: avatarUrl }}
@@ -56,7 +63,7 @@ const ProfileHeader = ({
                 </Text>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
 
           {/* Profile Info */}
           <View style={styles.profileInfo}>
@@ -139,6 +146,38 @@ const ProfileHeader = ({
           </View>
         </>
       ) : null}
+
+      {/* Expanded Avatar Modal */}
+      <Modal
+        visible={showExpandedAvatar}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowExpandedAvatar(false)}
+      >
+        <TouchableOpacity
+          style={styles.expandedOverlay}
+          activeOpacity={1}
+          onPress={() => setShowExpandedAvatar(false)}
+        >
+          <View style={styles.expandedAvatarContainer}>
+            {avatarUrl && (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.expandedAvatar}
+                contentFit="cover"
+                transition={200}
+              />
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.expandedCloseButton}
+            onPress={() => setShowExpandedAvatar(false)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -287,5 +326,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '400',
+  },
+
+  // Expanded Avatar Modal
+  expandedOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expandedAvatarContainer: {
+    width: SCREEN_WIDTH - 48,
+    height: SCREEN_WIDTH - 48,
+    borderRadius: (SCREEN_WIDTH - 48) / 2,
+    overflow: 'hidden',
+  },
+  expandedAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  expandedCloseButton: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

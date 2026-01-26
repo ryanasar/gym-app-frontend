@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gymvy",
     "slug": "gymapp",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gymapp",
@@ -30,11 +30,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.ryanasar.gymapp"
     },
@@ -60,6 +56,13 @@
         {
           "photosPermission": "This app requires access to your photo library to select photos for your workout posts.",
           "cameraPermission": "This app requires access to your camera to take photos for your workout posts."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#ffffff"
         }
       ]
     ],
