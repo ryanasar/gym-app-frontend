@@ -591,7 +591,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsTokenExpired(false);
 
       // Navigate to login screen
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/welcome');
 
     } catch (e) {
       console.error('[Auth] Error during sign out:', e);

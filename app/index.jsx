@@ -22,7 +22,7 @@ export default function Index() {
 
   // Not logged in - go to auth
   if (!user) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href="/(auth)/welcome" />;
   }
 
   // Logged in but hasn't completed onboarding - go to onboarding

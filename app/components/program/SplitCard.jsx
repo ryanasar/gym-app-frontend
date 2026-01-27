@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import Badge from '../ui/Badge';
 
 const SplitCard = ({ split, onPress, onDelete, showDelete = false }) => {
   const colors = useThemeColors();
@@ -33,7 +34,7 @@ const SplitCard = ({ split, onPress, onDelete, showDelete = false }) => {
           <View style={styles.splitText}>
             <View style={styles.splitHeader}>
               <Text style={[styles.splitName, { color: colors.text }]}>{name}</Text>
-              {isActive && <Text style={[styles.activeBadge, { color: colors.primary, backgroundColor: colors.primary + '20' }]}>ACTIVE</Text>}
+              {isActive && <Badge label="ACTIVE" color={colors.primary} size="sm" />}
             </View>
             <Text style={[styles.splitDays, { color: colors.secondaryText }]}>{totalDays} days</Text>
             {workoutNames && <Text style={[styles.workoutNames, { color: colors.secondaryText }]} numberOfLines={1}>{workoutNames}</Text>}
@@ -105,16 +106,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
     marginRight: 8,
-  },
-  activeBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.light.primary,
-    backgroundColor: Colors.light.primaryLight || `${Colors.light.primary}20`,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
   },
   splitDays: {
     fontSize: 14,

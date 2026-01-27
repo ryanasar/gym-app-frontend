@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import SettingsDropdown from './SettingsDropdown';
+import Avatar from '../ui/Avatar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -48,21 +49,7 @@ const ProfileHeader = ({
             onPress={avatarUrl ? () => setShowExpandedAvatar(true) : undefined}
             activeOpacity={avatarUrl ? 0.8 : 1}
           >
-            {avatarUrl ? (
-              <Image
-                source={{ uri: avatarUrl }}
-                style={[styles.profileImage, { shadowColor: colors.shadow }]}
-                contentFit="cover"
-                transition={200}
-                cachePolicy="memory-disk"
-              />
-            ) : (
-              <View style={[styles.profileInitialContainer, { backgroundColor: colors.primary, shadowColor: colors.shadow }]}>
-                <Text style={[styles.profileInitial, { color: colors.onPrimary }]}>
-                  {name ? name.charAt(0).toUpperCase() : "?"}
-                </Text>
-              </View>
-            )}
+            <Avatar uri={avatarUrl} name={name} size={64} />
           </TouchableOpacity>
 
           {/* Profile Info */}

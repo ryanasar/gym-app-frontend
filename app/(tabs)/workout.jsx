@@ -401,7 +401,7 @@ const WorkoutScreen = () => {
       try {
         const exercises = await storage.getExercises();
         setExerciseDatabase(exercises || []);
-        const custom = await getCustomExercises();
+        const custom = await getCustomExercises(user?.id);
         setCustomExercises(custom || []);
       } catch (error) {
         console.error('[Workout] Error loading exercise database:', error);
@@ -498,7 +498,7 @@ const WorkoutScreen = () => {
 
   // Handle creating a new custom exercise
   const handleCreateCustomExercise = async (exerciseData) => {
-    const newExercise = await createCustomExercise(exerciseData);
+    const newExercise = await createCustomExercise(exerciseData, user?.id);
     setCustomExercises([...customExercises, newExercise]);
     setAddExerciseMuscleFilter('my_exercises');
     // Re-open add exercise modal after creating
@@ -1061,7 +1061,7 @@ const WorkoutScreen = () => {
                     disabled={isToggling}
                     activeOpacity={isToggling ? 1 : 0.7}
                   >
-                    <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Mark Complete</Text>
+                    <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Complete Workout</Text>
                   </TouchableOpacity>
                 </>
               )}

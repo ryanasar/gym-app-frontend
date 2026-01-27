@@ -2,8 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+import { BACKEND_API_URL } from '../constants';
 
 // Configure how notifications appear when app is foregrounded
 Notifications.setNotificationHandler({
@@ -83,7 +82,7 @@ export const registerForPushNotificationsAsync = async () => {
  */
 export const registerTokenWithBackend = async (supabaseId, token) => {
   try {
-    const response = await fetch(`${API_URL}/api/push-tokens/register/${supabaseId}`, {
+    const response = await fetch(`${BACKEND_API_URL}/push-tokens/register/${supabaseId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -115,7 +114,7 @@ export const removeTokenFromBackend = async (token) => {
   if (!token) return;
 
   try {
-    const response = await fetch(`${API_URL}/api/push-tokens/remove`, {
+    const response = await fetch(`${BACKEND_API_URL}/push-tokens/remove`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

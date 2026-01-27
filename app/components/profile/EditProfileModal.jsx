@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import Avatar from '../ui/Avatar';
 import { updateProfile } from '../../api/profileApi';
 import { uploadImage } from '../../api/storageApi';
 import { prepareProfileImage } from '../../utils/imageUpload';
@@ -268,11 +269,7 @@ const EditProfileModal = ({ visible, onClose, userId, currentBio, currentAvatarU
                   transition={200}
                 />
               ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.avatarInitial, { color: colors.onPrimary }]}>
-                    {userName ? userName.charAt(0).toUpperCase() : '?'}
-                  </Text>
-                </View>
+                <Avatar uri={null} name={userName} size={120} />
               )}
               <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
                 <Ionicons name="camera" size={16} color="#FFFFFF" />

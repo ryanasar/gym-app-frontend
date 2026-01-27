@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import Button from '../ui/Button';
 
 /**
  * Shared EmptyState component for consistent styling across the app
@@ -44,12 +45,13 @@ const EmptyState = ({
 
       {/* CTA Button */}
       {ctaText && onCtaPress && (
-        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.primary }]} onPress={onCtaPress}>
-          {ctaIcon && (
-            <Ionicons name={ctaIcon} size={20} color={colors.onPrimary} style={styles.ctaIcon} />
-          )}
-          <Text style={[styles.ctaText, { color: colors.onPrimary }]}>{ctaText}</Text>
-        </TouchableOpacity>
+        <Button
+          title={ctaText}
+          icon={ctaIcon}
+          onPress={onCtaPress}
+          size="lg"
+          style={styles.ctaButton}
+        />
       )}
     </View>
   );
@@ -89,19 +91,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    gap: 8,
-  },
-  ctaIcon: {
-    marginRight: 4,
-  },
-  ctaText: {
-    fontSize: 16,
-    fontWeight: '600',
+    minWidth: 200,
   },
 });

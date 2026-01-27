@@ -6,6 +6,7 @@
 import { storage } from './StorageAdapter.js';
 import { createWorkoutSession } from '../app/api/workoutSessionsApi.js';
 import { checkNetworkStatus as checkNetwork } from '../services/networkService.js';
+import { createCustomExerciseOnBackend } from '../app/api/customExercisesBackendApi.js';
 
 /**
  * Network status check
@@ -70,8 +71,9 @@ function convertWorkoutToApiFormat(workout, userId) {
  */
 async function syncWorkout(workout, userId) {
   try {
-    // Load exercise database to get exercise names
+    // Load exercise database to get exercise names (bundled + custom)
     const exercises = await storage.getExercises();
+    const customExercises = await storage.getCustomExercises();
 
     if (!exercises || exercises.length === 0) {
       console.warn('[Sync] Exercise database is empty! Cannot enrich workout with names.');
@@ -80,6 +82,10 @@ async function syncWorkout(workout, userId) {
     const exerciseMap = {};
     exercises.forEach(ex => {
       exerciseMap[ex.id] = ex;
+    });
+    customExercises.forEach(ex => {
+      exerciseMap[ex.id] = { ...ex, isCustom: true };
+      if (ex.backendId) exerciseMap[String(ex.backendId)] = { ...ex, isCustom: true };
     });
 
     // Enrich workout with exercise names
@@ -145,6 +151,52 @@ async function syncWorkout(workout, userId) {
     });
 
     return { success: false, error, shouldRetry };
+  }
+}
+
+/**
+ * Syncs pending custom exercises to the backend
+ * @param {number} userId
+ * @returns {Promise<{synced: number, failed: number}>}
+ */
+export async function syncPendingCustomExercises(userId) {
+  if (!userId) return { synced: 0, failed: 0 };
+
+  const isOnline = await checkNetworkStatus();
+  if (!isOnline) return { synced: 0, failed: 0 };
+
+  try {
+    const exercises = await storage.getCustomExercises();
+    const pending = exercises.filter(e => e.pendingSync);
+
+    if (pending.length === 0) return { synced: 0, failed: 0 };
+
+    let synced = 0;
+    let failed = 0;
+
+    for (const ex of pending) {
+      try {
+        const backendEx = await createCustomExerciseOnBackend({
+          userId,
+          name: ex.name,
+          category: ex.category,
+          primaryMuscles: ex.primaryMuscles || [],
+          secondaryMuscles: ex.secondaryMuscles || [],
+          equipment: ex.equipment,
+          difficulty: ex.difficulty,
+        });
+        await storage.markCustomExerciseSynced(ex.id, backendEx.id);
+        synced++;
+      } catch (err) {
+        console.warn('[Sync] Failed to sync custom exercise:', ex.name, err.message);
+        failed++;
+      }
+    }
+
+    return { synced, failed };
+  } catch (error) {
+    console.error('[Sync] Error syncing custom exercises:', error);
+    return { synced: 0, failed: 0 };
   }
 }
 
@@ -216,6 +268,8 @@ export async function syncPendingWorkouts(userId) {
  */
 export async function backgroundSync(userId) {
   try {
+    // Sync custom exercises first (workouts may reference them)
+    await syncPendingCustomExercises(userId);
     await syncPendingWorkouts(userId);
   } catch (error) {
     // Don't throw - background sync should fail silently

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,6 +8,7 @@ import { useAuth } from '../auth/auth';
 import { useSync } from '../contexts/SyncContext';
 import EmptyState from '../components/common/EmptyState';
 import { useThemeColors } from '../hooks/useThemeColors';
+import Avatar from '../components/ui/Avatar';
 
 export default function ExploreScreen() {
   const colors = useThemeColors();
@@ -86,21 +86,7 @@ export default function ExploreScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.userInfo}>
-                  {result.profile?.avatarUrl ? (
-                    <Image
-                      source={{ uri: result.profile.avatarUrl }}
-                      style={[styles.userAvatarImage, { backgroundColor: colors.borderLight }]}
-                      contentFit="cover"
-                      transition={200}
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View style={[styles.userAvatar, { backgroundColor: colors.primary }]}>
-                      <Text style={[styles.userAvatarText, { color: colors.onPrimary }]}>
-                        {result.name?.[0]?.toUpperCase() || result.username?.[0]?.toUpperCase() || '?'}
-                      </Text>
-                    </View>
-                  )}
+                  <Avatar uri={result.profile?.avatarUrl} name={result.name || result.username} size={48} style={{ marginRight: 12 }} />
                   <View style={styles.userDetails}>
                     <View style={styles.nameRow}>
                       <Text style={[styles.userName, { color: colors.text }]}>{result.name || result.username}</Text>
@@ -228,24 +214,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-  },
-  userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  userAvatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
-  },
-  userAvatarText: {
-    fontSize: 20,
-    fontWeight: '700',
   },
   userDetails: {
     flex: 1,

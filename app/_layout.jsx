@@ -8,10 +8,13 @@ import { PushNotificationProvider } from './contexts/PushNotificationContext';
 import { NetworkProvider } from './contexts/NetworkContext';
 import { Stack } from 'expo-router';
 import { OfflineBanner } from './components/common/OfflineBanner';
+import { useThemeColors } from './hooks/useThemeColors';
 
 export default function RootLayout() {
+  const colors = useThemeColors();
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <NetworkProvider>
         <AuthProvider>
           <PushNotificationProvider>
@@ -19,7 +22,7 @@ export default function RootLayout() {
               <SyncProvider>
                 <NotificationProvider>
                   <OfflineBanner />
-                  <Stack screenOptions={{ headerShown: false }}>
+                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="user/[username]" options={{ headerShown: false, presentation: 'modal' }} />
                     <Stack.Screen name="workout" options={{ headerShown: false }} />

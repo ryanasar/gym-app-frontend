@@ -83,6 +83,10 @@ const WorkoutSessionScreen = () => {
   // Live Activity ref to track if started
   const liveActivityStartedRef = useRef(false);
 
+  // Animation lock refs - synchronous guards against rapid tapping
+  const isAnimatingRef = useRef(false);
+  const isCompletingRef = useRef(false);
+
   // Input refs
   const weightInputRef = useRef(null);
   const repsInputRef = useRef(null);
@@ -164,6 +168,23 @@ const WorkoutSessionScreen = () => {
               exerciseMap[ex.id] = { ...ex, isCustom: true };
               exerciseMap[String(ex.id)] = { ...ex, isCustom: true };
             });
+
+            // Resolve any unresolved exercise IDs from backend
+            const { getCustomExerciseById } = await import('../api/customExercisesApi');
+            for (const exercise of activeWorkout.exercises) {
+              const id = exercise.exerciseId;
+              if (!exerciseMap[id] && !exerciseMap[String(id)]) {
+                try {
+                  const resolved = await getCustomExerciseById(id);
+                  if (resolved) {
+                    exerciseMap[id] = { ...resolved, isCustom: true };
+                    exerciseMap[String(id)] = { ...resolved, isCustom: true };
+                  }
+                } catch (e) {
+                  // Ignore - will fall back to "Exercise {id}"
+                }
+              }
+            }
 
             // Convert storage format to UI format
             const restoredExercises = activeWorkout.exercises.map((exercise) => {
@@ -765,6 +786,9 @@ const WorkoutSessionScreen = () => {
   );
 
   const completeCurrentSet = async () => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
     // Mark set as complete
     const updatedSetData = {
       ...currentSet,
@@ -802,6 +826,7 @@ const WorkoutSessionScreen = () => {
       setTotalRestTime(restSeconds);
       setRestTimeRemaining(restSeconds);
       setShowRestTimer(true);
+      isAnimatingRef.current = false;
     } else {
       // No rest timer or last set, proceed immediately
       proceedToNext();
@@ -866,7 +891,7 @@ const WorkoutSessionScreen = () => {
           duration: 200,
           useNativeDriver: true,
         })
-      ]).start();
+      ]).start(() => { isAnimatingRef.current = false; });
     });
   };
 
@@ -910,19 +935,23 @@ const WorkoutSessionScreen = () => {
             duration: 300,
             useNativeDriver: true,
           })
-        ]).start();
+        ]).start(() => { isAnimatingRef.current = false; });
       }
     });
   };
 
   const goToNextExercise = () => {
+    if (isAnimatingRef.current) return;
     if (currentExerciseIndex < exercises.length - 1) {
+      isAnimatingRef.current = true;
       animateToNextExercise();
     }
   };
 
   const goToPreviousExercise = () => {
+    if (isAnimatingRef.current) return;
     if (currentExerciseIndex > 0) {
+      isAnimatingRef.current = true;
       // Animate to previous exercise (vertical - up)
       Animated.parallel([
         Animated.timing(slideYAnim, {
@@ -955,12 +984,15 @@ const WorkoutSessionScreen = () => {
             duration: 300,
             useNativeDriver: true,
           })
-        ]).start();
+        ]).start(() => { isAnimatingRef.current = false; });
       });
     }
   };
 
   const goBackOneStep = async () => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
     if (currentSetIndex > 0) {
       // Go back to previous set with horizontal animation (to the right)
       const previousSetIndex = currentSetIndex - 1;
@@ -1017,7 +1049,7 @@ const WorkoutSessionScreen = () => {
             duration: 200,
             useNativeDriver: true,
           })
-        ]).start();
+        ]).start(() => { isAnimatingRef.current = false; });
       });
     } else if (currentExerciseIndex > 0) {
       // Go to previous exercise, last completed set (vertical animation - up)
@@ -1088,15 +1120,17 @@ const WorkoutSessionScreen = () => {
             duration: 300,
             useNativeDriver: true,
           })
-        ]).start();
+        ]).start(() => { isAnimatingRef.current = false; });
       });
     }
   };
 
   const handleWorkoutComplete = async () => {
-    // Prevent multiple presses during completion
-    if (isCompleting) return;
+    // Prevent multiple presses during completion (ref for synchronous guard)
+    if (isCompletingRef.current) return;
+    isCompletingRef.current = true;
     setIsCompleting(true);
+    isAnimatingRef.current = false;
 
     // Stop Live Activity
     LiveActivity.stopWorkout();
@@ -1196,12 +1230,12 @@ const WorkoutSessionScreen = () => {
           <View style={[styles.progressBar, { backgroundColor: colors.borderLight + '60' }]}>
             <View style={[
               styles.progressFill,
-              { width: `${((currentExerciseIndex + (currentSetIndex + 1) / currentExercise.totalSets) / exercises.length) * 100}%`, backgroundColor: colors.primary, shadowColor: colors.primary }
+              { width: `${((currentExerciseIndex + (currentSetIndex + 1) / (currentExercise?.totalSets || 1)) / exercises.length) * 100}%`, backgroundColor: colors.primary, shadowColor: colors.primary }
             ]} />
           </View>
         </View>
         <Text style={[styles.progressText, { color: colors.secondaryText }]}>
-          Exercise {currentExerciseIndex + 1} of {exercises.length} • Set {currentSetIndex + 1} of {currentExercise.totalSets}
+          Exercise {currentExerciseIndex + 1} of {exercises.length} • Set {currentSetIndex + 1} of {currentExercise?.totalSets || 0}
         </Text>
       </View>
 
@@ -1806,7 +1840,6 @@ export default WorkoutSessionScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   header: {
     flexDirection: 'row',

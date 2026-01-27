@@ -168,6 +168,27 @@ export const deleteLikeNotification = async (actorId, postId) => {
 };
 
 /**
+ * Delete a comment notification (when deleting a comment)
+ */
+export const deleteCommentNotification = async (actorId, postId, commentId) => {
+  try {
+    const { error } = await supabase
+      .from('Notifications')
+      .delete()
+      .eq('actor_id', actorId)
+      .eq('post_id', postId)
+      .eq('comment_id', commentId)
+      .eq('type', 'comment');
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting comment notification:', error);
+    return false;
+  }
+};
+
+/**
  * Delete a follow notification (when unfollowing)
  */
 export const deleteFollowNotification = async (actorId, recipientId) => {

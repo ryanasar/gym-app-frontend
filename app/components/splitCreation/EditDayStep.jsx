@@ -11,6 +11,7 @@ import SaveWorkoutModal from './SaveWorkoutModal';
 import CreateCustomExerciseModal from '../exercises/CreateCustomExerciseModal';
 import { getSavedWorkouts, createSavedWorkout } from '../../api/savedWorkoutsApi';
 import { getCustomExercises, createCustomExercise } from '../../api/customExercisesApi';
+import { useAuth } from '../../auth/auth';
 
 // Isolated component for workout name input to prevent keyboard dismissal
 const WorkoutNameInput = memo(({ initialValue, onChangeComplete, colors }) => {
@@ -222,6 +223,7 @@ const restTimerStyles = StyleSheet.create({
 
 const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   const colors = useThemeColors();
+  const { user } = useAuth();
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState('all');
@@ -241,7 +243,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
   useEffect(() => {
     const loadCustomExercises = async () => {
       try {
-        const exercises = await getCustomExercises();
+        const exercises = await getCustomExercises(user?.id);
         setCustomExercises(exercises);
       } catch (error) {
         console.error('Failed to load custom exercises:', error);
@@ -386,7 +388,7 @@ const EditDayStep = ({ splitData, updateSplitData, editingDayIndex }) => {
 
   // Handle creating a new custom exercise
   const handleCreateCustomExercise = async (exerciseData) => {
-    const newExercise = await createCustomExercise(exerciseData);
+    const newExercise = await createCustomExercise(exerciseData, user?.id);
     setCustomExercises([...customExercises, newExercise]);
     // Optionally auto-select "My Exercises" filter to show the new exercise
     setSelectedMuscleFilter('my_exercises');

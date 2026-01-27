@@ -1,12 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Pressable, Modal, KeyboardAvoidingView, Platform, FlatList } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import { createComment, deletePost, likePost, unlikePost, getComments } from '../../api/postsApi';
-import { createLikeNotification, deleteLikeNotification, createCommentNotification } from '../../api/notificationsApi';
+import { deletePost, likePost, unlikePost } from '../../api/postsApi';
+import { createLikeNotification, deleteLikeNotification } from '../../api/notificationsApi';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import Avatar from '../ui/Avatar';
+import Badge from '../ui/Badge';
+import CommentModal from './CommentModal';
+import SocialActions from './SocialActions';
 
 const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOpenComments = false }) => {
   const colors = useThemeColors();
@@ -30,16 +34,13 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
 
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [comments, setComments] = useState([]);
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
-  const [commentText, setCommentText] = useState('');
   const [localLikeCount, setLocalLikeCount] = useState(_count?.likes || 0);
   const [localCommentCount, setLocalCommentCount] = useState(_count?.comments || 0);
   const [isLiked, setIsLiked] = useState(
     likes?.some(like => like.userId === currentUserId) || false
   );
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const isLikingRef = useRef(false);
 
-  // Sync like/comment state when post prop changes (e.g., when navigating between tabs)
   useEffect(() => {
     const likedFromServer = likes?.some(like => like.userId === currentUserId) || false;
     setIsLiked(likedFromServer);
@@ -47,19 +48,15 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
     setLocalCommentCount(_count?.comments || 0);
   }, [likes, _count?.likes, _count?.comments, currentUserId]);
 
-  // Auto-open comments if initialOpenComments is true
   useEffect(() => {
     if (initialOpenComments) {
-      openCommentsModal();
+      setShowCommentsModal(true);
     }
   }, [initialOpenComments]);
 
   const isOwnPost = currentUserId && author?.id === currentUserId;
+  const isRestDay = type === 'rest_day' || (!workoutSession && description && description.includes('Recovery:'));
 
-  // Check if this is a rest day post by looking for "Recovery:" in description
-  const isRestDay = type === 'rest_day' || (description && description.includes('Recovery:'));
-
-  // Convert workoutSession to workoutData format for display
   const workoutData = workoutSession ? {
     dayName: workoutSession.dayName || workoutSession.workoutName || split?.name || 'Workout',
     weekNumber: workoutSession.weekNumber,
@@ -70,12 +67,10 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
     })) || []
   } : null;
 
-  // Calculate workout stats
   const totalSets = workoutData?.exercises?.reduce((acc, ex) => {
     return acc + (Array.isArray(ex.sets) ? ex.sets.length : parseInt(ex.sets) || 0);
   }, 0) || 0;
 
-  // Parse rest activities from description
   const restActivities = isRestDay && description ? (() => {
     const match = description.match(/Recovery:\s*(.+?)(?:\n|$)/);
     if (match) {
@@ -84,34 +79,17 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
     return [];
   })() : [];
 
-  // Extract muscles worked from workout exercises
   const musclesWorked = workoutData?.exercises ? (() => {
     const muscles = new Set();
     workoutData.exercises.forEach(exercise => {
-      // Map exercise names to muscle groups
       const exerciseName = (exercise.name || '').toLowerCase();
-      if (exerciseName.includes('bench') || exerciseName.includes('press') || exerciseName.includes('chest')) {
-        muscles.add('Chest');
-      }
-      if (exerciseName.includes('pull') || exerciseName.includes('row') || exerciseName.includes('back')) {
-        muscles.add('Back');
-      }
-      if (exerciseName.includes('squat') || exerciseName.includes('leg') || exerciseName.includes('quad')) {
-        muscles.add('Legs');
-      }
-      if (exerciseName.includes('shoulder') || exerciseName.includes('lateral') || exerciseName.includes('overhead')) {
-        muscles.add('Shoulders');
-      }
-      if (exerciseName.includes('curl') || exerciseName.includes('bicep')) {
-        muscles.add('Biceps');
-      }
-      if (exerciseName.includes('tricep') || exerciseName.includes('dip') || exerciseName.includes('extension')) {
-        muscles.add('Triceps');
-      }
-      if (exerciseName.includes('deadlift')) {
-        muscles.add('Back');
-        muscles.add('Legs');
-      }
+      if (exerciseName.includes('bench') || exerciseName.includes('press') || exerciseName.includes('chest')) muscles.add('Chest');
+      if (exerciseName.includes('pull') || exerciseName.includes('row') || exerciseName.includes('back')) muscles.add('Back');
+      if (exerciseName.includes('squat') || exerciseName.includes('leg') || exerciseName.includes('quad')) muscles.add('Legs');
+      if (exerciseName.includes('shoulder') || exerciseName.includes('lateral') || exerciseName.includes('overhead')) muscles.add('Shoulders');
+      if (exerciseName.includes('curl') || exerciseName.includes('bicep')) muscles.add('Biceps');
+      if (exerciseName.includes('tricep') || exerciseName.includes('dip') || exerciseName.includes('extension')) muscles.add('Triceps');
+      if (exerciseName.includes('deadlift')) { muscles.add('Back'); muscles.add('Legs'); }
     });
     return Array.from(muscles);
   })() : [];
@@ -122,27 +100,21 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
     const diffInMs = now - date;
     const diffInHours = diffInMs / (1000 * 60 * 60);
     const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
-
     if (diffInHours < 1) {
       const minutes = Math.floor(diffInMs / (1000 * 60));
       return minutes < 1 ? 'now' : `${minutes}m`;
     } else if (diffInHours < 24) {
-      const hours = Math.floor(diffInHours);
-      return `${hours}h`;
+      return `${Math.floor(diffInHours)}h`;
     } else if (diffInDays < 7) {
-      const days = Math.floor(diffInDays);
-      return `${days}d`;
+      return `${Math.floor(diffInDays)}d`;
     } else if (diffInDays < 365) {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const handleCardPress = () => {
-    // Don't navigate on rest day posts (they're not interactive)
     if (isRestDay) return;
-
     if (workoutData) {
       router.push({
         pathname: '../workout/workoutDetail',
@@ -162,26 +134,22 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
   };
 
   const handleLike = async () => {
-    // Optimistic update
+    if (isLikingRef.current) return;
+    isLikingRef.current = true;
     const wasLiked = isLiked;
     setIsLiked(!isLiked);
     setLocalLikeCount(prev => wasLiked ? prev - 1 : prev + 1);
-
     try {
       if (wasLiked) {
         await unlikePost(id, currentUserId);
-        // Delete the like notification
         await deleteLikeNotification(currentUserId, id);
       } else {
         await likePost(id, currentUserId);
-        // Create a notification for the post author (if not self)
         if (author?.id && author.id !== currentUserId) {
           await createLikeNotification(author.id, currentUserId, id);
         }
       }
-
       if (onPostUpdated) {
-        // Update both the likes array and count to keep state in sync
         const updatedLikes = wasLiked
           ? likes.filter(like => like.userId !== currentUserId)
           : [...likes, { userId: currentUserId }];
@@ -192,70 +160,11 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
         });
       }
     } catch (error) {
-      // Revert on error
       setIsLiked(wasLiked);
       setLocalLikeCount(prev => wasLiked ? prev + 1 : prev - 1);
       Alert.alert('Error', 'Failed to update like');
-    }
-  };
-
-  const openCommentsModal = async () => {
-    setShowCommentsModal(true);
-    if (comments.length === 0) {
-      setIsLoadingComments(true);
-      try {
-        const fetchedComments = await getComments(id);
-        setComments(fetchedComments);
-      } catch (error) {
-        console.error('Error fetching comments:', error);
-        Alert.alert('Error', 'Failed to load comments');
-      } finally {
-        setIsLoadingComments(false);
-      }
-    }
-  };
-
-  const closeCommentsModal = () => {
-    setShowCommentsModal(false);
-    setCommentText('');
-  };
-
-  const handleCommentAuthorPress = (username) => {
-    if (!username) return;
-    setShowCommentsModal(false);
-    setTimeout(() => {
-      router.push(`/user/${username}`);
-    }, 100);
-  };
-
-  const handleCommentSubmit = async () => {
-    if (!commentText.trim()) return;
-
-    setIsSubmittingComment(true);
-    try {
-      const newComment = await createComment(id, {
-        userId: currentUserId,
-        content: commentText
-      });
-
-      setLocalCommentCount(prev => prev + 1);
-      setCommentText('');
-
-      // Add the new comment to the comments list
-      setComments(prev => [newComment, ...prev]);
-
-      // Create a notification for the post author (if not self)
-      if (author?.id && author.id !== currentUserId && newComment?.id) {
-        await createCommentNotification(author.id, currentUserId, id, newComment.id);
-      }
-
-      if (onPostUpdated) {
-        onPostUpdated({ ...post, _count: { ...post._count, comments: localCommentCount + 1 } });
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to post comment');
     } finally {
-      setIsSubmittingComment(false);
+      isLikingRef.current = false;
     }
   };
 
@@ -273,28 +182,29 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
   };
 
   const handleDeletePost = () => {
-    Alert.alert(
-      'Delete Post',
-      'Are you sure you want to delete this post?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePost(id);
-              if (onPostDeleted) {
-                onPostDeleted(id);
-              }
-              Alert.alert('Success', 'Post deleted successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete post');
-            }
-          },
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deletePost(id);
+            if (onPostDeleted) onPostDeleted(id);
+            Alert.alert('Success', 'Post deleted successfully');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to delete post');
+          }
         },
-      ]
-    );
+      },
+    ]);
+  };
+
+  const handleCommentCountChange = (newCount) => {
+    setLocalCommentCount(newCount);
+    if (onPostUpdated) {
+      onPostUpdated({ ...post, _count: { ...post._count, comments: newCount } });
+    }
   };
 
   const [showMenu, setShowMenu] = useState(false);
@@ -312,28 +222,14 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
       android_ripple={{ color: colors.borderLight }}
       disabled={isRestDay}
     >
-      {/* Header Row: Avatar, Name, Timestamp, Menu */}
+      {/* Header Row */}
       <View style={styles.headerRow}>
-        <TouchableOpacity
-          style={styles.authorInfo}
-          onPress={handleProfilePress}
-          activeOpacity={0.7}
-        >
-          {author?.profile?.avatarUrl ? (
-            <Image
-              source={{ uri: author.profile.avatarUrl }}
-              style={[styles.authorAvatar, { backgroundColor: colors.borderLight }]}
-              contentFit="cover"
-              transition={200}
-              cachePolicy="memory-disk"
-            />
-          ) : (
-            <View style={[styles.authorAvatarPlaceholder, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
-                {(author?.name || author?.username || 'U').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+        <TouchableOpacity style={styles.authorInfo} onPress={handleProfilePress} activeOpacity={0.7}>
+          <Avatar
+            uri={author?.profile?.avatarUrl}
+            name={author?.name || author?.username}
+            size={38}
+          />
           <View style={styles.authorTextContainer}>
             <View style={styles.nameTimestampRow}>
               <Text style={[styles.authorName, { color: colors.text }]}>{author?.name || author?.username || 'Unknown User'}</Text>
@@ -361,20 +257,14 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
         <View style={[styles.menuOverlay, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => {
-              setShowMenu(false);
-              handleEditPost();
-            }}
+            onPress={() => { setShowMenu(false); handleEditPost(); }}
           >
             <Ionicons name="pencil" size={18} color={colors.text} />
             <Text style={[styles.menuItemText, { color: colors.text }]}>Edit Post</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.menuItem, styles.menuItemDanger]}
-            onPress={() => {
-              setShowMenu(false);
-              handleDeletePost();
-            }}
+            onPress={() => { setShowMenu(false); handleDeletePost(); }}
           >
             <Ionicons name="trash-outline" size={18} color={colors.error} />
             <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Post</Text>
@@ -384,7 +274,6 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
 
       {/* Content Body */}
       <View style={[styles.contentBody, !imageUrl && styles.contentBodyNoImage]}>
-        {/* Type Label + Workout Name */}
         <Text style={[styles.typeLabel, { color: colors.primary }]}>{isRestDay ? 'REST DAY' : 'WORKOUT'}</Text>
         {isRestDay ? (
           <Text style={[styles.workoutName, { color: colors.text }]}>Rest & Recover</Text>
@@ -393,8 +282,6 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
             {title || workoutData?.dayName || 'Workout'}
           </Text>
         )}
-
-        {/* Description */}
         {description && (
           <View>
             <Text
@@ -410,10 +297,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
               {isRestDay ? description.replace(/Recovery:\s*.+?(?:\n|$)/, '').trim() || 'Took a rest day' : description}
             </Text>
             {descriptionNeedsTruncation && (
-              <TouchableOpacity
-                onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)} activeOpacity={0.7}>
                 <Text style={[styles.showMoreText, { color: colors.primary }]}>
                   {isDescriptionExpanded ? 'show less' : 'show more'}
                 </Text>
@@ -423,7 +307,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
         )}
       </View>
 
-      {/* Post Image - Full Width */}
+      {/* Post Image */}
       {imageUrl && (
         <Image
           source={{ uri: imageUrl }}
@@ -436,237 +320,70 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
 
       {/* Metadata Section */}
       <View style={[styles.metadataSection, !imageUrl && styles.metadataSectionNoImage]}>
-        {/* Badges Row - Streak and Split Completed */}
         {(streak > 1 || isSplitCompleted) && (
           <View style={styles.topBadgesRow}>
-            {/* Streak Badge */}
             {streak && streak > 1 && (
-              <View style={[styles.streakBadge, { backgroundColor: colors.warning + '20' }]}>
-                <Text style={[styles.streakText, { color: colors.warning }]}>🔥 {streak}-day streak</Text>
-              </View>
+              <Badge label={`🔥 ${streak}-day streak`} color={colors.warning} />
             )}
-
-            {/* Split Completed Badge */}
             {isSplitCompleted && (
-              <View style={[styles.splitCompletedBadge, { backgroundColor: '#8B5CF6' + '20' }]}>
-                <Text style={[styles.splitCompletedText, { color: '#8B5CF6' }]}>🎉 Split Completed</Text>
-              </View>
+              <Badge label="🎉 Split Completed" color="#8B5CF6" />
             )}
           </View>
         )}
 
-        {/* Tagged Users Badge */}
         {taggedUsers && taggedUsers.length > 0 && (
           <View style={styles.taggedBadgesContainer}>
             {taggedUsers.map((taggedUser) => (
-              <TouchableOpacity
+              <Badge
                 key={taggedUser.id}
-                style={[styles.taggedUserBadge, { backgroundColor: colors.primary + '15' }]}
+                label={`🏋️ @${taggedUser.username}`}
+                color={colors.primary}
                 onPress={() => router.push(`/user/${taggedUser.username}`)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.taggedUserBadgeText, { color: colors.primary }]}>
-                  🏋️ @{taggedUser.username}
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         )}
 
-        {/* Badges Row - Rest Activities or Muscles */}
         <View style={styles.badgesContainer}>
-          {/* Rest Activities */}
           {isRestDay && restActivities && restActivities.length > 0 && restActivities.map((activity, index) => (
-            <View key={index} style={[styles.activityBadge, { backgroundColor: colors.accent + '20' }]}>
-              <Text style={[styles.activityBadgeText, { color: colors.accent }]}>{activity}</Text>
-            </View>
+            <Badge key={index} label={activity} color={colors.accent} />
           ))}
-
-          {/* Muscles Worked for Workout Days */}
           {!isRestDay && musclesWorked && musclesWorked.length > 0 && musclesWorked.map((muscle, index) => (
-            <View key={index} style={[styles.muscleBadge, { backgroundColor: colors.primary + '15' }]}>
-              <Text style={[styles.muscleBadgeText, { color: colors.primary }]}>{muscle}</Text>
-            </View>
+            <Badge key={index} label={muscle} color={colors.primary} />
           ))}
         </View>
 
-        {/* Stats Row */}
         {workoutData && !isRestDay && (
           <View style={styles.statsRow}>
             <Text style={[styles.statsText, { color: colors.secondaryText }]}>
               {totalSets} {totalSets === 1 ? 'set' : 'sets'} • {workoutData.exercises?.length || 0} {workoutData.exercises?.length === 1 ? 'exercise' : 'exercises'}
             </Text>
-            <Text style={[styles.tapHintText, { color: colors.secondaryText }]}>• Tap to view workout details</Text>
+            <Text style={[styles.tapHintText, { color: colors.secondaryText }]}>• Tap to view...</Text>
           </View>
         )}
       </View>
 
-      {/* Social Actions Row */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={styles.actionItem}
-          onPress={handleLike}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons
-            name={isLiked ? "heart" : "heart-outline"}
-            size={20}
-            color={isLiked ? colors.error : colors.secondaryText}
-          />
-          {localLikeCount > 0 && (
-            <Text style={[styles.actionCount, { color: colors.secondaryText }, isLiked && { color: colors.error }]}>
-              {localLikeCount}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionItem}
-          onPress={openCommentsModal}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chatbubble-outline" size={18} color={colors.secondaryText} />
-          {localCommentCount > 0 && (
-            <Text style={[styles.actionCount, { color: colors.secondaryText }]}>{localCommentCount}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* View Comments Link */}
-      {localCommentCount > 0 && (
-        <TouchableOpacity
-          style={styles.viewCommentsButton}
-          onPress={openCommentsModal}
-        >
-          <Text style={[styles.viewCommentsText, { color: colors.secondaryText }]}>
-            View {localCommentCount === 1 ? 'comment' : `all ${localCommentCount} comments`}
-          </Text>
-        </TouchableOpacity>
-      )}
+      {/* Social Actions */}
+      <SocialActions
+        isLiked={isLiked}
+        likeCount={localLikeCount}
+        commentCount={localCommentCount}
+        onLike={handleLike}
+        onComment={() => setShowCommentsModal(true)}
+      />
 
       {/* Comments Modal */}
-      <Modal
+      <CommentModal
         visible={showCommentsModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={closeCommentsModal}
-      >
-        <KeyboardAvoidingView
-          style={[styles.modalContainer, { backgroundColor: colors.background }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-        >
-          {/* Modal Header */}
-          <View style={[styles.modalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Comments</Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={closeCommentsModal}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Comments List */}
-          {isLoadingComments ? (
-            <View style={styles.modalLoading}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-          ) : (
-            <FlatList
-              data={comments}
-              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-              renderItem={({ item: comment }) => (
-                <View style={styles.modalCommentItem}>
-                  <TouchableOpacity
-                    onPress={() => handleCommentAuthorPress(comment.author?.username)}
-                    activeOpacity={0.7}
-                  >
-                    {comment.author?.profile?.avatarUrl ? (
-                      <Image
-                        source={{ uri: comment.author.profile.avatarUrl }}
-                        style={[styles.modalCommentAvatar, { backgroundColor: colors.borderLight }]}
-                        contentFit="cover"
-                        transition={200}
-                        cachePolicy="memory-disk"
-                      />
-                    ) : (
-                      <View style={[styles.modalCommentAvatarPlaceholder, { backgroundColor: colors.primary + '20' }]}>
-                        <Text style={[styles.modalCommentAvatarText, { color: colors.primary }]}>
-                          {(comment.author?.name || comment.author?.username || 'U').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <View style={styles.modalCommentContent}>
-                    <View style={styles.modalCommentHeader}>
-                      <TouchableOpacity
-                        onPress={() => handleCommentAuthorPress(comment.author?.username)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.modalCommentAuthor, { color: colors.text }]}>
-                          {comment.author?.name || comment.author?.username || 'Unknown User'}
-                        </Text>
-                      </TouchableOpacity>
-                      {comment.author?.profile?.isVerified && (
-                        <Ionicons name="checkmark-circle" size={14} color="#1D9BF0" style={{ marginLeft: -4 }} />
-                      )}
-                      <Text style={[styles.modalCommentTimestamp, { color: colors.secondaryText }]}>
-                        {formatDate(comment.timestamp)}
-                      </Text>
-                    </View>
-                    <Text style={[styles.modalCommentText, { color: colors.text }]}>{comment.content}</Text>
-                  </View>
-                </View>
-              )}
-              ListEmptyComponent={
-                <View style={styles.modalEmptyState}>
-                  <Text style={[styles.modalEmptyText, { color: colors.text }]}>No comments yet</Text>
-                  <Text style={[styles.modalEmptySubtext, { color: colors.secondaryText }]}>Be the first to comment!</Text>
-                </View>
-              }
-              contentContainerStyle={styles.modalCommentsList}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-
-          {/* Comment Input */}
-          <View style={[styles.modalInputContainer, { backgroundColor: colors.cardBackground, borderTopColor: colors.borderLight }]}>
-            <TextInput
-              style={[styles.modalCommentInput, { backgroundColor: colors.borderLight + '30', color: colors.text }]}
-              placeholder="Write a comment..."
-              placeholderTextColor={colors.secondaryText}
-              value={commentText}
-              onChangeText={setCommentText}
-              multiline
-              blurOnSubmit={true}
-              returnKeyType="send"
-              onSubmitEditing={handleCommentSubmit}
-              maxLength={500}
-            />
-            <TouchableOpacity
-              style={[
-                styles.modalSendButton,
-                { backgroundColor: colors.primary + '15' },
-                (!commentText.trim() || isSubmittingComment) && styles.modalSendButtonDisabled
-              ]}
-              onPress={handleCommentSubmit}
-              disabled={!commentText.trim() || isSubmittingComment}
-            >
-              {isSubmittingComment ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Ionicons
-                  name="send"
-                  size={20}
-                  color={commentText.trim() ? colors.primary : colors.secondaryText}
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        onClose={() => setShowCommentsModal(false)}
+        postId={id}
+        postAuthorId={author?.id}
+        currentUserId={currentUserId}
+        comments={comments}
+        setComments={setComments}
+        commentCount={localCommentCount}
+        onCommentCountChange={handleCommentCountChange}
+      />
     </Pressable>
   );
 };
@@ -690,8 +407,6 @@ const styles = StyleSheet.create({
   cardPressed: {
     opacity: 0.96,
   },
-
-  // Header Row
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -706,25 +421,6 @@ const styles = StyleSheet.create({
     gap: 10,
     flex: 1,
   },
-  authorAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.light.borderLight,
-  },
-  authorAvatarPlaceholder: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: Colors.light.onPrimary,
-    fontSize: 17,
-    fontWeight: '700',
-  },
   authorTextContainer: {
     flex: 1,
   },
@@ -736,30 +432,23 @@ const styles = StyleSheet.create({
   authorName: {
     fontWeight: '600',
     fontSize: 15,
-    color: Colors.light.text,
   },
   verifiedBadge: {
     marginLeft: 2,
   },
   timestampInline: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     fontWeight: '400',
   },
   menuButton: {
     padding: 4,
   },
-
-  // Overflow Menu
   menuOverlay: {
     position: 'absolute',
     top: 50,
     right: 14,
-    backgroundColor: Colors.light.cardBackground,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.light.borderLight,
-    shadowColor: Colors.light.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -782,13 +471,7 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.light.text,
   },
-  menuItemTextDanger: {
-    color: '#EF4444',
-  },
-
-  // Content Body
   contentBody: {
     paddingHorizontal: 14,
     paddingBottom: 12,
@@ -799,7 +482,6 @@ const styles = StyleSheet.create({
   typeLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.light.secondaryText,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 4,
@@ -807,31 +489,24 @@ const styles = StyleSheet.create({
   workoutName: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 6,
     lineHeight: 24,
   },
   description: {
     fontSize: 15,
     lineHeight: 21,
-    color: Colors.light.text,
     fontWeight: '400',
   },
   showMoreText: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
     marginTop: 4,
   },
-
-  // Post Image - Full Width
   postImage: {
     width: '100%',
     height: 320,
     backgroundColor: Colors.light.borderLight + '20',
   },
-
-  // Metadata Section
   metadataSection: {
     paddingHorizontal: 14,
     paddingTop: 12,
@@ -840,91 +515,22 @@ const styles = StyleSheet.create({
   metadataSectionNoImage: {
     paddingTop: 6,
   },
-
-  // Top Badges Row (Streak + Split Completed)
   topBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     alignItems: 'center',
   },
-
-  // Streak Badge
-  streakBadge: {
-    backgroundColor: '#FFF4ED',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  streakText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#EA580C',
-  },
-
-  // Split Completed Badge
-  splitCompletedBadge: {
-    backgroundColor: '#8B5CF6' + '20',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  splitCompletedText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8B5CF6',
-  },
-
-  // Tagged Users Badges
   taggedBadgesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  taggedUserBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  taggedUserBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  // Badges Container
   badgesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-
-  // Rest Activity Badge
-  activityBadge: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  activityBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2E7D32',
-  },
-
-  // Muscle Badge
-  muscleBadge: {
-    backgroundColor: Colors.light.primary + '12',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  muscleBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-
-  // Stats Text
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -933,314 +539,12 @@ const styles = StyleSheet.create({
   },
   statsText: {
     fontSize: 13,
-    color: Colors.light.secondaryText,
     fontWeight: '600',
   },
   tapHintText: {
     fontSize: 12,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
     opacity: 0.7,
     fontStyle: 'italic',
-  },
-
-  // Tagged Users
-  taggedUsersContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  taggedLabel: {
-    fontSize: 13,
-    color: Colors.light.secondaryText,
-  },
-  taggedUserLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-
-  // Social Actions Row
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 20,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-  },
-  actionCount: {
-    fontSize: 14,
-    color: Colors.light.text,
-    fontWeight: '600',
-  },
-  likedCount: {
-    color: '#EF4444',
-  },
-
-  // View Comments Button
-  viewCommentsButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  viewCommentsText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-  },
-
-  // Comments Section
-  commentsSection: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: Colors.light.borderLight + '30',
-  },
-  commentsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  commentsSectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  hideCommentsText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-  commentsLoading: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  noCommentsText: {
-    fontSize: 13,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    paddingVertical: 12,
-  },
-  commentItem: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  commentAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.light.primary + '25',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  commentAvatarImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.light.borderLight,
-  },
-  commentAvatarText: {
-    color: Colors.light.primary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  commentContent: {
-    flex: 1,
-  },
-  commentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  commentAuthor: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  commentTimestamp: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    fontWeight: '400',
-  },
-  commentText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.light.text,
-  },
-
-  // Comment Input
-  commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderTopWidth: 0.5,
-    borderTopColor: Colors.light.borderLight + '30',
-  },
-  commentInput: {
-    flex: 1,
-    backgroundColor: Colors.light.borderLight + '25',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: Colors.light.text,
-    maxHeight: 100,
-  },
-  commentSubmitButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.light.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  commentSubmitButtonDisabled: {
-    opacity: 0.5,
-  },
-
-  // Comments Modal
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.cardBackground,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    padding: 4,
-  },
-  modalLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCommentsList: {
-    padding: 16,
-    flexGrow: 1,
-  },
-  modalCommentItem: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  modalCommentAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.borderLight,
-  },
-  modalCommentAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCommentAvatarText: {
-    color: Colors.light.primary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  modalCommentContent: {
-    flex: 1,
-  },
-  modalCommentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  modalCommentAuthor: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  modalCommentTimestamp: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-  },
-  modalCommentText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.light.text,
-  },
-  modalEmptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  modalEmptyText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  modalEmptySubtext: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-  },
-  modalInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 34,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.borderLight,
-    backgroundColor: Colors.light.cardBackground,
-  },
-  modalCommentInput: {
-    flex: 1,
-    backgroundColor: Colors.light.borderLight + '30',
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.light.text,
-    maxHeight: 120,
-    minHeight: 44,
-  },
-  modalSendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.light.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalSendButtonDisabled: {
-    opacity: 0.5,
   },
 });

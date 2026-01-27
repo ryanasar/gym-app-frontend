@@ -205,12 +205,12 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
 
       // Format the description to include activities if selected
       let finalDescription = caption || '';
-      if (activityLabels.length > 0) {
-        const activitiesText = `Recovery: ${activityLabels.join(', ')}`;
-        finalDescription = finalDescription
-          ? `${finalDescription}\n\n${activitiesText}`
-          : activitiesText;
-      }
+      const activitiesText = activityLabels.length > 0
+        ? `Recovery: ${activityLabels.join(', ')}`
+        : 'Recovery: Rest Day';
+      finalDescription = finalDescription
+        ? `${finalDescription}\n\n${activitiesText}`
+        : activitiesText;
 
       const postData = {
         authorId: user.id,
@@ -409,6 +409,8 @@ const RestDayPostModal = ({ visible, onClose, onPostCreated, splitName, splitEmo
             placeholder="How did you recover today?"
             placeholderTextColor={colors.placeholder}
             multiline
+            blurOnSubmit
+            returnKeyType="done"
             value={caption}
             onChangeText={setCaption}
             maxLength={500}

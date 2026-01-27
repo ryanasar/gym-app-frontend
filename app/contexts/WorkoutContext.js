@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { initializeApp, storage } from '../../storage/index.js';
+import { useAuth } from '../auth/auth';
+import { getSplitsByUserId } from '../api/splitsApi';
+import { getCustomExercises } from '../api/customExercisesApi';
+import { checkNetworkStatus } from '../../services/networkService';
+import { syncPendingCustomExercises } from '../../storage/syncService';
 
 const WorkoutContext = createContext();
 
@@ -13,6 +18,8 @@ export const useWorkout = () => {
 };
 
 export const WorkoutProvider = ({ children }) => {
+  const { user } = useAuth();
+
   // State from storage layer
   const [activeSplit, setActiveSplit] = useState(null);
   const [currentWeek, setCurrentWeek] = useState(3);
@@ -93,11 +100,16 @@ export const WorkoutProvider = ({ children }) => {
         // Initialize the storage layer
         const appState = await initializeApp();
 
-        // Load exercise database for mapping IDs to names
+        // Load exercise database for mapping IDs to names (bundled + custom)
         const exercises = await storage.getExercises();
+        const customExercises = await storage.getCustomExercises();
         const exerciseMap = {};
         exercises.forEach(ex => {
           exerciseMap[ex.id] = ex;
+        });
+        customExercises.forEach(ex => {
+          exerciseMap[ex.id] = { ...ex, isCustom: true };
+          if (ex.backendId) exerciseMap[String(ex.backendId)] = { ...ex, isCustom: true };
         });
         setExerciseDatabase(exerciseMap);
 
@@ -281,6 +293,97 @@ export const WorkoutProvider = ({ children }) => {
 
     initializeWorkoutContext();
   }, []);
+
+  // Sync custom exercises on startup: push pending, fetch from backend, migrate if needed
+  useEffect(() => {
+    if (!isInitialized || !user?.id) return;
+
+    const syncCustomExercisesOnStartup = async () => {
+      try {
+        const isOnline = await checkNetworkStatus();
+        if (!isOnline) return;
+
+        // Sync any pending custom exercises to backend first
+        await syncPendingCustomExercises(user.id);
+
+        // One-time migration: push all existing local custom exercises to backend
+        const migrationKey = '@gymvy/custom_exercises_migrated';
+        const migrated = await AsyncStorage.getItem(migrationKey);
+        if (!migrated) {
+          const localExercises = await storage.getCustomExercises();
+          const pendingExercises = localExercises.filter(e => e.pendingSync || !e.backendId);
+          if (pendingExercises.length > 0) {
+            const { createCustomExerciseOnBackend } = await import('../api/customExercisesBackendApi');
+            for (const ex of pendingExercises) {
+              try {
+                const backendEx = await createCustomExerciseOnBackend({
+                  userId: user.id,
+                  name: ex.name,
+                  category: ex.category,
+                  primaryMuscles: ex.primaryMuscles || [],
+                  secondaryMuscles: ex.secondaryMuscles || [],
+                  equipment: ex.equipment,
+                  difficulty: ex.difficulty,
+                });
+                await storage.markCustomExerciseSynced(ex.id, backendEx.id);
+              } catch (err) {
+                console.warn('[WorkoutContext] Failed to migrate custom exercise:', ex.name, err.message);
+              }
+            }
+          }
+          await AsyncStorage.setItem(migrationKey, 'true');
+        }
+
+        // Fetch from backend and refresh local cache
+        await getCustomExercises(user.id);
+
+        // Refresh exercise database with updated custom exercises
+        await refreshExerciseDatabase();
+      } catch (error) {
+        console.error('[WorkoutContext] Custom exercise sync failed:', error);
+      }
+    };
+
+    syncCustomExercisesOnStartup();
+  }, [isInitialized, user?.id]);
+
+  // Fetch splits from backend if none found locally after init
+  useEffect(() => {
+    if (!isInitialized || activeSplit || !user?.id) return;
+
+    const fetchAndActivateSplit = async () => {
+      try {
+        const splits = await getSplitsByUserId(user.id);
+        if (splits && splits.length > 0) {
+          const split = splits[0];
+          const formatted = {
+            id: split.id,
+            name: split.name,
+            totalDays: split.numDays,
+            emoji: split.emoji,
+            isActive: true,
+            description: split.description,
+            started: split.started,
+            isPublic: split.isPublic,
+            workoutDays: split.workoutDays,
+            days: split.workoutDays.map((day, index) => ({
+              dayIndex: index,
+              name: day.workoutName,
+              type: day.workoutType,
+              emoji: day.emoji,
+              isRest: day.isRest,
+              exercises: day.exercises || [],
+            })),
+          };
+          changeActiveSplit(formatted);
+        }
+      } catch (error) {
+        console.error('[WorkoutContext] Failed to fetch splits from backend:', error);
+      }
+    };
+
+    fetchAndActivateSplit();
+  }, [isInitialized, activeSplit, user?.id]);
 
   // Helper to get today's date in local timezone (YYYY-MM-DD format)
   const getLocalDateString = () => {
@@ -561,6 +664,25 @@ export const WorkoutProvider = ({ children }) => {
     return getTodaysWorkout();
   }, [getTodaysWorkout]);
 
+  // Refresh exercise database (bundled + custom) from local storage
+  const refreshExerciseDatabase = useCallback(async () => {
+    try {
+      const exercises = await storage.getExercises();
+      const customExercises = await storage.getCustomExercises();
+      const exerciseMap = {};
+      exercises.forEach(ex => {
+        exerciseMap[ex.id] = ex;
+      });
+      customExercises.forEach(ex => {
+        exerciseMap[ex.id] = { ...ex, isCustom: true };
+        if (ex.backendId) exerciseMap[String(ex.backendId)] = { ...ex, isCustom: true };
+      });
+      setExerciseDatabase(exerciseMap);
+    } catch (error) {
+      console.error('[WorkoutContext] Failed to refresh exercise database:', error);
+    }
+  }, []);
+
   // Refresh today's workout from local storage
   const refreshTodaysWorkout = useCallback(async () => {
     try {
@@ -605,6 +727,7 @@ export const WorkoutProvider = ({ children }) => {
     completedSessionId,
     checkTodaysWorkoutStatus,
     refreshTodaysWorkout,
+    refreshExerciseDatabase,
     isInitialized,
   };
 

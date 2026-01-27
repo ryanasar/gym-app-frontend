@@ -10,8 +10,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import Avatar from '../ui/Avatar';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { searchUsers } from '../../api/usersApi';
@@ -103,21 +103,7 @@ const TagUsersModal = ({ visible, onClose, selectedUsers = [], onUsersSelected, 
         activeOpacity={0.7}
       >
         <View style={styles.avatarContainer}>
-          {item.profile?.avatarUrl ? (
-            <Image
-              source={{ uri: item.profile.avatarUrl }}
-              style={[styles.avatarImage, { backgroundColor: colors.borderLight }]}
-              contentFit="cover"
-              transition={200}
-              cachePolicy="memory-disk"
-            />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
-                {(item.name || item.username || '?').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <Avatar uri={item.profile?.avatarUrl} name={item.name || item.username} size={44} />
         </View>
 
         <View style={styles.userInfo}>

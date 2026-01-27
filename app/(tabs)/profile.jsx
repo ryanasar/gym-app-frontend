@@ -11,6 +11,7 @@ import WorkoutPlansTab from '../components/profile/WorkoutPlansTab';
 import FollowListModal from '../components/profile/FollowListModal';
 import EditProfileModal from '../components/profile/EditProfileModal';
 import { useThemeColors } from '../hooks/useThemeColors';
+import TabBar from '../components/ui/TabBar';
 
 const ProfileScreen = () => {
   const colors = useThemeColors();
@@ -132,29 +133,16 @@ const ProfileScreen = () => {
         onEditPress={handleOpenEditModal}
       />
       {/* Tabs */}
-      <View style={[styles.tabsContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => setSelectedTab('Progress')}
-        >
-          <Text style={selectedTab === 'Progress' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Progress</Text>
-          {selectedTab === 'Progress' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => setSelectedTab('Posts')}
-        >
-          <Text style={selectedTab === 'Posts' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Posts</Text>
-          {selectedTab === 'Posts' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => setSelectedTab('Splits')}
-        >
-          <Text style={selectedTab === 'Splits' ? [styles.activeTabText, { color: colors.primary }] : [styles.inactiveTabText, { color: colors.secondaryText }]}>Splits</Text>
-          {selectedTab === 'Splits' && <View style={[styles.activeTabIndicator, { backgroundColor: colors.primary }]} />}
-        </TouchableOpacity>
-      </View>
+      <TabBar
+        tabs={[
+          { key: 'Progress', label: 'Progress' },
+          { key: 'Posts', label: 'Posts' },
+          { key: 'Splits', label: 'Splits' },
+        ]}
+        activeTab={selectedTab}
+        onTabPress={setSelectedTab}
+        style={{ backgroundColor: colors.cardBackground, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}
+      />
 
       {/* Tab Content */}
       <View style={[styles.tabContentContainer, { backgroundColor: colors.background }]}>
@@ -201,36 +189,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    position: 'relative',
-  },
-  activeTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  inactiveTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  activeTabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    height: 3,
-    borderRadius: 1.5,
-    width: '70%',
   },
   tabContentContainer: {
     flex: 1,

@@ -528,7 +528,7 @@ export class AsyncStorageAdapter {
         id: exercise.id || `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         createdAt: exercise.createdAt || Date.now(),
         updatedAt: Date.now(),
-        pendingSync: true,
+        pendingSync: exercise.pendingSync !== undefined ? exercise.pendingSync : true,
       };
 
       exercises.push(newExercise);
@@ -584,6 +584,82 @@ export class AsyncStorageAdapter {
       await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(filtered));
     } catch (error) {
       console.error('[StorageAdapter] Failed to delete custom exercise:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Replace local custom exercises cache with backend data.
+   * Preserves local exercises with pendingSync that don't yet exist on backend.
+   * @param {Array} backendExercises - Exercises from backend
+   * @returns {Promise<void>}
+   */
+  async replaceCustomExercises(backendExercises) {
+    try {
+      const localExercises = await this.getCustomExercises();
+
+      // Keep any local exercises that are pending sync (not yet on backend)
+      const pendingLocal = localExercises.filter(e => e.pendingSync);
+
+      // Convert backend exercises to local format
+      const synced = backendExercises.map(e => ({
+        id: String(e.id),
+        name: e.name,
+        category: e.category || null,
+        primaryMuscles: e.primaryMuscles || [],
+        secondaryMuscles: e.secondaryMuscles || [],
+        equipment: e.equipment || null,
+        difficulty: e.difficulty || null,
+        createdAt: new Date(e.createdAt).getTime(),
+        updatedAt: new Date(e.updatedAt).getTime(),
+        backendId: e.id,
+        pendingSync: false,
+      }));
+
+      // Merge: synced from backend + pending local (avoid duplicates by backendId)
+      const syncedIds = new Set(synced.map(e => e.backendId));
+      const uniquePending = pendingLocal.filter(e => !e.backendId || !syncedIds.has(e.backendId));
+      const merged = [...synced, ...uniquePending];
+
+      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(merged));
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to replace custom exercises:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upsert a single custom exercise into local cache (e.g., after backend fetch)
+   * @param {Object} exercise - Exercise from backend
+   * @returns {Promise<void>}
+   */
+  async cacheCustomExercise(exercise) {
+    try {
+      const exercises = await this.getCustomExercises();
+      const id = String(exercise.id);
+
+      // Remove existing entry with same id or backendId
+      const filtered = exercises.filter(e =>
+        e.id !== id && String(e.backendId) !== id
+      );
+
+      filtered.push({
+        id,
+        name: exercise.name,
+        category: exercise.category || null,
+        primaryMuscles: exercise.primaryMuscles || [],
+        secondaryMuscles: exercise.secondaryMuscles || [],
+        equipment: exercise.equipment || null,
+        difficulty: exercise.difficulty || null,
+        createdAt: exercise.createdAt ? new Date(exercise.createdAt).getTime() : Date.now(),
+        updatedAt: exercise.updatedAt ? new Date(exercise.updatedAt).getTime() : Date.now(),
+        backendId: exercise.id,
+        pendingSync: false,
+      });
+
+      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('[StorageAdapter] Failed to cache custom exercise:', error);
       throw error;
     }
   }

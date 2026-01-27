@@ -8,16 +8,19 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  useColorScheme
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useAuth } from '../auth/auth';
 import { useNetwork } from '../contexts/NetworkContext';
 import { supabase } from '../../supabase';
 import { useRouter } from 'expo-router';
-import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 export default function LoginScreen() {
+  const colorScheme = useColorScheme();
+  const colors = useThemeColors();
   const { user, signIn, signInWithApple, isLoading, error: authError } = useAuth();
   const { isOffline } = useNetwork();
   const router = useRouter();
@@ -69,7 +72,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.flex}>
+    <View style={[styles.flex, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -85,32 +88,8 @@ export default function LoginScreen() {
               style={styles.logo}
               contentFit="contain"
             />
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Log in to continue</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholderTextColor={Colors.light.placeholder}
-              value={email}
-              onChangeText={setEmail}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              autoCapitalize="none"
-              secureTextEntry
-              placeholderTextColor={Colors.light.placeholder}
-              value={password}
-              onChangeText={setPassword}
-            />
-
-            <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotPasswordButton}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
+            <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Log in to continue</Text>
 
             {isOffline && (
               <View style={styles.offlineWarning}>
@@ -119,40 +98,64 @@ export default function LoginScreen() {
             )}
 
             {(error || authError) ? (
-              <Text style={styles.errorText}>{error || authError?.error_description || 'An error occurred'}</Text>
+              <Text style={[styles.errorText, { color: colors.error }]}>{error || authError?.error_description || 'An error occurred'}</Text>
             ) : null}
 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-              <Text style={styles.primaryButtonText}>Login</Text>
-            </TouchableOpacity>
-
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.divider} />
-            </View>
-
-            <TouchableOpacity style={styles.googleButton} onPress={signIn}>
+            <TouchableOpacity style={[styles.googleButton, { backgroundColor: colors.onPrimary, borderColor: colors.primary }]} onPress={signIn}>
               <Image
                 source={require('../../assets/images/google.png')}
                 style={styles.googleIcon}
                 contentFit="contain"
               />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={[styles.googleButtonText, { color: colors.text }]}>Continue with Google</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.appleButton} onPress={signInWithApple}>
+            <TouchableOpacity style={[styles.appleButton, { backgroundColor: colors.text }]} onPress={signInWithApple}>
               <Image
-                source={require('../../assets/images/apple.png')}
+                source={colorScheme === 'dark' ? require('../../assets/images/apple-black.svg') : require('../../assets/images/apple.png')}
                 style={styles.appleIcon}
                 contentFit="contain"
               />
-              <Text style={styles.appleButtonText}>Continue with Apple</Text>
+              <Text style={[styles.appleButtonText, { color: colors.background }]}>Continue with Apple</Text>
+            </TouchableOpacity>
+
+            <View style={styles.dividerContainer}>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dividerText, { color: colors.secondaryText }]}>OR</Text>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            </View>
+
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+              placeholder="Email"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholderTextColor={colors.placeholder}
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+              placeholder="Password"
+              autoCapitalize="none"
+              secureTextEntry
+              placeholderTextColor={colors.placeholder}
+              value={password}
+              onChangeText={setPassword}
+            />
+
+            <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotPasswordButton}>
+              <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={handleLogin}>
+              <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Login</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleSignupNavigate}>
-              <Text style={styles.signupText}>
-                Don't have an account? <Text style={styles.signupLink}>Sign Up</Text>
+              <Text style={[styles.signupText, { color: colors.secondaryText }]}>
+                Don't have an account? <Text style={[styles.signupLink, { color: colors.primary }]}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -165,7 +168,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -186,43 +188,34 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
     marginBottom: 32,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: Colors.light.inputBackground,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.light.text,
     marginBottom: 16,
   },
   primaryButton: {
-    backgroundColor: Colors.light.primary,
     paddingVertical: 16,
     borderRadius: 8,
     marginBottom: 16,
   },
   primaryButtonText: {
-    color: Colors.light.onPrimary,
     fontWeight: '600',
     fontSize: 18,
     textAlign: 'center',
   },
   googleButton: {
-    backgroundColor: Colors.light.onPrimary,
-    borderBlockColor: Colors.light.primary,
     borderWidth: 1,
     paddingVertical: 16,
     borderRadius: 8,
@@ -237,13 +230,11 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   googleButtonText: {
-    color: Colors.light.placeholder,
     fontWeight: '600',
     fontSize: 18,
     textAlign: 'center',
   },
   appleButton: {
-    backgroundColor: '#000000',
     paddingVertical: 16,
     borderRadius: 8,
     marginBottom: 16,
@@ -257,7 +248,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   appleButtonText: {
-    color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 18,
     textAlign: 'center',
@@ -270,11 +260,9 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.light.border,
   },
   dividerText: {
     marginHorizontal: 12,
-    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
   forgotPasswordButton: {
@@ -283,21 +271,17 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   forgotPasswordText: {
-    color: Colors.light.primary,
     fontSize: 14,
     fontWeight: '500',
   },
   signupText: {
     textAlign: 'center',
-    color: Colors.light.secondaryText,
     fontSize: 14,
   },
   signupLink: {
-    color: Colors.light.primary,
     fontWeight: '600',
   },
   errorText: {
-    color: '#ef4444',
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,

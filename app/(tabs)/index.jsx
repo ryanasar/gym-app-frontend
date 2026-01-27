@@ -10,6 +10,7 @@ import { getFollowingPosts } from '../api/postsApi';
 import Activity from '../components/common/Activity';
 import EmptyState from '../components/common/EmptyState';
 import { useThemeColors } from '../hooks/useThemeColors';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 export default function HomeScreen() {
   const colors = useThemeColors();
@@ -141,9 +142,7 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <LoadingSpinner fullScreen />
       </View>
     );
   }

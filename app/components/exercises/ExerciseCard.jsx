@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { getMuscleInfo } from '../../data/exercises/muscleGroups';
+import Badge from '../ui/Badge';
 
 // Helper to format equipment names: "pull_up_bar" → "Pull Up Bar"
 const formatEquipmentName = (equipment) => {
@@ -55,11 +56,7 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false, 
             {name}
           </Text>
           {showCategory && (
-            <View style={[styles.categoryBadge, { backgroundColor: colors.borderLight }]}>
-              <Text style={[styles.categoryText, { color: colors.secondaryText }]}>
-                {categoryIcon[category]} {category}
-              </Text>
-            </View>
+            <Badge label={`${categoryIcon[category]} ${category}`} size="sm" />
           )}
         </View>
 
@@ -69,11 +66,7 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false, 
             🏋️ {formatEquipmentName(equipment)}
           </Text>
           {isCustom ? (
-            <View style={[styles.customBadge, { backgroundColor: colors.accent + '20' }]}>
-              <Text style={[styles.customBadgeText, { color: colors.accent }]}>
-                Custom
-              </Text>
-            </View>
+            <Badge label="Custom" color={colors.accent} size="sm" />
           ) : (
             <View style={[styles.difficultyBadge, { backgroundColor: difficultyColor[difficulty] }]}>
               <Text style={styles.difficultyText}>
@@ -89,14 +82,7 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false, 
             <Text style={[styles.muscleLabel, { color: colors.text }]}>Primary:</Text>
             <View style={styles.muscleList}>
               {primaryMuscleInfo.map((muscle, index) => (
-                <View
-                  key={index}
-                  style={[styles.muscleBadge, { backgroundColor: muscle?.color + '20' }]}
-                >
-                  <Text style={[styles.muscleText, { color: muscle?.color }]}>
-                    {muscle?.icon} {muscle?.name}
-                  </Text>
-                </View>
+                <Badge key={index} label={`${muscle?.icon} ${muscle?.name}`} color={muscle?.color} size="sm" />
               ))}
             </View>
 
@@ -109,7 +95,7 @@ const ExerciseCard = ({ exercise, onPress, showMuscles = true, compact = false, 
                     return (
                       <View
                         key={index}
-                        style={[styles.muscleBadge, styles.secondaryMuscle, { backgroundColor: colors.borderLight }]}
+                        style={[styles.secondaryMuscle, { backgroundColor: colors.borderLight }]}
                       >
                         <Text style={[styles.secondaryMuscleText, { color: colors.secondaryText }]}>
                           {muscleInfo?.name}
@@ -163,26 +149,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  customBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  customBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  categoryBadge: {
-    backgroundColor: Colors.light.borderLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.light.secondaryText,
-  },
   metaInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -220,19 +186,11 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 8,
   },
-  muscleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  muscleText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
   secondaryMuscle: {
     backgroundColor: Colors.light.borderLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
   },
   secondaryMuscleText: {
     fontSize: 11,

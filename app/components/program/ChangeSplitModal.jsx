@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import EmptyState from '../common/EmptyState';
+import ModalHeader from '../ui/ModalHeader';
 
 const ChangeSplitModal = ({ visible, onClose, currentSplit, otherSplits, onSelectSplit }) => {
   return (
@@ -21,13 +22,7 @@ const ChangeSplitModal = ({ visible, onClose, currentSplit, otherSplits, onSelec
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Switch Active Split</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={Colors.light.text} />
-            </TouchableOpacity>
-          </View>
+          <ModalHeader title="Switch Active Split" onClose={onClose} style={{ borderBottomWidth: 0, paddingHorizontal: 24 }} />
 
           {/* Current Split Info */}
           {currentSplit && (
@@ -111,27 +106,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.light.borderLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
   // Current Split Section
   currentSplitSection: {
     paddingHorizontal: 24,

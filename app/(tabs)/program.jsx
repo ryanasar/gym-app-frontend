@@ -5,6 +5,7 @@ import { deleteSplit, getSplitsByUserId } from '../api/splitsApi';
 import { useAuth } from '../auth/auth';
 import ChangeSplitModal from '../components/program/ChangeSplitModal';
 import SplitCard from '../components/program/SplitCard';
+import ScreenHeader from '../components/ui/ScreenHeader';
 import { Colors } from '../constants/colors';
 import { useSync } from '../contexts/SyncContext';
 import { useWorkout } from '../contexts/WorkoutContext';
@@ -291,9 +292,10 @@ const ProgramScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Program</Text>
-      </View>
+      <ScreenHeader
+        title="Program"
+        style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -423,11 +425,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.light.text,
   },
   scrollView: {
     flex: 1,

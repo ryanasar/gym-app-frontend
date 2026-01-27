@@ -32,6 +32,7 @@ export {
 // Sync service
 export {
   syncPendingWorkouts,
+  syncPendingCustomExercises,
   backgroundSync,
   getSyncStatus,
   checkNetworkStatus,

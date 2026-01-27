@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import ModalHeader from '../ui/ModalHeader';
+import Button from '../ui/Button';
 
 const BeginSplitCard = ({ split, onDaySelected }) => {
   const colors = useThemeColors();
@@ -56,14 +58,13 @@ const BeginSplitCard = ({ split, onDaySelected }) => {
         </View>
 
         {/* Begin Button */}
-        <TouchableOpacity
-          style={[styles.beginButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
+        <Button
+          title="Begin Split"
+          icon="play-circle"
           onPress={handleBeginSplit}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="play-circle" size={24} color="#FFFFFF" />
-          <Text style={styles.beginButtonText}>Begin Split</Text>
-        </TouchableOpacity>
+          size="lg"
+          style={{ shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 }}
+        />
       </View>
 
       {/* Day Picker Modal */}
@@ -75,16 +76,7 @@ const BeginSplitCard = ({ split, onDaySelected }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Choose Starting Day</Text>
-              <TouchableOpacity
-                onPress={() => setShowDayPicker(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={28} color={colors.text} />
-              </TouchableOpacity>
-            </View>
+            <ModalHeader title="Choose Starting Day" onClose={() => setShowDayPicker(false)} />
 
             <Text style={[styles.modalSubtitle, { color: colors.secondaryText }]}>
               Select which day you'd like to start with
@@ -219,25 +211,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  beginButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  beginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -250,17 +223,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
     maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
   },
   modalSubtitle: {
     fontSize: 14,

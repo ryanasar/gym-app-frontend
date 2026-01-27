@@ -15,7 +15,8 @@ import { useThemeColors } from '../hooks/useThemeColors';
 import EmptyState from '../components/common/EmptyState';
 import { createSplit } from '../api/splitsApi';
 import { useAuth } from '../auth/auth';
-import { getCustomExerciseById, createCustomExercise } from '../api/customExercisesApi';
+import { copyCustomExercises } from '../api/customExercisesApi';
+import { checkNetworkStatus } from '../../services/networkService';
 
 const ViewSplitScreen = () => {
   const colors = useThemeColors();
@@ -37,31 +38,47 @@ const ViewSplitScreen = () => {
 
     setSaving(true);
     try {
-      // First, find and copy any custom exercises
-      const customExerciseIdMap = {}; // Maps old custom exercise ID to new ID
       const allExercises = (splitData.workoutDays || []).flatMap(day => day.exercises || []);
+      let customExerciseIdMap = {};
 
-      // Find unique custom exercise IDs (those starting with 'custom_')
+      // Find custom exercise IDs: legacy 'custom_*' prefix OR isCustom flag with numeric ID >= 10000
       const customExerciseIds = [...new Set(
         allExercises
-          .filter(ex => ex.id && String(ex.id).startsWith('custom_'))
+          .filter(ex => {
+            if (!ex.id) return false;
+            const idStr = String(ex.id);
+            if (idStr.startsWith('custom_')) return true;
+            if (ex.isCustom && parseInt(ex.id) >= 10000) return true;
+            return false;
+          })
           .map(ex => ex.id)
       )];
 
-      // Copy each custom exercise with a new ID
-      for (const oldId of customExerciseIds) {
-        const originalExercise = await getCustomExerciseById(oldId);
-        if (originalExercise) {
-          // Create a copy with new ID
-          const newExercise = await createCustomExercise({
-            name: originalExercise.name,
-            category: originalExercise.category,
-            primaryMuscles: originalExercise.primaryMuscles,
-            secondaryMuscles: originalExercise.secondaryMuscles,
-            equipment: originalExercise.equipment,
-            difficulty: originalExercise.difficulty,
-          });
-          customExerciseIdMap[oldId] = newExercise.id;
+      if (customExerciseIds.length > 0) {
+        const isOnline = await checkNetworkStatus();
+        if (isOnline) {
+          // Filter to only numeric (backend) IDs for the copy endpoint
+          const numericIds = customExerciseIds
+            .map(id => parseInt(id))
+            .filter(id => !isNaN(id) && id >= 10000);
+
+          if (numericIds.length > 0) {
+            try {
+              const result = await copyCustomExercises(numericIds, user.id);
+              // result.idMapping: { oldId: newId }
+              Object.entries(result.idMapping).forEach(([oldId, newId]) => {
+                customExerciseIdMap[oldId] = String(newId);
+                customExerciseIdMap[String(oldId)] = String(newId);
+              });
+            } catch (err) {
+              console.warn('[ViewSplit] Backend copy failed:', err.message);
+            }
+          }
+        } else {
+          Alert.alert(
+            'Offline',
+            'Custom exercises in this split cannot be copied while offline. The split will be saved but custom exercises may not work correctly until you\'re online.'
+          );
         }
       }
 
@@ -72,7 +89,7 @@ const ViewSplitScreen = () => {
         description: splitData.description || '',
         emoji: splitData.emoji || '💪',
         numDays: splitData.totalDays || splitData.numDays || splitData.workoutDays?.length || 0,
-        isPublic: false, // Make the copy private by default
+        isPublic: false,
         workoutDays: (splitData.workoutDays || []).map((day, index) => ({
           dayNumber: index + 1,
           workoutName: day.name || day.workoutName || `Day ${index + 1}`,
@@ -81,10 +98,9 @@ const ViewSplitScreen = () => {
           emoji: day.emoji || '',
           isRestDay: day.isRest || day.isRestDay || (!day.exercises || day.exercises.length === 0),
           exercises: (day.exercises || []).map(ex => {
-            // If this exercise has a custom ID, update to the new copied ID
-            const exerciseId = ex.id && String(ex.id).startsWith('custom_')
-              ? customExerciseIdMap[ex.id] || ex.id
-              : ex.id;
+            // Remap custom exercise IDs to the new copied IDs
+            const idStr = String(ex.id);
+            const exerciseId = customExerciseIdMap[idStr] || ex.id;
 
             return {
               id: exerciseId,
@@ -93,7 +109,6 @@ const ViewSplitScreen = () => {
               reps: ex.reps?.toString() || '10',
               restSeconds: ex.restTime || ex.restSeconds || '',
               notes: ex.notes || '',
-              // Copy custom exercise metadata if available
               ...(ex.isCustom && {
                 isCustom: true,
                 category: ex.category,

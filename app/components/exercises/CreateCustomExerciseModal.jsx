@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { getAllMuscleGroups } from '../../data/exercises/muscleGroups';
+import ModalHeader from '../ui/ModalHeader';
 
 const CATEGORIES = [
   { id: 'compound', label: 'Compound', icon: '' },
@@ -144,26 +145,25 @@ const CreateCustomExerciseModal = ({ visible, onClose, onSave }) => {
       onRequestClose={handleClose}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
-          <TouchableOpacity onPress={handleClose} disabled={saving}>
-            <Text style={[styles.cancelText, { color: colors.primary }]}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.text }]}>New Exercise</Text>
-          <TouchableOpacity onPress={handleSave} disabled={saving || !name.trim()}>
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Text style={[
-                styles.saveText,
-                { color: colors.primary },
-                !name.trim() && { color: colors.placeholder },
-              ]}>
-                Save
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <ModalHeader
+          title="New Exercise"
+          onClose={handleClose}
+          rightAction={
+            <TouchableOpacity onPress={handleSave} disabled={saving || !name.trim()}>
+              {saving ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[
+                  { fontSize: 16, fontWeight: '600', color: colors.primary },
+                  !name.trim() && { color: colors.placeholder },
+                ]}>
+                  Save
+                </Text>
+              )}
+            </TouchableOpacity>
+          }
+          style={{ paddingTop: 60, borderBottomColor: colors.borderLight }}
+        />
 
         <ScrollView
           style={styles.scrollView}
@@ -276,27 +276,6 @@ export default CreateCustomExerciseModal;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  saveText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   scrollView: {
     flex: 1,

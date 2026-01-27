@@ -421,6 +421,8 @@ const CreatePostScreen = () => {
           placeholder="How did your workout go? Share your thoughts..."
           placeholderTextColor={colors.placeholder}
           multiline
+          blurOnSubmit
+          returnKeyType="done"
           value={description}
           onChangeText={setDescription}
           maxLength={500}

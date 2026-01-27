@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { supabase } from '../../supabase';
 import { useRouter } from 'expo-router';
-import { Colors } from '../constants/colors';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { useNetwork } from '../contexts/NetworkContext';
 
 export default function SignUpScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { isOffline } = useNetwork();
 
@@ -52,7 +53,7 @@ export default function SignUpScreen() {
   };
 
   return (
-    <View style={styles.flex}>
+    <View style={[styles.flex, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -63,15 +64,15 @@ export default function SignUpScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.formContainer}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Sign up to get started</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Sign up to get started</Text>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
               placeholder="Email"
               autoCapitalize="none"
               keyboardType="email-address"
-              placeholderTextColor={Colors.light.placeholder}
+              placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={setEmail}
               maxLength={100}
@@ -79,11 +80,11 @@ export default function SignUpScreen() {
             />
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
               placeholder="Password"
               autoCapitalize="none"
               secureTextEntry
-              placeholderTextColor={Colors.light.placeholder}
+              placeholderTextColor={colors.placeholder}
               value={password}
               onChangeText={setPassword}
               maxLength={128}
@@ -97,16 +98,16 @@ export default function SignUpScreen() {
             )}
 
             {error ? (
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
             ) : null}
 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleSignup}>
-              <Text style={styles.primaryButtonText}>Sign Up</Text>
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={handleSignup}>
+              <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Sign Up</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleLoginNavigate}>
-              <Text style={styles.signupText}>
-                Already have an account? <Text style={styles.signupLink}>Log In</Text>
+              <Text style={[styles.signupText, { color: colors.secondaryText }]}>
+                Already have an account? <Text style={[styles.signupLink, { color: colors.primary }]}>Log In</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -119,7 +120,6 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -134,51 +134,41 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: Colors.light.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
     marginBottom: 32,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: Colors.light.inputBackground,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.light.border,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.light.text,
     marginBottom: 16,
   },
   primaryButton: {
-    backgroundColor: Colors.light.primary,
     paddingVertical: 16,
     borderRadius: 8,
     marginBottom: 24,
   },
   primaryButtonText: {
-    color: Colors.light.onPrimary,
     fontWeight: '600',
     fontSize: 18,
     textAlign: 'center',
   },
   signupText: {
     textAlign: 'center',
-    color: Colors.light.secondaryText,
     fontSize: 14,
   },
   signupLink: {
-    color: Colors.light.primary,
     fontWeight: '600',
   },
   errorText: {
-    color: '#ef4444',
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
