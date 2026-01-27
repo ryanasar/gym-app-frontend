@@ -603,17 +603,16 @@ export const WorkoutProvider = ({ children }) => {
     const today = getLocalDateString();
 
     try {
-      // First, complete all storage operations
-      await AsyncStorage.setItem('lastCompletionDate', today);
-      await AsyncStorage.setItem('lastCheckDate', today);
       if (workoutSessionId) {
+        await AsyncStorage.setItem('lastCompletionDate', today);
+        await AsyncStorage.setItem('lastCheckDate', today);
         await AsyncStorage.setItem('completedSessionId', workoutSessionId.toString());
 
         // Mark today as completed in calendar
         const { markTodayCompleted } = await import('../../storage/calendarStorage.js');
         await markTodayCompleted(isRestDay);
       } else {
-        await AsyncStorage.removeItem('completedSessionId');
+        await AsyncStorage.multiRemove(['completedSessionId', 'lastCompletionDate', 'lastCheckDate']);
 
         // Unmark today in calendar (uncomplete)
         const { unmarkTodayCompleted } = await import('../../storage/calendarStorage.js');
@@ -626,7 +625,7 @@ export const WorkoutProvider = ({ children }) => {
         timestamp: new Date().toISOString(),
       });
 
-      setLastCompletionDate(today);
+      setLastCompletionDate(workoutSessionId ? today : null);
       setTodaysWorkoutCompleted(workoutSessionId !== null);
       setCompletedSessionId(workoutSessionId);
     } catch (error) {
@@ -686,23 +685,22 @@ export const WorkoutProvider = ({ children }) => {
   // Refresh today's workout from local storage
   const refreshTodaysWorkout = useCallback(async () => {
     try {
-      // Re-read split from local storage
+      // Read all async data first
       const localSplit = await storage.getSplit();
-      setActiveSplit(localSplit); // Set to null if no split found
-
+      let newWeek, newDayIndex;
       if (localSplit) {
-        // Re-read progress from local storage
         const savedWeek = await AsyncStorage.getItem('currentWeek');
         const savedDayIndex = await AsyncStorage.getItem('currentDayIndex');
+        newWeek = savedWeek ? parseInt(savedWeek, 10) : undefined;
+        newDayIndex = savedDayIndex ? parseInt(savedDayIndex, 10) : undefined;
+      }
 
-        if (savedWeek) {
-          setCurrentWeek(parseInt(savedWeek, 10));
-        }
-        if (savedDayIndex) {
-          setCurrentDayIndex(parseInt(savedDayIndex, 10));
-        }
+      // Set all state synchronously — React batches into one render
+      setActiveSplit(localSplit);
+      if (newWeek !== undefined) setCurrentWeek(newWeek);
+      if (newDayIndex !== undefined) setCurrentDayIndex(newDayIndex);
 
-        // Re-check today's workout status
+      if (localSplit) {
         await checkTodaysWorkoutStatus();
       }
     } catch (error) {

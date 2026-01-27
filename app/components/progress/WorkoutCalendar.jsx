@@ -228,7 +228,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                     // Regular workout days
                     day.hasWorkout && !day.isRestDay && { backgroundColor: colors.primary },
                     // Rest days (only if actually logged/completed)
-                    day.hasWorkout && day.isRestDay && { backgroundColor: colors.accent + '40' },
+                    day.hasWorkout && day.isRestDay && { backgroundColor: colors.accent + '80' },
                     // Today's border (applied last to override colors if needed)
                     // Use white border in dark mode for better visibility
                     day.isToday && { borderWidth: 2, borderColor: isDarkMode ? '#FFFFFF' : colors.primary },

@@ -25,7 +25,7 @@ const palette = {
 
   // Dark theme
   darkText: '#F8FAFC',
-  darkSecondaryText: '#94A3B8',
+  darkSecondaryText: '#B4C0CE',
   darkBackground: '#0A0A0F',
   darkIcon: '#94A3B8',
   darkTint: '#F8FAFC',
