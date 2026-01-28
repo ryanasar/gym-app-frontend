@@ -82,9 +82,10 @@ export const unlikePost = async (postId, userId) => {
   }
 };
 
-export const getComments = async (postId) => {
+export const getComments = async (postId, userId) => {
   try {
-    const response = await axios.get(`${BACKEND_API_URL}/posts/${postId}/comments`);
+    const params = userId ? { userId } : {};
+    const response = await axios.get(`${BACKEND_API_URL}/posts/${postId}/comments`, { params });
     return response.data;
   } catch (error) {
     console.error('Failed to fetch comments:', error);

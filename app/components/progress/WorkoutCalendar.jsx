@@ -45,6 +45,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
       const workoutDay = workoutsByDay.find(w => w.date === dateStr);
       const hasWorkout = !!workoutDay;
       let isRestDay = workoutDay?.isRestDay || false;
+      let isFreeRestDay = workoutDay?.isFreeRestDay || false;
 
       // If this is today and we have todaysWorkout info, check if it's a rest day
       const isToday = dateStr === todayStr;
@@ -60,6 +61,7 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
         date: dateStr,
         hasWorkout,
         isRestDay,
+        isFreeRestDay,
         day: date.getDate(),
         month: date.getMonth(),
         dayOfWeek: date.getDay(),
@@ -228,7 +230,9 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                     // Regular workout days
                     day.hasWorkout && !day.isRestDay && { backgroundColor: colors.primary },
                     // Rest days (only if actually logged/completed)
-                    day.hasWorkout && day.isRestDay && { backgroundColor: colors.accent + '80' },
+                    day.hasWorkout && day.isRestDay && !day.isFreeRestDay && { backgroundColor: colors.accent + '80' },
+                    // Free rest days (amber/warning color)
+                    day.hasWorkout && day.isFreeRestDay && { backgroundColor: colors.warning + '80' },
                     // Today's border (applied last to override colors if needed)
                     // Use white border in dark mode for better visibility
                     day.isToday && { borderWidth: 2, borderColor: isDarkMode ? '#FFFFFF' : colors.primary },
@@ -241,7 +245,8 @@ const WorkoutCalendar = ({ workoutsByDay = [], todaysWorkout = null }) => {
                       // Future days - more faded text
                       day.isFuture && { color: colors.secondaryText + '50' },
                       day.hasWorkout && { color: colors.onPrimary },
-                      day.hasWorkout && day.isRestDay && { color: colors.text },
+                      day.hasWorkout && day.isRestDay && !day.isFreeRestDay && { color: colors.text },
+                      day.hasWorkout && day.isFreeRestDay && { color: colors.text },
                       day.isToday && !day.hasWorkout && { color: isDarkMode ? '#FFFFFF' : colors.primary, fontWeight: '700' },
                     ]}
                   >

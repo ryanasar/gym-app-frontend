@@ -105,4 +105,5 @@ export const STORAGE_KEYS = {
   WORKOUT_ID_MAP: '@gymvy/workout_id_map',
   SAVED_WORKOUTS: '@gymvy/saved_workouts',
   CUSTOM_EXERCISES: '@gymvy/custom_exercises',
+  BODY_WEIGHT_LOG: '@gymvy/body_weight_log',
 };

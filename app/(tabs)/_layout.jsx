@@ -114,10 +114,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: "Explore",
+          title: "Progress",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "search" : "search-outline"}
+              name={focused ? "stats-chart" : "stats-chart-outline"}
               size={24}
               color={color}
             />

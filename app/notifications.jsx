@@ -77,6 +77,8 @@ const NotificationsScreen = () => {
         return 'started following you';
       case 'tag':
         return 'tagged you in a post';
+      case 'comment_like':
+        return 'liked your comment';
       default:
         return 'interacted with you';
     }
@@ -92,6 +94,8 @@ const NotificationsScreen = () => {
         return { name: 'person-add', color: colors.accent };
       case 'tag':
         return { name: 'pricetag', color: colors.primary };
+      case 'comment_like':
+        return { name: 'heart', color: colors.error };
       default:
         return { name: 'notifications', color: colors.secondaryText };
     }
@@ -133,12 +137,12 @@ const NotificationsScreen = () => {
       return;
     }
 
-    // For like/comment/tag notifications, go to the post
-    if ((notification.type === 'like' || notification.type === 'comment' || notification.type === 'tag') && notification.post_id) {
+    // For like/comment/tag/comment_like notifications, go to the post
+    if ((notification.type === 'like' || notification.type === 'comment' || notification.type === 'tag' || notification.type === 'comment_like') && notification.post_id) {
       router.push({
         pathname: `/post/${notification.post_id}`,
         params: {
-          openComments: notification.type === 'comment' ? 'true' : 'false'
+          openComments: (notification.type === 'comment' || notification.type === 'comment_like') ? 'true' : 'false'
         }
       });
     }

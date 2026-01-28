@@ -1166,11 +1166,19 @@ const WorkoutSessionScreen = () => {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Save & Exit',
-          onPress: () => {
-            // Keep Live Activity running so user can resume later
-            // (or stop it if you prefer to end it on pause)
+          onPress: async () => {
             LiveActivity.stopWorkout();
             liveActivityStartedRef.current = false;
+
+            // Save current in-progress set data before exiting
+            if (workoutSessionId && currentExercise && currentSet) {
+              try {
+                await saveSetToStorage(currentExerciseIndex, currentSetIndex, currentSet);
+              } catch (error) {
+                console.error('[Session] Error saving current set on exit:', error);
+              }
+            }
+
             router.replace({
               pathname: '/(tabs)/workout',
               params: { paused: 'true' }

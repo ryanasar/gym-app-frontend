@@ -189,6 +189,53 @@ export const deleteCommentNotification = async (actorId, postId, commentId) => {
 };
 
 /**
+ * Create a notification for a comment like action
+ */
+export const createCommentLikeNotification = async (recipientId, actorId, postId, commentId) => {
+  if (recipientId === actorId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('Notifications')
+      .insert({
+        recipient_id: recipientId,
+        actor_id: actorId,
+        type: 'comment_like',
+        post_id: postId,
+        comment_id: commentId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating comment like notification:', error);
+    return null;
+  }
+};
+
+/**
+ * Delete a comment like notification (when unliking a comment)
+ */
+export const deleteCommentLikeNotification = async (actorId, commentId) => {
+  try {
+    const { error } = await supabase
+      .from('Notifications')
+      .delete()
+      .eq('actor_id', actorId)
+      .eq('comment_id', commentId)
+      .eq('type', 'comment_like');
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting comment like notification:', error);
+    return false;
+  }
+};
+
+/**
  * Delete a follow notification (when unfollowing)
  */
 export const deleteFollowNotification = async (actorId, recipientId) => {

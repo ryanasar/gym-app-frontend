@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { ActivityIndicator, Alert, Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, RefreshControl, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import CelebrationAnimation from '../components/animations/CelebrationAnimation';
 import RestDayCard from '../components/workout/RestDayCard';
+import FreeRestDayCard from '../components/workout/FreeRestDayCard';
 import BeginSplitCard from '../components/workout/BeginSplitCard';
 import EmptyState from '../components/common/EmptyState';
 import ExerciseCard from '../components/exercises/ExerciseCard';
@@ -16,6 +17,7 @@ import { useSync } from '../contexts/SyncContext';
 import { useAuth } from '../auth/auth';
 import { getActiveWorkout, storage, calculateStreakFromLocal, unmarkTodayCompleted } from '../../storage';
 import { getCalendarData } from '../../storage/calendarStorage';
+import { isFreeRestDayAvailable, clearFreeRestDayUsageForToday } from '../../storage/freeRestDayStorage';
 import { clearLocalSplit, debugLocalSplit } from '../utils/clearLocalSplit';
 import { updateSplit } from '../api/splitsApi';
 import { getTodaysWorkoutPost } from '../api/postsApi';
@@ -36,6 +38,7 @@ const WorkoutScreen = () => {
     todaysWorkout,
     activeSplit,
     markWorkoutCompleted,
+    markFreeRestDay,
     todaysWorkoutCompleted,
     completedSessionId: cachedSessionId,
     refreshTodaysWorkout,
@@ -71,6 +74,22 @@ const WorkoutScreen = () => {
       };
       checkIfPosted();
     }, [todaysWorkoutCompleted, user?.id])
+  );
+
+  // Check free rest day availability on focus
+  useFocusEffect(
+    useCallback(() => {
+      const checkFreeRestDay = async () => {
+        const isRest = todaysWorkout?.isRest || (todaysWorkout?.exercises?.length === 0 && todaysWorkout?.dayName === 'Rest Day');
+        if (!isRest && !todaysWorkoutCompleted && todaysWorkout) {
+          const available = await isFreeRestDayAvailable();
+          setFreeRestDayAvailable(available);
+        } else {
+          setFreeRestDayAvailable(false);
+        }
+      };
+      checkFreeRestDay();
+    }, [todaysWorkoutCompleted, todaysWorkout])
   );
 
   // Handle pull-to-refresh
@@ -120,7 +139,9 @@ const WorkoutScreen = () => {
   const [hasPosted, setHasPosted] = useState(false);
   const [isExercisesExpanded, setIsExercisesExpanded] = useState(false);
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
+  const skipAutoResumeRef = useRef(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [freeRestDayAvailable, setFreeRestDayAvailable] = useState(false);
   const [showChangeDayModal, setShowChangeDayModal] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [localExercises, setLocalExercises] = useState([]);
@@ -223,13 +244,19 @@ const WorkoutScreen = () => {
 
   // Check for active workout and auto-resume
   useEffect(() => {
+    // Latch the skip flag when arriving from pause/complete/discard so it
+    // survives across effect re-runs even if route params get cleared.
+    if (params.paused === 'true' || params.completed === 'true' || params.discarded === 'true') {
+      skipAutoResumeRef.current = true;
+    }
+
     const checkAndResumeWorkout = async () => {
       try {
         const activeWorkout = await getActiveWorkout();
         setHasActiveWorkout(!!activeWorkout);
 
         // Don't auto-resume if we just paused, completed, or discarded a workout
-        if (params.paused === 'true' || params.completed === 'true' || params.discarded === 'true') {
+        if (skipAutoResumeRef.current) {
           return;
         }
 
@@ -745,6 +772,73 @@ const WorkoutScreen = () => {
     );
   }
 
+  // Show Free Rest Day Card when a free rest day has been taken today
+  if (todaysWorkoutCompleted && completedSessionId === 'free-rest-day') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { backgroundColor: colors.warning }]}>
+          <Text style={[styles.title, { color: '#FFFFFF' }]}>Today's Workout</Text>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          }
+        >
+          <View style={styles.contentContainer}>
+            <FreeRestDayCard
+              splitName={activeSplit?.name}
+              splitEmoji={activeSplit?.emoji}
+              weekNumber={todaysWorkout?.weekNumber}
+              dayNumber={todaysWorkout?.dayNumber}
+              originalWorkoutName={todaysWorkout?.dayName}
+              onRestLogged={() => {
+                setShowCelebration(true);
+              }}
+              onUndoRestDay={() => {
+                Alert.alert(
+                  'Undo Free Rest Day?',
+                  'This will restore your free rest day for this week and you can resume your workout.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Undo',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await markWorkoutCompleted(null);
+                          await clearFreeRestDayUsageForToday();
+                          await AsyncStorage.removeItem('freeRestDayDate');
+                          setFreeRestDayAvailable(true);
+                        } catch (error) {
+                          console.error('[Workout Tab] Error undoing free rest day:', error);
+                          Alert.alert('Error', 'Failed to undo free rest day. Please try again.');
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+            />
+          </View>
+        </ScrollView>
+
+        {/* Celebration Animation */}
+        {showCelebration && (
+          <CelebrationAnimation
+            key={Date.now()}
+            onAnimationComplete={() => {
+              setShowCelebration(false);
+              setIsToggling(false);
+            }}
+          />
+        )}
+      </View>
+    );
+  }
+
   const handleToggleCompletion = async () => {
     // Prevent multiple clicks
     if (isToggling) return;
@@ -967,6 +1061,31 @@ const WorkoutScreen = () => {
                     <Ionicons name="create-outline" size={18} color={colors.text} />
                     <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Edit Workout</Text>
                   </TouchableOpacity>
+                  {freeRestDayAvailable && (
+                    <TouchableOpacity
+                      style={styles.optionsMenuItem}
+                      onPress={() => {
+                        setShowOptionsMenu(false);
+                        Alert.alert(
+                          'Take Free Rest Day?',
+                          'This will use your free rest day for the week. Your current workout will be waiting tomorrow.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Take Rest Day',
+                              onPress: async () => {
+                                await markFreeRestDay();
+                                setFreeRestDayAvailable(false);
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="bed-outline" size={18} color={colors.warning} />
+                      <Text style={[styles.optionsMenuItemText, { color: colors.warning }]}>Take Free Rest Day</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </>
             )}
@@ -1032,12 +1151,15 @@ const WorkoutScreen = () => {
                       { backgroundColor: colors.primary, shadowColor: colors.primary },
                       !hasExercises && styles.startWorkoutButtonDisabled
                     ]}
-                    onPress={() => router.push({
-                      pathname: '/workout/session',
-                      params: {
-                        workoutData: JSON.stringify(todaysWorkout)
-                      }
-                    })}
+                    onPress={() => {
+                      skipAutoResumeRef.current = false;
+                      router.push({
+                        pathname: '/workout/session',
+                        params: {
+                          workoutData: JSON.stringify(todaysWorkout)
+                        }
+                      });
+                    }}
                     disabled={!hasExercises}
                     activeOpacity={!hasExercises ? 1 : 0.7}
                   >

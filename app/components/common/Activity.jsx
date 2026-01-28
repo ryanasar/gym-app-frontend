@@ -274,7 +274,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
 
       {/* Content Body */}
       <View style={[styles.contentBody, !imageUrl && styles.contentBodyNoImage]}>
-        <Text style={[styles.typeLabel, { color: colors.primary }]}>{isRestDay ? 'REST DAY' : 'WORKOUT'}</Text>
+        <Text style={[styles.typeLabel, { color: isRestDay ? colors.accent : colors.primary }]}>{isRestDay ? 'REST DAY' : 'WORKOUT'}</Text>
         {isRestDay ? (
           <Text style={[styles.workoutName, { color: colors.text }]}>Rest & Recover</Text>
         ) : (

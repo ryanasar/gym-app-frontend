@@ -1,131 +1,218 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { searchUsers } from '../api/usersApi';
 import { useAuth } from '../auth/auth';
-import { useSync } from '../contexts/SyncContext';
-import EmptyState from '../components/common/EmptyState';
+import { useWorkout } from '../contexts/WorkoutContext';
 import { useThemeColors } from '../hooks/useThemeColors';
-import Avatar from '../components/ui/Avatar';
+import { storage } from '../../storage';
+import { getBodyWeightLog, addBodyWeightEntry } from '../../storage/bodyWeightStorage';
+import { getBodyWeightEntries, createBodyWeightEntry } from '../api/bodyWeightApi';
+import { getWorkoutSessionsByUserId } from '../api/workoutSessionsApi';
+import { getBestOneRMFromSets } from '../utils/oneRMCalculator';
+import BodyWeightCard from '../components/progress/BodyWeightCard';
+import ExerciseOneRMCard from '../components/progress/ExerciseOneRMCard';
+import EmptyState from '../components/common/EmptyState';
 
-export default function ExploreScreen() {
+export default function ProgressScreen() {
   const colors = useThemeColors();
-  const router = useRouter();
   const { user } = useAuth();
-  const { manualSync } = useSync();
+  const { activeSplit, exerciseDatabase } = useWorkout();
 
-  // Auto-sync when explore tab is focused
+  const [bodyWeightData, setBodyWeightData] = useState([]);
+  const [exerciseOneRMData, setExerciseOneRMData] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      // Load body weight data
+      let localEntries = await getBodyWeightLog();
+
+      // Try to fetch and merge backend entries
+      if (user?.id) {
+        try {
+          const backendEntries = await getBodyWeightEntries(user.id);
+          if (backendEntries && backendEntries.length > 0) {
+            const localDates = new Set(localEntries.map(e => e.date));
+            for (const be of backendEntries) {
+              const dateStr = be.date.split('T')[0];
+              if (!localDates.has(dateStr)) {
+                localEntries.push({
+                  date: dateStr,
+                  weight: be.weight,
+                  timestamp: be.createdAt,
+                });
+              }
+            }
+            localEntries.sort((a, b) => a.date.localeCompare(b.date));
+          }
+        } catch {
+          // Backend fetch failed, use local data only
+        }
+      }
+
+      setBodyWeightData(localEntries);
+
+      // Load 1RM data for active split exercises
+      if (activeSplit?.days && Object.keys(exerciseDatabase).length > 0) {
+        const completedHistory = await storage.getCompletedHistory();
+        const exerciseIds = new Set();
+
+        // Collect unique non-custom exercise IDs from active split
+        for (const day of activeSplit.days) {
+          if (day.isRest || !day.exercises) continue;
+          for (const ex of day.exercises) {
+            const id = String(ex.exerciseId || ex.id);
+            if (id.startsWith('custom_')) continue;
+            if (exerciseDatabase[id]) {
+              exerciseIds.add(id);
+            }
+          }
+        }
+
+        // Fetch backend workout sessions for historical data
+        let backendSessions = [];
+        if (user?.id) {
+          try {
+            backendSessions = await getWorkoutSessionsByUserId(user.id) || [];
+          } catch {
+            // Backend unavailable, use local only
+          }
+        }
+
+        // Calculate 1RM data for each exercise from both sources
+        const oneRMResults = [];
+        for (const exerciseId of exerciseIds) {
+          const exerciseInfo = exerciseDatabase[exerciseId];
+          if (!exerciseInfo) continue;
+
+          const dataPointsByDate = {};
+
+          // Local completed history (uses exerciseId)
+          for (const workout of completedHistory) {
+            if (!workout.exercises) continue;
+            const match = workout.exercises.find(
+              e => String(e.exerciseId) === exerciseId
+            );
+            if (match?.sets) {
+              const bestOneRM = getBestOneRMFromSets(match.sets);
+              if (bestOneRM > 0) {
+                const d = workout.completedAt ? new Date(workout.completedAt) : new Date(workout.startedAt);
+                const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                if (!dataPointsByDate[dateStr] || bestOneRM > dataPointsByDate[dateStr]) {
+                  dataPointsByDate[dateStr] = bestOneRM;
+                }
+              }
+            }
+          }
+
+          // Backend sessions (uses exerciseTemplateId)
+          for (const session of backendSessions) {
+            if (!session.exercises || !session.completedAt) continue;
+            const match = session.exercises.find(
+              e => String(e.exerciseTemplateId) === exerciseId
+            );
+            if (match?.sets) {
+              const bestOneRM = getBestOneRMFromSets(match.sets);
+              if (bestOneRM > 0) {
+                const d = new Date(session.completedAt);
+                const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                if (!dataPointsByDate[dateStr] || bestOneRM > dataPointsByDate[dateStr]) {
+                  dataPointsByDate[dateStr] = bestOneRM;
+                }
+              }
+            }
+          }
+
+          const dataPoints = Object.entries(dataPointsByDate)
+            .map(([date, value]) => ({ date, value }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+          oneRMResults.push({
+            exerciseId,
+            exerciseName: exerciseInfo.name,
+            data: dataPoints,
+          });
+        }
+
+        setExerciseOneRMData(oneRMResults);
+      } else {
+        setExerciseOneRMData([]);
+      }
+    } catch (error) {
+      console.error('[ProgressScreen] Error loading data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [user?.id, activeSplit, exerciseDatabase]);
+
+  // Reload data when tab is focused
   useFocusEffect(
     useCallback(() => {
-      manualSync();
-    }, [manualSync])
+      setRefreshing(true);
+      loadData();
+    }, [loadData])
   );
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
 
-  // Debounce search
-  useEffect(() => {
-    const timeoutId = setTimeout(async () => {
-      if (searchQuery.trim()) {
-        setIsSearching(true);
-        try {
-          const results = await searchUsers(searchQuery, user?.id);
-          setSearchResults(results);
-        } catch (error) {
-          console.error('Search error:', error);
-        } finally {
-          setIsSearching(false);
-        }
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
+  const handleLogWeight = async (weight) => {
+    // Save locally
+    await addBodyWeightEntry(weight);
 
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, user?.id]);
+    // Fire-and-forget backend save
+    if (user?.id) {
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      createBodyWeightEntry(user.id, weight, dateStr).catch(() => {});
+    }
 
-  const handleUserPress = (username) => {
-    router.push(`/user/${username}`);
+    // Reload data
+    loadData();
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData();
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Explore</Text>
-
-        {/* Search Bar */}
-        <View style={[styles.searchContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-          <Text style={[styles.searchIcon, { color: colors.secondaryText }]}>🔍</Text>
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search users..."
-            placeholderTextColor={colors.placeholder}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {isSearching && (
-            <ActivityIndicator size="small" color={colors.primary} />
-          )}
-        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Progress</Text>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {searchResults.length > 0 ? (
-          <View style={styles.resultsContainer}>
-            {searchResults.map((result) => (
-              <TouchableOpacity
-                key={result.id}
-                style={[styles.userCard, { backgroundColor: colors.cardBackground, borderColor: colors.border, shadowColor: colors.shadow }]}
-                onPress={() => handleUserPress(result.username)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.userInfo}>
-                  <Avatar uri={result.profile?.avatarUrl} name={result.name || result.username} size={48} style={{ marginRight: 12 }} />
-                  <View style={styles.userDetails}>
-                    <View style={styles.nameRow}>
-                      <Text style={[styles.userName, { color: colors.text }]}>{result.name || result.username}</Text>
-                      {result.profile?.isVerified && (
-                        <Ionicons name="checkmark-circle" size={16} color="#1D9BF0" style={styles.verifiedBadge} />
-                      )}
-                    </View>
-                    <Text style={[styles.userUsername, { color: colors.secondaryText }]}>@{result.username}</Text>
-                    {result.profile?.bio && (
-                      <Text style={[styles.userBio, { color: colors.secondaryText }]} numberOfLines={1}>
-                        {result.profile.bio}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                <View style={styles.userStats}>
-                  <Text style={[styles.userStat, { color: colors.secondaryText }]}>
-                    {result._count?.posts || 0} posts
-                  </Text>
-                  <Text style={[styles.userStat, { color: colors.secondaryText }]}>
-                    {result._count?.followedBy || 0} followers
-                  </Text>
-                </View>
-              </TouchableOpacity>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
+      >
+        {/* Body Weight Card */}
+        <BodyWeightCard data={bodyWeightData} onLogWeight={handleLogWeight} />
+
+        {/* Strength Progress Section */}
+        {activeSplit && exerciseOneRMData.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Strength Progress</Text>
+            {exerciseOneRMData.map((exercise) => (
+              <ExerciseOneRMCard
+                key={exercise.exerciseId}
+                exerciseName={exercise.exerciseName}
+                data={exercise.data}
+              />
             ))}
-          </View>
-        ) : searchQuery.trim() && !isSearching ? (
+          </>
+        )}
+
+        {/* Empty state for no active split */}
+        {!activeSplit && (
           <EmptyState
-            emoji="😕"
-            title="No users found"
-            message="Try searching for a different username"
+            icon="barbell-outline"
+            title="No active split"
+            message="Set up a workout split to track your strength progress"
           />
-        ) : !searchQuery.trim() ? (
-          <EmptyState
-            emoji="🔍"
-            title="Discover new users"
-            message="Search for users to follow and see their workouts"
-          />
-        ) : null}
+        )}
       </ScrollView>
     </View>
   );
@@ -147,104 +234,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: 16,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
   },
   scrollView: {
     flex: 1,
   },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 100,
+  scrollContent: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 32,
   },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyIcon: {
-    fontSize: 32,
-  },
-  emptyTitle: {
+  sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  resultsContainer: {
-    padding: 16,
-  },
-  userCard: {
-    borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  userDetails: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  verifiedBadge: {
-    marginLeft: 4,
-    marginBottom: 2,
-  },
-  userUsername: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  userBio: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  userStats: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  userStat: {
-    fontSize: 13,
-    fontWeight: '500',
+    marginTop: 8,
   },
 });

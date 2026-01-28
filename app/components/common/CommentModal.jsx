@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -17,7 +17,8 @@ import { Colors } from '../../constants/colors';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { createComment, getComments } from '../../api/postsApi';
 import { deleteComment } from '../../api/commentsApi';
-import { createCommentNotification, deleteCommentNotification } from '../../api/notificationsApi';
+import { createCommentNotification, deleteCommentNotification, createCommentLikeNotification, deleteCommentLikeNotification } from '../../api/notificationsApi';
+import { toggleCommentLike } from '../../api/commentLikesApi';
 import Avatar from '../ui/Avatar';
 import LoadingSpinner from '../ui/LoadingSpinner';
 
@@ -38,12 +39,13 @@ const CommentModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const isLikingCommentRef = useRef({});
 
   const loadComments = async () => {
     if (hasLoaded && comments.length > 0) return;
     setIsLoading(true);
     try {
-      const fetched = await getComments(postId);
+      const fetched = await getComments(postId, currentUserId);
       setComments(fetched);
       setHasLoaded(true);
     } catch (error) {
@@ -91,6 +93,53 @@ const CommentModal = ({
     }, 100);
   };
 
+  const handleCommentLike = async (comment) => {
+    if (isLikingCommentRef.current[comment.id]) return;
+    isLikingCommentRef.current[comment.id] = true;
+
+    const wasLiked = comment.isLikedByCurrentUser;
+    const prevLikeCount = comment.likeCount;
+
+    // Optimistic update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === comment.id
+          ? {
+              ...c,
+              isLikedByCurrentUser: !wasLiked,
+              likeCount: wasLiked ? prevLikeCount - 1 : prevLikeCount + 1,
+            }
+          : c
+      )
+    );
+
+    try {
+      const result = await toggleCommentLike(comment.id, currentUserId);
+
+      if (result.liked && result.shouldNotify) {
+        await createCommentLikeNotification(
+          result.commentAuthorId,
+          currentUserId,
+          result.postId,
+          comment.id
+        );
+      } else if (!result.liked) {
+        await deleteCommentLikeNotification(currentUserId, comment.id);
+      }
+    } catch (error) {
+      // Rollback on error
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === comment.id
+            ? { ...c, isLikedByCurrentUser: wasLiked, likeCount: prevLikeCount }
+            : c
+        )
+      );
+    } finally {
+      isLikingCommentRef.current[comment.id] = false;
+    }
+  };
+
   const handleSubmit = async () => {
     if (!commentText.trim()) return;
     setIsSubmitting(true);
@@ -100,7 +149,7 @@ const CommentModal = ({
         content: commentText,
       });
       setCommentText('');
-      setComments((prev) => [newComment, ...prev]);
+      setComments((prev) => [{ ...newComment, isLikedByCurrentUser: false, likeCount: 0 }, ...prev]);
       onCommentCountChange(commentCount + 1);
 
       if (postAuthorId && postAuthorId !== currentUserId && newComment?.id) {
@@ -196,15 +245,33 @@ const CommentModal = ({
                   </View>
                   <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                 </View>
-                {(comment.userId === currentUserId || comment.author?.id === currentUserId) && (
+                <View style={styles.commentActions}>
                   <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDelete(comment)}
+                    style={styles.likeButton}
+                    onPress={() => handleCommentLike(comment)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="trash-outline" size={16} color={colors.error} />
+                    <Ionicons
+                      name={comment.isLikedByCurrentUser ? 'heart' : 'heart-outline'}
+                      size={16}
+                      color={comment.isLikedByCurrentUser ? colors.error : colors.secondaryText}
+                    />
+                    {comment.likeCount > 0 && (
+                      <Text style={[styles.likeCount, { color: comment.isLikedByCurrentUser ? colors.error : colors.secondaryText }]}>
+                        {comment.likeCount}
+                      </Text>
+                    )}
                   </TouchableOpacity>
-                )}
+                  {(comment.userId === currentUserId || comment.author?.id === currentUserId) && (
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDelete(comment)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
             ListEmptyComponent={
@@ -311,11 +378,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  deleteButton: {
-    padding: 6,
+  commentActions: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
     marginLeft: 4,
-    alignSelf: 'flex-start',
-    marginTop: 2,
+    gap: 8,
+    paddingTop: 2,
+  },
+  likeButton: {
+    alignItems: 'center',
+    padding: 4,
+  },
+  likeCount: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  deleteButton: {
+    padding: 4,
   },
   emptyState: {
     flex: 1,

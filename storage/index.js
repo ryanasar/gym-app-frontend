@@ -49,5 +49,11 @@ export {
   clearCalendarData,
 } from './calendarStorage.js';
 
+// Body weight storage
+export {
+  getBodyWeightLog,
+  addBodyWeightEntry,
+} from './bodyWeightStorage.js';
+
 // Types
 export { STORAGE_KEYS } from '../types/storage.js';

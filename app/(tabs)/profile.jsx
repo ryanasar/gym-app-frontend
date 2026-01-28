@@ -94,7 +94,7 @@ const ProfileScreen = () => {
     return (
       <>
         <View style={selectedTab === 'Progress' ? styles.tabVisible : styles.tabHidden}>
-          <ProgressTab key={progressKey} userId={user.id} />
+          <ProgressTab key={progressKey} userId={user.id} onRefresh={async () => { await refreshProfile(); await refreshPosts(); }} />
         </View>
         <View style={selectedTab === 'Posts' ? styles.tabVisible : styles.tabHidden}>
           <ActivitiesTab posts={posts} currentUserId={user.id} onRefresh={refreshPosts} />

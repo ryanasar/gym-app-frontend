@@ -251,12 +251,17 @@ export const WorkoutProvider = ({ children }) => {
             // Check if the workout on the last check date was completed
             const wasLastDayCompleted = savedCompletionDate === dateToCheck;
 
+            // Check if a free rest day was used — skip advancement if so
+            const freeRestDayDate = await AsyncStorage.getItem('freeRestDayDate');
+            const wasFreeRestDay = freeRestDayDate === dateToCheck;
+
             // Check if the current day in the split is a rest day
             const currentDayData = appState.split.days?.[currentDayValue % appState.split.totalDays];
             const isCurrentDayRest = currentDayData?.isRest === true;
 
             // Only advance if the last day was completed or was a rest day
-            if (wasLastDayCompleted || isCurrentDayRest) {
+            // BUT skip advancement if it was a free rest day
+            if ((wasLastDayCompleted && !wasFreeRestDay) || isCurrentDayRest) {
               const nextDayIndex = (currentDayValue + 1) % appState.split.totalDays;
               currentDayValue = nextDayIndex;
 
@@ -271,13 +276,18 @@ export const WorkoutProvider = ({ children }) => {
             }
             // else: workout wasn't completed and wasn't a rest day — stay on same day
 
+            // Clear freeRestDayDate after processing
+            if (freeRestDayDate) {
+              await AsyncStorage.removeItem('freeRestDayDate');
+            }
+
             setTodaysWorkoutCompleted(false);
             setCompletedSessionId(null);
             await AsyncStorage.removeItem('completedSessionId');
           } else if (savedCompletionDate === today && savedLastCheckDate === today && savedSessionId) {
             // Restore today's completion state if workout was completed today
             setTodaysWorkoutCompleted(true);
-            setCompletedSessionId(parseInt(savedSessionId));
+            setCompletedSessionId(savedSessionId === 'free-rest-day' ? 'free-rest-day' : parseInt(savedSessionId));
           }
 
           await AsyncStorage.setItem('lastCheckDate', today);
@@ -408,6 +418,10 @@ export const WorkoutProvider = ({ children }) => {
           // Check if the workout on the last check date was completed
           const wasLastDayCompleted = savedCompletionDate === savedLastCheckDate;
 
+          // Check if a free rest day was used — skip advancement if so
+          const freeRestDayDate = await AsyncStorage.getItem('freeRestDayDate');
+          const wasFreeRestDay = freeRestDayDate === savedLastCheckDate;
+
           // Read current progress from storage to avoid stale state
           const savedDayIdx = await AsyncStorage.getItem('currentDayIndex');
           const savedWeekVal = await AsyncStorage.getItem('currentWeek');
@@ -419,7 +433,8 @@ export const WorkoutProvider = ({ children }) => {
           const isCurrentDayRest = currentDayData?.isRest === true;
 
           // Only advance if the last day was completed or was a rest day
-          if (wasLastDayCompleted || isCurrentDayRest) {
+          // BUT skip advancement if it was a free rest day
+          if ((wasLastDayCompleted && !wasFreeRestDay) || isCurrentDayRest) {
             const nextDayIndex = (tempDayIndex + 1) % activeSplit.totalDays;
             tempDayIndex = nextDayIndex;
 
@@ -431,6 +446,11 @@ export const WorkoutProvider = ({ children }) => {
             setCurrentWeek(tempWeek);
             await AsyncStorage.setItem('currentDayIndex', tempDayIndex.toString());
             await AsyncStorage.setItem('currentWeek', tempWeek.toString());
+          }
+
+          // Clear freeRestDayDate after processing
+          if (freeRestDayDate) {
+            await AsyncStorage.removeItem('freeRestDayDate');
           }
 
           setTodaysWorkoutCompleted(false);
@@ -598,6 +618,36 @@ export const WorkoutProvider = ({ children }) => {
     }
   };
 
+  // Mark a free rest day (doesn't advance day index)
+  const markFreeRestDay = async () => {
+    const today = getLocalDateString();
+
+    try {
+      // Set completion date so UI state persists on reopen
+      await AsyncStorage.setItem('lastCompletionDate', today);
+      await AsyncStorage.setItem('lastCheckDate', today);
+      await AsyncStorage.setItem('completedSessionId', 'free-rest-day');
+
+      // Set freeRestDayDate so day advancement is skipped
+      await AsyncStorage.setItem('freeRestDayDate', today);
+
+      // Mark in calendar as rest day + free rest day
+      const { markTodayCompleted } = await import('../../storage/calendarStorage.js');
+      await markTodayCompleted(true, true);
+
+      // Mark usage in free rest day storage
+      const { useFreeRestDay } = await import('../../storage/freeRestDayStorage.js');
+      await useFreeRestDay();
+
+      // Update context state
+      setLastCompletionDate(today);
+      setTodaysWorkoutCompleted(true);
+      setCompletedSessionId('free-rest-day');
+    } catch (error) {
+      console.error('[WorkoutContext] Failed to mark free rest day:', error);
+    }
+  };
+
   // Mark workout as completed
   const markWorkoutCompleted = async (workoutSessionId, isRestDay = false) => {
     const today = getLocalDateString();
@@ -645,7 +695,7 @@ export const WorkoutProvider = ({ children }) => {
 
       if (savedCompletionDate === today && savedLastCheckDate === today && savedSessionId) {
         setTodaysWorkoutCompleted(true);
-        setCompletedSessionId(parseInt(savedSessionId));
+        setCompletedSessionId(savedSessionId === 'free-rest-day' ? 'free-rest-day' : parseInt(savedSessionId));
         return true;
       } else {
         setTodaysWorkoutCompleted(false);
@@ -721,11 +771,13 @@ export const WorkoutProvider = ({ children }) => {
     todaysWorkout,
     lastWorkoutCompleted,
     markWorkoutCompleted,
+    markFreeRestDay,
     todaysWorkoutCompleted,
     completedSessionId,
     checkTodaysWorkoutStatus,
     refreshTodaysWorkout,
     refreshExerciseDatabase,
+    exerciseDatabase,
     isInitialized,
   };
 

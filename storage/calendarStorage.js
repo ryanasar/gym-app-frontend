@@ -57,9 +57,10 @@ export async function getCalendarData() {
 /**
  * Mark today as completed (workout or rest day)
  * @param {boolean} isRestDay - Whether today is a rest day
+ * @param {boolean} isFreeRestDay - Whether today is a free rest day
  * @returns {Promise<void>}
  */
-export async function markTodayCompleted(isRestDay = false) {
+export async function markTodayCompleted(isRestDay = false, isFreeRestDay = false) {
   try {
     const calendar = await getCalendarData();
     const today = getTodayDateString();
@@ -67,6 +68,7 @@ export async function markTodayCompleted(isRestDay = false) {
     calendar[today] = {
       completed: true,
       isRestDay: isRestDay,
+      isFreeRestDay: isFreeRestDay,
       timestamp: new Date().toISOString()
     };
 
@@ -124,7 +126,8 @@ export async function getCalendarDataForDisplay() {
     return Object.entries(calendar).map(([date, data]) => ({
       date,
       volume: data.isRestDay ? 0 : 1, // Just for display purposes
-      isRestDay: data.isRestDay || false
+      isRestDay: data.isRestDay || false,
+      isFreeRestDay: data.isFreeRestDay || false
     }));
   } catch (error) {
     console.error('[CalendarStorage] Error getting calendar data for display:', error);

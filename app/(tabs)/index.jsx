@@ -128,6 +128,47 @@ export default function HomeScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
           <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity
+              onPress={() => router.push('/search')}
+              style={styles.notificationButton}
+            >
+              <Ionicons name="search-outline" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/notifications')}
+              style={styles.notificationButton}
+            >
+              <Ionicons name="notifications-outline" size={24} color={colors.text} />
+              {unreadCount > 0 && (
+                <View style={[styles.notificationBadge, { borderColor: colors.cardBackground }]}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+        <LoadingSpinner fullScreen />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
+        <TouchableOpacity onPress={scrollToTop} activeOpacity={0.7}>
+          <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+        </TouchableOpacity>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity
+            onPress={() => router.push('/search')}
+            style={styles.notificationButton}
+          >
+            <Ionicons name="search-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/notifications')}
             style={styles.notificationButton}
@@ -142,31 +183,6 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
         </View>
-        <LoadingSpinner fullScreen />
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
-        <TouchableOpacity onPress={scrollToTop} activeOpacity={0.7}>
-          <Text style={[styles.title, { color: colors.text }]}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => router.push('/notifications')}
-          style={styles.notificationButton}
-        >
-          <Ionicons name="notifications-outline" size={24} color={colors.text} />
-          {unreadCount > 0 && (
-            <View style={[styles.notificationBadge, { borderColor: colors.cardBackground }]}>
-              <Text style={styles.notificationBadgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -217,6 +233,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   notificationButton: {
     position: 'relative',

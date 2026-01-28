@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { getWorkoutSessionsByUserId } from '../../api/workoutSessionsApi';
 import { useThemeColors } from '../../hooks/useThemeColors';
@@ -8,9 +8,9 @@ import { useAuth } from '../../auth/auth';
 import { getCalendarDataForDisplay, backfillCalendarFromBackend } from '../../../storage/calendarStorage';
 import WorkoutCalendar from '../progress/WorkoutCalendar';
 
-const ProgressTab = ({ userId }) => {
+const ProgressTab = ({ userId, onRefresh }) => {
   const colors = useThemeColors();
-  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [workoutsByDay, setWorkoutsByDay] = useState([]);
   const { lastWorkoutCompleted, todaysWorkout } = useWorkout();
   const { user: currentUser } = useAuth();
@@ -24,6 +24,7 @@ const ProgressTab = ({ userId }) => {
   // Initial load - only fetch once with backend backfill
   useEffect(() => {
     if (userId && !hasBackfilled.current) {
+      setRefreshing(true);
       fetchProgressData(true);
     }
   }, [userId]);
@@ -51,7 +52,6 @@ const ProgressTab = ({ userId }) => {
 
     try {
       isFetching.current = true;
-      setLoading(true);
 
       // Check if userId is valid
       if (!userId) {
@@ -119,25 +119,26 @@ const ProgressTab = ({ userId }) => {
       // Set empty data on error
       setWorkoutsByDay([]);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
       isFetching.current = false;
     }
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Loading progress data...</Text>
-      </View>
-    );
-  }
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    hasBackfilled.current = false;
+    await fetchProgressData(true);
+    if (onRefresh) await onRefresh();
+  };
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+      }
     >
       {/* Workout Calendar Section */}
       {/* Only show todaysWorkout for own profile, not for other users */}
@@ -160,18 +161,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.light.background,
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: Colors.light.secondaryText,
   },
   section: {
     marginTop: 8,
