@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,12 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { createSavedWorkout } from '../api/savedWorkoutsApi';
+import { createSavedWorkout, updateSavedWorkout } from '../api/savedWorkoutsApi';
 import { exercises } from '../data/exercises/exerciseDatabase';
 import ExerciseCard from '../components/exercises/ExerciseCard';
 import EmptyState from '../components/common/EmptyState';
@@ -24,14 +24,48 @@ import EmptyState from '../components/common/EmptyState';
 const CreateSavedWorkoutScreen = () => {
   const colors = useThemeColors();
   const router = useRouter();
+  const params = useLocalSearchParams();
+
+  // Parse params for edit mode
+  const isEditMode = params.mode === 'edit';
+  const workoutId = params.workoutId;
+  const initialWorkoutData = params.workoutData ? JSON.parse(params.workoutData) : null;
 
   const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
+  const [workoutEmoji, setWorkoutEmoji] = useState('💪');
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState('all');
   const [saving, setSaving] = useState(false);
+
+  // Initialize state from workout data in edit mode
+  useEffect(() => {
+    if (isEditMode && initialWorkoutData) {
+      setWorkoutName(initialWorkoutData.name || '');
+      setWorkoutDescription(initialWorkoutData.description || '');
+      setWorkoutEmoji(initialWorkoutData.emoji || '💪');
+
+      // Map exercises to include all needed fields
+      if (initialWorkoutData.exercises && initialWorkoutData.exercises.length > 0) {
+        const mappedExercises = initialWorkoutData.exercises.map(ex => ({
+          id: ex.id,
+          name: ex.name,
+          sets: ex.sets?.toString() || '',
+          reps: ex.reps?.toString() || '',
+          weight: ex.weight?.toString() || '',
+          restSeconds: ex.restSeconds?.toString() || '',
+          notes: ex.notes || '',
+          primaryMuscles: ex.primaryMuscles || [],
+          secondaryMuscles: ex.secondaryMuscles || [],
+          category: ex.category || '',
+          isCustom: ex.isCustom || false,
+        }));
+        setSelectedExercises(mappedExercises);
+      }
+    }
+  }, []);
 
   const muscleGroups = [
     { id: 'all', name: 'All' },
@@ -57,12 +91,18 @@ const CreateSavedWorkoutScreen = () => {
 
     setSaving(true);
     try {
-      await createSavedWorkout({
+      const workoutPayload = {
         name: workoutName.trim(),
         description: workoutDescription.trim() || null,
-        emoji: '💪',
+        emoji: workoutEmoji,
         exercises: selectedExercises
-      });
+      };
+
+      if (isEditMode && workoutId) {
+        await updateSavedWorkout(workoutId, workoutPayload);
+      } else {
+        await createSavedWorkout(workoutPayload);
+      }
 
       router.back();
     } catch (error) {
@@ -282,7 +322,7 @@ const CreateSavedWorkoutScreen = () => {
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
           <Text style={[styles.cancelText, { color: colors.primary }]}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Create Workout</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{isEditMode ? 'Edit Workout' : 'Create Workout'}</Text>
         <TouchableOpacity
           onPress={handleSave}
           disabled={saving || !workoutName.trim() || selectedExercises.length === 0}
@@ -308,7 +348,6 @@ const CreateSavedWorkoutScreen = () => {
           onDragEnd={handleReorderExercises}
           renderItem={renderExerciseItem}
           ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}

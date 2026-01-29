@@ -13,6 +13,8 @@ export { storage, AsyncStorageAdapter } from './StorageAdapter.js';
 // Workout helpers
 export {
   startWorkout,
+  startFreestyleWorkout,
+  startSavedWorkout,
   updateWorkoutSet,
   completeWorkout,
   getActiveWorkout,
@@ -20,6 +22,7 @@ export {
   generateWorkoutId,
   buildWorkoutFromSplit,
   calculateStreakFromLocal,
+  createCompletedWorkoutSession,
 } from './workoutHelpers.js';
 
 // App initialization

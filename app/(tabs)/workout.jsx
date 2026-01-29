@@ -1,33 +1,60 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { ActivityIndicator, Alert, Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, RefreshControl, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, RefreshControl } from 'react-native';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import CelebrationAnimation from '../components/animations/CelebrationAnimation';
+import ExerciseCard from '../components/exercises/ExerciseCard';
 import RestDayCard from '../components/workout/RestDayCard';
 import FreeRestDayCard from '../components/workout/FreeRestDayCard';
 import BeginSplitCard from '../components/workout/BeginSplitCard';
-import EmptyState from '../components/common/EmptyState';
-import ExerciseCard from '../components/exercises/ExerciseCard';
+import SplitWorkoutCard from '../components/workout/SplitWorkoutCard';
+import IndividualWorkoutView from '../components/workout/IndividualWorkoutView';
+import CreateCustomExerciseModal from '../components/exercises/CreateCustomExerciseModal';
+import IndividualWorkoutCompletedCard from '../components/workout/IndividualWorkoutCompletedCard';
+import SavedWorkoutPicker from '../components/workout/SavedWorkoutPicker';
+import SavedWorkoutDetailCard from '../components/workout/SavedWorkoutDetailCard';
+import TabBar from '../components/ui/TabBar';
 import { Colors } from '../constants/colors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useSync } from '../contexts/SyncContext';
 import { useAuth } from '../auth/auth';
-import { getActiveWorkout, storage, calculateStreakFromLocal, unmarkTodayCompleted } from '../../storage';
+import { getActiveWorkout, storage, calculateStreakFromLocal, createCompletedWorkoutSession } from '../../storage';
 import { getCalendarData } from '../../storage/calendarStorage';
 import { isFreeRestDayAvailable, clearFreeRestDayUsageForToday } from '../../storage/freeRestDayStorage';
-import { clearLocalSplit, debugLocalSplit } from '../utils/clearLocalSplit';
-import { updateSplit } from '../api/splitsApi';
 import { getTodaysWorkoutPost } from '../api/postsApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { getCustomExercises, createCustomExercise } from '../api/customExercisesApi';
-import CreateCustomExerciseModal from '../components/exercises/CreateCustomExerciseModal';
+import { getSavedWorkouts, deleteSavedWorkout } from '../api/savedWorkoutsApi';
+import { useWorkoutCompletion } from '../hooks/workout/useWorkoutCompletion';
+import { useExerciseFiltering } from '../hooks/workout/useExerciseFiltering';
+import { useExerciseManagement } from '../hooks/workout/useExerciseManagement';
+import { calculateWorkoutCardCollapse } from '../utils/workout/workoutCalculations';
+import { handleDaySelection } from '../utils/workout/splitManagement';
 
+const WORKOUT_TABS = [
+  { key: 'split', label: 'My Split' },
+  { key: 'individual', label: 'Individual' },
+];
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+const muscleGroups = [
+  { id: 'all', name: 'All Exercises' },
+  { id: 'my_exercises', name: 'My Exercises' },
+  { id: 'chest', name: 'Chest' },
+  { id: 'lats', name: 'Back' },
+  { id: 'front_delts', name: 'Shoulders' },
+  { id: 'biceps', name: 'Biceps' },
+  { id: 'triceps', name: 'Triceps' },
+  { id: 'quadriceps', name: 'Legs' },
+  { id: 'core', name: 'Core' },
+  { id: 'hamstrings', name: 'Hamstrings' },
+  { id: 'glutes', name: 'Glutes' },
+  { id: 'calves', name: 'Calves' },
+  { id: 'forearms', name: 'Forearms' }
+];
 
 const WorkoutScreen = () => {
   const colors = useThemeColors();
@@ -43,9 +70,42 @@ const WorkoutScreen = () => {
     completedSessionId: cachedSessionId,
     refreshTodaysWorkout,
     isInitialized,
+    individualWorkoutCompleted,
+    completedIndividualWorkout,
+    markIndividualWorkoutCompleted,
   } = useWorkout();
   const { updatePendingCount, manualSync } = useSync();
+
+  // State management
   const [refreshing, setRefreshing] = useState(false);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [hasPosted, setHasPosted] = useState(false);
+  const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
+  const skipAutoResumeRef = useRef(false);
+  const completionProcessedRef = useRef(false);
+  const [freeRestDayAvailable, setFreeRestDayAvailable] = useState(false);
+  const [workoutMode, setWorkoutMode] = useState('split');
+  const [savedWorkouts, setSavedWorkouts] = useState([]);
+  const [selectedSavedWorkout, setSelectedSavedWorkout] = useState(null);
+
+  // Modal state
+  const [showChangeDayModal, setShowChangeDayModal] = useState(false);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [showCreateCustomModal, setShowCreateCustomModal] = useState(false);
+
+  // Exercise database and filtering state
+  const [exerciseDatabase, setExerciseDatabase] = useState([]);
+  const [customExercises, setCustomExercises] = useState([]);
+  const [addExerciseSearch, setAddExerciseSearch] = useState('');
+  const [addExerciseMuscleFilter, setAddExerciseMuscleFilter] = useState('all');
+  const [selectedNewExercise, setSelectedNewExercise] = useState(null);
+  const [newExerciseSets, setNewExerciseSets] = useState('3');
+  const [newExerciseReps, setNewExerciseReps] = useState('10');
+
+  const isCompleted = todaysWorkoutCompleted;
+  const completedSessionId = cachedSessionId;
 
   // Auto-sync when workout tab is focused
   useFocusEffect(
@@ -99,148 +159,104 @@ const WorkoutScreen = () => {
     setRefreshing(false);
   }, [refreshTodaysWorkout]);
 
-  // Clear local split data
-  const handleClearLocalSplit = async () => {
-    Alert.alert(
-      'Clear Local Data?',
-      'This will remove the local split and reset your progress. You can then select a new split from the Program tab.\n\nYour workout history is safe.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await clearLocalSplit();
-            if (success) {
-              Alert.alert('Cleared!', 'Local split data has been cleared. Pull to refresh or restart the app.', [
-                {
-                  text: 'Refresh Now',
-                  onPress: async () => {
-                    await refreshTodaysWorkout();
-                  },
-                },
-              ]);
-            } else {
-              Alert.alert('Error', 'Failed to clear local data.');
-            }
-          },
-        },
-      ]
-    );
-  };
+  // Custom hooks
+  const { isToggling, setIsToggling, handleToggleCompletion } = useWorkoutCompletion({
+    markWorkoutCompleted,
+    updatePendingCount,
+    todaysWorkout,
+    activeSplit,
+    isRestDay: todaysWorkout?.isRest || (todaysWorkout?.exercises?.length === 0 && todaysWorkout?.dayName === 'Rest Day'),
+    completedSessionId
+  });
 
-  // Use context state directly - no local isCompleted state to avoid sync issues
-  const isCompleted = todaysWorkoutCompleted;
-  const completedSessionId = cachedSessionId;
+  const { localExercises, setLocalExercises, handleReorderExercises, handleRemoveExercise, handleAddExercise } = useExerciseManagement({
+    todaysWorkout,
+    refreshTodaysWorkout
+  });
 
-  const [currentStreak, setCurrentStreak] = useState(0);
-  const [isToggling, setIsToggling] = useState(false);
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [hasPosted, setHasPosted] = useState(false);
-  const [isExercisesExpanded, setIsExercisesExpanded] = useState(false);
-  const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
-  const skipAutoResumeRef = useRef(false);
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-  const [freeRestDayAvailable, setFreeRestDayAvailable] = useState(false);
-  const [showChangeDayModal, setShowChangeDayModal] = useState(false);
-  const [showReorderModal, setShowReorderModal] = useState(false);
-  const [localExercises, setLocalExercises] = useState([]);
+  const filteredExercisesForAdd = useExerciseFiltering({
+    exerciseDatabase,
+    customExercises,
+    localExercises,
+    muscleFilter: addExerciseMuscleFilter,
+    searchQuery: addExerciseSearch
+  });
 
-  // Add Exercise Modal state
-  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
-  const [exerciseDatabase, setExerciseDatabase] = useState([]);
-  const [customExercises, setCustomExercises] = useState([]);
-  const [addExerciseSearch, setAddExerciseSearch] = useState('');
-  const [addExerciseMuscleFilter, setAddExerciseMuscleFilter] = useState('all');
-  const [selectedNewExercise, setSelectedNewExercise] = useState(null);
-  const [newExerciseSets, setNewExerciseSets] = useState('3');
-  const [newExerciseReps, setNewExerciseReps] = useState('10');
-  const [showCreateCustomModal, setShowCreateCustomModal] = useState(false);
-
-  // Muscle groups for filtering
-  const muscleGroups = [
-    { id: 'all', name: 'All Exercises' },
-    { id: 'my_exercises', name: 'My Exercises' },
-    { id: 'chest', name: 'Chest' },
-    { id: 'lats', name: 'Back' },
-    { id: 'front_delts', name: 'Shoulders' },
-    { id: 'biceps', name: 'Biceps' },
-    { id: 'triceps', name: 'Triceps' },
-    { id: 'quadriceps', name: 'Legs' },
-    { id: 'core', name: 'Core' },
-    { id: 'hamstrings', name: 'Hamstrings' },
-    { id: 'glutes', name: 'Glutes' },
-    { id: 'calves', name: 'Calves' },
-    { id: 'forearms', name: 'Forearms' }
-  ];
-
-  // Calculate if card would exceed screen height
-  const { shouldCollapse, maxVisibleExercises } = useMemo(() => {
-    if (!todaysWorkout?.exercises) return { shouldCollapse: false, maxVisibleExercises: 0 };
-
-    // Estimated heights (in pixels) - adjusted for even gaps
-    const HEADER_HEIGHT = 100; // Top header with title
-    const CONTENT_PADDING = 32; // 16px top + 16px bottom around card
-    const CARD_PADDING = 40; // Card padding top + bottom
-    const WORKOUT_HEADER_HEIGHT = 80; // Workout name + cycle info
-    const EXERCISE_ITEM_HEIGHT = 52; // Each exercise item
-    const SHOW_MORE_BUTTON_HEIGHT = 30; // Reduced compact button
-    const ACTION_BUTTONS_HEIGHT = 130; // Start Workout + Mark Complete buttons
-    const BOTTOM_SAFE_AREA = 130; // Tab bar + safe area + extra padding
-
-    const totalExercises = todaysWorkout.exercises.length;
-
-    // Calculate height with all exercises
-    const fullCardHeight =
-      HEADER_HEIGHT +
-      CONTENT_PADDING +
-      CARD_PADDING +
-      WORKOUT_HEADER_HEIGHT +
-      (EXERCISE_ITEM_HEIGHT * totalExercises) +
-      ACTION_BUTTONS_HEIGHT +
-      BOTTOM_SAFE_AREA;
-
-    // If it fits, show all exercises
-    if (fullCardHeight <= SCREEN_HEIGHT) {
-      return { shouldCollapse: false, maxVisibleExercises: totalExercises };
-    }
-
-    // Otherwise, calculate max exercises that fit
-    const availableHeight = SCREEN_HEIGHT - (
-      HEADER_HEIGHT +
-      CONTENT_PADDING +
-      CARD_PADDING +
-      WORKOUT_HEADER_HEIGHT +
-      SHOW_MORE_BUTTON_HEIGHT +
-      ACTION_BUTTONS_HEIGHT +
-      BOTTOM_SAFE_AREA
-    );
-
-    const maxExercises = Math.max(3, Math.floor(availableHeight / EXERCISE_ITEM_HEIGHT));
-
-    return {
-      shouldCollapse: totalExercises > maxExercises,
-      maxVisibleExercises: maxExercises
+  // Load saved workout mode preference on mount
+  useEffect(() => {
+    const loadWorkoutMode = async () => {
+      try {
+        const savedMode = await AsyncStorage.getItem('workoutModePreference');
+        if (savedMode === 'split' || savedMode === 'individual') {
+          setWorkoutMode(savedMode);
+        }
+      } catch (error) {
+        console.error('[Workout] Error loading workout mode preference:', error);
+      }
     };
-  }, [todaysWorkout]);
+    loadWorkoutMode();
+  }, []);
+
+  // Handle workout mode change (save to AsyncStorage)
+  const handleWorkoutModeChange = useCallback(async (mode) => {
+    setWorkoutMode(mode);
+    try {
+      await AsyncStorage.setItem('workoutModePreference', mode);
+    } catch (error) {
+      console.error('[Workout] Error saving workout mode preference:', error);
+    }
+  }, []);
+
+  // Calculate workout card collapse state
+  const { shouldCollapse, maxVisibleExercises } = useMemo(() =>
+    calculateWorkoutCardCollapse(todaysWorkout),
+    [todaysWorkout]
+  );
 
   // Handle returning from completed workout session
   useEffect(() => {
     const handleCompletedSession = async () => {
-      if (params.completed === 'true') {
-        // Calculate streak when returning from completed workout
-        try {
-          const streak = await calculateStreakFromLocal();
-          setCurrentStreak(streak);
-        } catch (error) {
-          console.error('[Workout Tab] Error calculating streak after session:', error);
-        }
-        // Show celebration animation when returning from completed workout
-        setShowCelebration(true);
+      // Reset the ref when not in completed state (allows future completions)
+      if (params.completed !== 'true') {
+        completionProcessedRef.current = false;
+        return;
       }
+
+      // Only process completion once per session
+      if (completionProcessedRef.current) {
+        return;
+      }
+      completionProcessedRef.current = true;
+
+      // Calculate streak when returning from completed workout
+      try {
+        const streak = await calculateStreakFromLocal();
+        setCurrentStreak(streak);
+      } catch (error) {
+        console.error('[Workout Tab] Error calculating streak after session:', error);
+      }
+
+      // Handle individual workout completion (freestyle or saved)
+      const source = params.source;
+      if (source === 'freestyle' || source === 'saved') {
+        // Parse the workout data and mark as completed
+        if (params.workoutData) {
+          try {
+            const workoutData = JSON.parse(params.workoutData);
+            await markIndividualWorkoutCompleted(workoutData);
+          } catch (error) {
+            console.error('[Workout Tab] Error parsing workout data:', error);
+          }
+        }
+        // Switch to Individual tab to show the completed card
+        setWorkoutMode('individual');
+      }
+
+      // Show celebration animation when returning from completed workout
+      setShowCelebration(true);
     };
     handleCompletedSession();
-  }, [params.completed]);
+  }, [params.completed, params.source, params.workoutData, markIndividualWorkoutCompleted]);
 
   // Check for active workout and auto-resume
   useEffect(() => {
@@ -280,9 +296,6 @@ const WorkoutScreen = () => {
   // Check if it's a rest day
   const isRestDay = todaysWorkout?.isRest || (todaysWorkout?.exercises && todaysWorkout.exercises.length === 0 && todaysWorkout?.dayName === 'Rest Day');
 
-  // Check if workout has exercises
-  const hasExercises = todaysWorkout?.exercises?.length > 0;
-
   // Automatically mark rest days as completed (doesn't increase streak)
   useEffect(() => {
     const autoMarkRestDay = async () => {
@@ -311,44 +324,9 @@ const WorkoutScreen = () => {
   }, [isRestDay, todaysWorkout]);
 
   // Handle split that exists but hasn't been started
-  const handleDaySelected = async (dayIndex) => {
-    try {
-      // Clear any existing completion for today when changing days
-      await unmarkTodayCompleted();
-
-      // Clear all completion state in storage and context
-      await AsyncStorage.multiRemove([
-        'completedSessionId',
-        'lastCompletionDate',
-        'lastCheckDate'
-      ]);
-
-      // Clear completion in context - this updates todaysWorkoutCompleted to false
-      await markWorkoutCompleted(null);
-
-      // Update the split to mark it as started in backend
-      if (activeSplit?.id) {
-        await updateSplit(activeSplit.id, { started: true });
-
-        // Update the local split object with started: true
-        const updatedSplit = { ...activeSplit, started: true };
-        await storage.saveSplit(updatedSplit);
-      }
-
-      // Update local storage to set current day
-      await AsyncStorage.setItem('currentDayIndex', dayIndex.toString());
-      await AsyncStorage.setItem('currentWeek', '1');
-
-      // Close modal if open
-      setShowChangeDayModal(false);
-
-      // Refresh to show the selected workout
-      // This will trigger auto-mark for rest days via the useEffect
-      await refreshTodaysWorkout();
-    } catch (error) {
-      console.error('Error starting split:', error);
-      Alert.alert('Error', 'Failed to start split. Please try again.');
-    }
+  const handleDaySelectedWrapper = async (dayIndex) => {
+    await handleDaySelection(dayIndex, activeSplit, markWorkoutCompleted, refreshTodaysWorkout);
+    setShowChangeDayModal(false);
   };
 
   // Sync local exercises with todaysWorkout
@@ -358,69 +336,10 @@ const WorkoutScreen = () => {
     }
   }, [todaysWorkout?.exercises]);
 
-  // Handle reordering exercises
-  const handleReorderExercises = useCallback(async ({ data }) => {
-    setLocalExercises(data);
-
-    // Update the split in local storage
-    try {
-      // Read fresh from storage to avoid stale data
-      const currentSplit = await storage.getSplit();
-      if (currentSplit) {
-        const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
-        // Deep copy the split to avoid mutation issues
-        const updatedSplit = JSON.parse(JSON.stringify(currentSplit));
-        const days = updatedSplit.days || updatedSplit.workoutDays;
-
-        if (days && days[currentDayIndex]) {
-          // Update exercises for the current day
-          days[currentDayIndex].exercises = data;
-
-          // Save to local storage
-          await storage.saveSplit(updatedSplit);
-
-          // Refresh to reflect changes
-          await refreshTodaysWorkout();
-        }
-      }
-    } catch (error) {
-      console.error('[Workout] Error saving reordered exercises:', error);
-      Alert.alert('Error', 'Failed to save exercise order. Please try again.');
-    }
-  }, [todaysWorkout, refreshTodaysWorkout]);
-
   const openReorderModal = () => {
-    setShowOptionsMenu(false);
     setLocalExercises(todaysWorkout?.exercises || []);
     setShowReorderModal(true);
   };
-
-  // Handle removing an exercise from the workout
-  const handleRemoveExercise = useCallback(async (exerciseIndex) => {
-    const updatedExercises = localExercises.filter((_, index) => index !== exerciseIndex);
-    setLocalExercises(updatedExercises);
-
-    // Update the split in local storage
-    try {
-      // Read fresh from storage to avoid stale data
-      const currentSplit = await storage.getSplit();
-      if (currentSplit) {
-        const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
-        // Deep copy the split to avoid mutation issues
-        const updatedSplit = JSON.parse(JSON.stringify(currentSplit));
-        const days = updatedSplit.days || updatedSplit.workoutDays;
-
-        if (days && days[currentDayIndex]) {
-          days[currentDayIndex].exercises = updatedExercises;
-          await storage.saveSplit(updatedSplit);
-          await refreshTodaysWorkout();
-        }
-      }
-    } catch (error) {
-      console.error('[Workout] Error removing exercise:', error);
-      Alert.alert('Error', 'Failed to remove exercise. Please try again.');
-    }
-  }, [localExercises, todaysWorkout, refreshTodaysWorkout]);
 
   // Load exercise database (bundled + custom)
   useEffect(() => {
@@ -436,6 +355,21 @@ const WorkoutScreen = () => {
     };
     loadExerciseDatabase();
   }, []);
+
+  // Load saved workouts for no-split and different workout modal
+  useFocusEffect(
+    useCallback(() => {
+      const loadSavedWorkouts = async () => {
+        try {
+          const workouts = await getSavedWorkouts();
+          setSavedWorkouts(workouts || []);
+        } catch (error) {
+          console.error('[Workout] Error loading saved workouts:', error);
+        }
+      };
+      loadSavedWorkouts();
+    }, [])
+  );
 
   // Open add exercise modal (close reorder modal first to avoid stacking issues on iOS)
   const openAddExerciseModal = () => {
@@ -460,60 +394,6 @@ const WorkoutScreen = () => {
     }, 100);
   };
 
-  // Filter exercises for search with muscle group filter
-  const filteredExercisesForAdd = useMemo(() => {
-    // Handle "My Exercises" filter - only show custom exercises
-    if (addExerciseMuscleFilter === 'my_exercises') {
-      let filtered = customExercises.map(ex => ({ ...ex, isCustom: true }));
-
-      // Exclude exercises already in workout
-      filtered = filtered.filter(ex =>
-        !localExercises.some(e => e.id === ex.id || e.name === ex.name)
-      );
-
-      if (addExerciseSearch.trim()) {
-        const lowercaseQuery = addExerciseSearch.toLowerCase();
-        filtered = filtered.filter(ex =>
-          ex.name.toLowerCase().includes(lowercaseQuery) ||
-          ex.primaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
-          ex.equipment?.toLowerCase().includes(lowercaseQuery)
-        );
-      }
-
-      return filtered;
-    }
-
-    // Merge bundled and custom exercises
-    const allExercises = [
-      ...exerciseDatabase,
-      ...customExercises.map(ex => ({ ...ex, isCustom: true }))
-    ];
-
-    return allExercises.filter(ex => {
-      // Exclude exercises already in workout
-      if (localExercises.some(e => e.id === ex.id || e.name === ex.name)) return false;
-
-      // Apply muscle filter first (only primary muscles)
-      if (addExerciseMuscleFilter !== 'all') {
-        const primaryMatch = ex.primaryMuscles && ex.primaryMuscles.includes(addExerciseMuscleFilter);
-        if (!primaryMatch) return false;
-      }
-
-      // Then apply search filter
-      if (addExerciseSearch.trim()) {
-        const lowercaseQuery = addExerciseSearch.toLowerCase();
-        return (
-          ex.name.toLowerCase().includes(lowercaseQuery) ||
-          ex.primaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
-          ex.secondaryMuscles?.some(muscle => muscle.toLowerCase().includes(lowercaseQuery)) ||
-          ex.equipment?.toLowerCase().includes(lowercaseQuery) ||
-          ex.category?.toLowerCase().includes(lowercaseQuery)
-        );
-      }
-
-      return true;
-    });
-  }, [exerciseDatabase, customExercises, localExercises, addExerciseMuscleFilter, addExerciseSearch]);
 
   // Handle opening create custom exercise modal
   const openCreateCustomModal = () => {
@@ -533,55 +413,6 @@ const WorkoutScreen = () => {
       setShowAddExerciseModal(true);
     }, 300);
   };
-
-  // Handle adding an exercise to today's workout
-  const handleAddExercise = useCallback(async () => {
-    if (!selectedNewExercise) {
-      Alert.alert('Select Exercise', 'Please select an exercise to add.');
-      return;
-    }
-
-    const sets = parseInt(newExerciseSets) || 3;
-    const reps = parseInt(newExerciseReps) || 10;
-
-    // Create new exercise object matching the workout format
-    const newExercise = {
-      id: selectedNewExercise.id,
-      name: selectedNewExercise.name,
-      sets: sets.toString(),
-      reps: reps.toString(),
-      primaryMuscles: selectedNewExercise.primaryMuscles,
-      secondaryMuscles: selectedNewExercise.secondaryMuscles,
-      equipment: selectedNewExercise.equipment,
-    };
-
-    const updatedExercises = [...localExercises, newExercise];
-    setLocalExercises(updatedExercises);
-
-    // Update the split in local storage
-    try {
-      // Read fresh from storage to avoid stale data
-      const currentSplit = await storage.getSplit();
-      if (currentSplit) {
-        const currentDayIndex = (todaysWorkout?.dayNumber || 1) - 1;
-        // Deep copy the split to avoid mutation issues
-        const updatedSplit = JSON.parse(JSON.stringify(currentSplit));
-        const days = updatedSplit.days || updatedSplit.workoutDays;
-
-        if (days && days[currentDayIndex]) {
-          days[currentDayIndex].exercises = updatedExercises;
-          await storage.saveSplit(updatedSplit);
-          await refreshTodaysWorkout();
-        }
-      }
-    } catch (error) {
-      console.error('[Workout] Error adding exercise:', error);
-      Alert.alert('Error', 'Failed to add exercise. Please try again.');
-    }
-
-    // Close and return to edit workout modal
-    closeAddExerciseModal();
-  }, [selectedNewExercise, newExerciseSets, newExerciseReps, localExercises, todaysWorkout, refreshTodaysWorkout]);
 
   // Show loading state while context initializes
   if (!isInitialized) {
@@ -614,7 +445,7 @@ const WorkoutScreen = () => {
         >
           <BeginSplitCard
             split={activeSplit}
-            onDaySelected={handleDaySelected}
+            onDaySelected={handleDaySelectedWrapper}
           />
         </ScrollView>
       </View>
@@ -625,25 +456,158 @@ const WorkoutScreen = () => {
   if (!activeSplit) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
-          <Text style={[styles.title, { color: colors.text }]}>Today's Workout</Text>
+        <View style={[
+          styles.headerContainer,
+          { backgroundColor: colors.cardBackground, shadowColor: colors.shadow },
+          individualWorkoutCompleted && styles.headerContainerCompleted
+        ]}>
+          <Text style={[
+            styles.title,
+            { color: colors.text },
+            individualWorkoutCompleted && styles.titleCompleted
+          ]}>Today's Workout</Text>
         </View>
+
+        {/* Tab Toggle - My Split vs Individual */}
+        <TabBar
+          tabs={WORKOUT_TABS}
+          activeTab={workoutMode}
+          onTabPress={handleWorkoutModeChange}
+          style={{ backgroundColor: colors.cardBackground }}
+          completed={individualWorkoutCompleted}
+          lockedTab={individualWorkoutCompleted ? 'individual' : null}
+        />
+
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.emptyScrollContent}
+          contentContainerStyle={styles.noSplitScrollContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         >
-          <EmptyState
-            icon="barbell-outline"
-            title="No Active Split"
-            message="Get started by creating a workout split in the Program tab. You'll be able to track your workouts and progress!"
-            ctaText="Create Your Split"
-            ctaIcon="add-circle-outline"
-            onCtaPress={() => router.push('/program')}
-          />
+          {workoutMode === 'individual' ? (
+            individualWorkoutCompleted && completedIndividualWorkout ? (
+              /* Show completed workout card */
+              <View style={styles.contentContainer}>
+                <IndividualWorkoutCompletedCard
+                  workoutData={completedIndividualWorkout}
+                  onPostWorkout={() => {
+                    // Format workout data like split workouts for consistent post creation
+                    const workoutDataForPost = {
+                      dayName: completedIndividualWorkout.workoutName || 'Workout',
+                      exercises: completedIndividualWorkout.exercises || [],
+                      source: completedIndividualWorkout.source || 'freestyle',
+                    };
+                    router.push({
+                      pathname: '/post/create',
+                      params: {
+                        workoutData: JSON.stringify(workoutDataForPost),
+                        workoutSessionId: completedIndividualWorkout.workoutSessionId?.toString() || '',
+                      },
+                    });
+                  }}
+                  onUncomplete={async () => {
+                    await markIndividualWorkoutCompleted(null);
+                  }}
+                />
+              </View>
+            ) : selectedSavedWorkout ? (
+              /* Show selected saved workout detail */
+              <SavedWorkoutDetailCard
+                workout={selectedSavedWorkout}
+                onBack={() => setSelectedSavedWorkout(null)}
+                onEdit={(workout) => router.push({
+                  pathname: '/workout/make-workout',
+                  params: { editWorkoutId: workout.id }
+                })}
+                onMarkComplete={async (workout) => {
+                  // Create a workout session so the post has exercise data
+                  const workoutSessionId = await createCompletedWorkoutSession({
+                    workoutName: workout.name,
+                    exercises: workout.exercises || [],
+                    source: 'saved',
+                    savedWorkoutId: workout.id?.toString(),
+                  });
+                  const workoutData = {
+                    source: 'saved',
+                    workoutSessionId,
+                    workoutName: workout.name,
+                    exercises: workout.exercises?.map(ex => ({
+                      name: ex.name,
+                      completedSets: ex.sets || 0,
+                      totalSets: ex.sets || 0,
+                    })) || [],
+                    completedAt: Date.now(),
+                  };
+                  await markIndividualWorkoutCompleted(workoutData);
+                  setSelectedSavedWorkout(null);
+                  setShowCelebration(true);
+                }}
+              />
+            ) : (
+              /* Show freestyle/saved options */
+              <>
+                {/* Freestyle Workout Option */}
+                <TouchableOpacity
+                  style={[styles.freestyleCard, { backgroundColor: colors.cardBackground, borderColor: colors.primary + '30' }]}
+                  onPress={() => router.push({ pathname: '/workout/session', params: { source: 'freestyle' } })}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.freestyleIconContainer, { backgroundColor: colors.primary + '15' }]}>
+                    <Ionicons name="flash" size={22} color={colors.primary} />
+                  </View>
+                  <View style={styles.freestyleContent}>
+                    <Text style={[styles.freestyleTitle, { color: colors.text }]}>Start Freestyle Workout</Text>
+                    <Text style={[styles.freestyleSubtitle, { color: colors.secondaryText }]}>
+                      Add exercises as you go
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.secondaryText} />
+                </TouchableOpacity>
+
+                {/* Saved Workouts Section */}
+                {savedWorkouts.length > 0 && (
+                  <View style={styles.savedWorkoutsSection}>
+                    <Text style={[styles.savedWorkoutsSectionTitle, { color: colors.text }]}>
+                      Saved Workouts
+                    </Text>
+                    <SavedWorkoutPicker
+                      workouts={savedWorkouts}
+                      onSelect={(workout) => setSelectedSavedWorkout(workout)}
+                    />
+                  </View>
+                )}
+              </>
+            )
+          ) : (
+            /* My Split Tab - No split created yet */
+            <View style={styles.createSplitSection}>
+              <View style={[styles.noSplitCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
+                <Ionicons name="calendar-outline" size={48} color={colors.secondaryText} style={{ marginBottom: 16 }} />
+                <Text style={[styles.noSplitTitle, { color: colors.text }]}>No Workout Split</Text>
+                <Text style={[styles.noSplitSubtitle, { color: colors.secondaryText }]}>
+                  Create a workout split to follow a structured weekly plan
+                </Text>
+                <TouchableOpacity
+                  style={[styles.createSplitButtonPrimary, { backgroundColor: colors.primary }]}
+                  onPress={() => router.push('/program')}
+                >
+                  <Ionicons name="add" size={20} color="#FFFFFF" />
+                  <Text style={styles.createSplitButtonPrimaryText}>Create a Workout Split</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </ScrollView>
+
+        {/* Celebration Animation for individual workout completion */}
+        {showCelebration && (
+          <CelebrationAnimation
+            onAnimationComplete={() => {
+              setShowCelebration(false);
+            }}
+          />
+        )}
       </View>
     );
   }
@@ -730,7 +694,7 @@ const WorkoutScreen = () => {
                   <TouchableOpacity
                     key={index}
                     style={[styles.dayPickerCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}
-                    onPress={() => handleDaySelected(index)}
+                    onPress={() => handleDaySelectedWrapper(index)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.dayPickerCardContent}>
@@ -761,7 +725,6 @@ const WorkoutScreen = () => {
         {/* Celebration Animation */}
         {showCelebration && (
           <CelebrationAnimation
-            key={completedSessionId || Date.now()}
             onAnimationComplete={() => {
               setShowCelebration(false);
               setIsToggling(false);
@@ -828,7 +791,6 @@ const WorkoutScreen = () => {
         {/* Celebration Animation */}
         {showCelebration && (
           <CelebrationAnimation
-            key={Date.now()}
             onAnimationComplete={() => {
               setShowCelebration(false);
               setIsToggling(false);
@@ -839,138 +801,25 @@ const WorkoutScreen = () => {
     );
   }
 
-  const handleToggleCompletion = async () => {
-    // Prevent multiple clicks
-    if (isToggling) return;
-
-    // If trying to un-complete, show warning
-    if (isCompleted) {
-      Alert.alert(
-        'Un-complete Workout?',
-        'Are you sure you want to mark this workout as incomplete? Your progress will be deleted.',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Un-complete',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                setIsToggling(true);
-
-                if (completedSessionId) {
-                  // Get the database ID (if workout was synced)
-                  const databaseId = await storage.getWorkoutDatabaseId(completedSessionId);
-
-                  // Delete from backend only if it was synced
-                  if (databaseId) {
-                    try {
-                      const { deleteWorkoutSession } = require('../api/workoutSessionsApi');
-                      await deleteWorkoutSession(databaseId);
-                      console.log('[Workout Tab] Deleted workout from backend:', databaseId);
-                    } catch (error) {
-                      // If 404, session was already deleted from backend
-                      if (error.response?.status !== 404) {
-                        console.error('[Workout Tab] Error deleting workout from backend:', error);
-                        Alert.alert('Error', 'Failed to delete from server. Please try again.');
-                        setIsToggling(false);
-                        return;
-                      }
-                    }
-
-                    // Delete the ID mapping
-                    await storage.deleteWorkoutDatabaseId(completedSessionId);
-                  }
-
-                  // Remove from local storage (pending queue)
-                  await storage.markWorkoutSynced(completedSessionId);
-
-                  // Remove from completed history
-                  await storage.removeFromCompletedHistory(completedSessionId);
-                }
-
-                // Update context state (this updates todaysWorkoutCompleted)
-                await markWorkoutCompleted(null);
-
-                // Recalculate streak
-                try {
-                  const streak = await calculateStreakFromLocal();
-                  setCurrentStreak(streak);
-                } catch (error) {
-                  console.error('[Workout Tab] Error recalculating streak:', error);
-                }
-
-                // Update pending count for sync
-                await updatePendingCount();
-              } catch (error) {
-                console.error('[Workout Tab] Error deleting workout:', error);
-                Alert.alert('Error', 'Failed to delete workout progress. Please try again.');
-              } finally {
-                setIsToggling(false);
-              }
-            },
-          },
-        ]
-      );
-    } else {
-      // If marking as complete, create a quick completion workout in local storage
+  // Wrapper for handleToggleCompletion from hook with celebration logic
+  const handleToggleCompletionWrapper = async () => {
+    const workoutId = await handleToggleCompletion(isCompleted);
+    if (workoutId && !isCompleted) {
+      // Show celebration when marking complete
+      setShowCelebration(true);
       try {
-        setIsToggling(true);
-
-        if (todaysWorkout && activeSplit) {
-          // Import the necessary functions
-          const { startWorkout: localStartWorkout, completeWorkout: localCompleteWorkout } = await import('../../storage');
-
-          // Create a workout session
-          const splitId = activeSplit.id;
-          const dayIndex = (todaysWorkout.dayNumber || 1) - 1;
-          const workout = await localStartWorkout(splitId, dayIndex);
-
-          // Mark all sets as completed (quick completion)
-          if (workout.exercises && workout.exercises.length > 0) {
-            workout.exercises.forEach(exercise => {
-              if (exercise.sets) {
-                exercise.sets.forEach(set => {
-                  set.completed = true;
-                  set.reps = set.reps || 0;
-                  set.weight = set.weight || 0;
-                });
-              }
-            });
-          }
-
-          // Save the updated workout with completed sets back to storage
-          await storage.saveActiveWorkout(workout);
-
-          // Complete the workout immediately
-          await localCompleteWorkout(workout.id);
-
-          // Update context state (this updates todaysWorkoutCompleted)
-          await markWorkoutCompleted(workout.id, isRestDay);
-
-          // Calculate and store current streak from local storage
-          try {
-            const streak = await calculateStreakFromLocal();
-            setCurrentStreak(streak);
-          } catch (error) {
-            console.error('[Workout Tab] Error calculating streak:', error);
-          }
-
-          // Show celebration animation (isToggling stays true until animation completes)
-          setShowCelebration(true);
-
-          // Update pending count for sync
-          await updatePendingCount();
-        } else {
-          setShowCelebration(true);
-        }
-        // Don't set isToggling to false here - wait for animation to complete
+        const streak = await calculateStreakFromLocal();
+        setCurrentStreak(streak);
       } catch (error) {
-        console.error('[Workout Tab] Error saving quick workout completion:', error);
-        Alert.alert('Error', 'Failed to save workout progress. Please try again.');
-        setIsToggling(false);
+        console.error('[Workout Tab] Error calculating streak:', error);
+      }
+    } else if (!workoutId && isCompleted) {
+      // Recalculate streak when un-completing
+      try {
+        const streak = await calculateStreakFromLocal();
+        setCurrentStreak(streak);
+      } catch (error) {
+        console.error('[Workout Tab] Error recalculating streak:', error);
       }
     }
   };
@@ -981,14 +830,24 @@ const WorkoutScreen = () => {
       <View style={[
         styles.headerContainer,
         { backgroundColor: colors.cardBackground, shadowColor: colors.shadow },
-        isCompleted && styles.headerContainerCompleted
+        ((isCompleted && workoutMode === 'split') || (individualWorkoutCompleted && workoutMode === 'individual')) && styles.headerContainerCompleted
       ]}>
         <Text style={[
           styles.title,
           { color: colors.text },
-          isCompleted && styles.titleCompleted
+          ((isCompleted && workoutMode === 'split') || (individualWorkoutCompleted && workoutMode === 'individual')) && styles.titleCompleted
         ]}>Today's Workout</Text>
       </View>
+
+      {/* Tab Toggle - My Split vs Individual */}
+      <TabBar
+        tabs={WORKOUT_TABS}
+        activeTab={workoutMode}
+        onTabPress={handleWorkoutModeChange}
+        style={{ backgroundColor: colors.cardBackground }}
+        completed={isCompleted || individualWorkoutCompleted}
+        lockedTab={isCompleted ? 'split' : (individualWorkoutCompleted ? 'individual' : null)}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -997,273 +856,83 @@ const WorkoutScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
-        <View style={styles.contentContainer}>
-          {/* Today's Workout Card */}
-          <View style={[
-            styles.workoutCard,
-            { backgroundColor: colors.cardBackground, shadowColor: colors.shadow, borderColor: colors.borderLight },
-            isCompleted && styles.workoutCardCompleted
-          ]}>
-            <View style={styles.workoutHeader}>
-              <View style={styles.workoutInfo}>
-                <View style={styles.workoutTitleRow}>
-                  <Text style={[styles.workoutTitle, { color: colors.text }]}>{todaysWorkout.dayName}</Text>
-                  <View style={styles.headerActions}>
-                    <Text style={[styles.exerciseCount, { color: colors.secondaryText }]}>
-                      {todaysWorkout.exercises.length} exercises
-                    </Text>
-                    {!isCompleted && (
-                      <TouchableOpacity
-                        style={styles.optionsButton}
-                        onPress={() => setShowOptionsMenu(!showOptionsMenu)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-                {activeSplit?.name && (
-                  <Text style={[styles.splitName, { color: colors.primary }]}>
-                    {activeSplit.emoji && `${activeSplit.emoji} `}{activeSplit.name}
-                  </Text>
-                )}
-                <Text style={[styles.cycleInfo, { color: colors.secondaryText }]}>
-                  Cycle {todaysWorkout.weekNumber} · Day {todaysWorkout.dayNumber}
-                </Text>
-              </View>
-            </View>
-
-            {/* Options Menu */}
-            {showOptionsMenu && !isCompleted && (
-              <>
-                {/* Backdrop to dismiss menu */}
-                <TouchableOpacity
-                  style={styles.optionsMenuBackdrop}
-                  activeOpacity={1}
-                  onPress={() => setShowOptionsMenu(false)}
-                />
-                <View style={[styles.optionsMenuOverlay, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
-                  <TouchableOpacity
-                    style={styles.optionsMenuItem}
-                    onPress={() => {
-                      setShowOptionsMenu(false);
-                      setShowChangeDayModal(true);
-                    }}
-                  >
-                    <Ionicons name="calendar-outline" size={18} color={colors.text} />
-                    <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Change Today's Workout</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.optionsMenuItem}
-                    onPress={openReorderModal}
-                  >
-                    <Ionicons name="create-outline" size={18} color={colors.text} />
-                    <Text style={[styles.optionsMenuItemText, { color: colors.text }]}>Edit Workout</Text>
-                  </TouchableOpacity>
-                  {freeRestDayAvailable && (
-                    <TouchableOpacity
-                      style={styles.optionsMenuItem}
-                      onPress={() => {
-                        setShowOptionsMenu(false);
-                        Alert.alert(
-                          'Take Free Rest Day?',
-                          'This will use your free rest day for the week. Your current workout will be waiting tomorrow.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Take Rest Day',
-                              onPress: async () => {
-                                await markFreeRestDay();
-                                setFreeRestDayAvailable(false);
-                              },
-                            },
-                          ]
-                        );
-                      }}
-                    >
-                      <Ionicons name="bed-outline" size={18} color={colors.warning} />
-                      <Text style={[styles.optionsMenuItemText, { color: colors.warning }]}>Take Free Rest Day</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </>
-            )}
-
-            {/* Exercises List */}
-            <View style={styles.exercisesList}>
-              {(isExercisesExpanded || !shouldCollapse
-                ? todaysWorkout.exercises
-                : todaysWorkout.exercises.slice(0, maxVisibleExercises)
-              ).map((exercise, exerciseIndex) => (
-                <View key={exerciseIndex} style={[styles.exerciseItem, { borderBottomColor: colors.borderLight + '40' }]}>
-                  <View style={styles.exerciseContent}>
-                    <Text style={[styles.exerciseName, { color: colors.text }]}>
-                      {exerciseIndex + 1}. {exercise.name}
-                    </Text>
-                    <Text style={[styles.exerciseDetailText, { color: colors.secondaryText }]}>
-                      {exercise.sets && `${exercise.sets} sets`}
-                      {exercise.sets && exercise.reps && ' · '}
-                      {exercise.reps && `${exercise.reps} reps`}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-
-              {/* Show More/Less Button - Only show if card would exceed screen */}
-              {shouldCollapse && (
-                <TouchableOpacity
-                  style={styles.showMoreButton}
-                  onPress={() => setIsExercisesExpanded(!isExercisesExpanded)}
-                >
-                  <Text style={[styles.showMoreText, { color: colors.primary }]}>
-                    {isExercisesExpanded
-                      ? 'Show less'
-                      : `Show ${todaysWorkout.exercises.length - maxVisibleExercises} more`}
-                  </Text>
-                  <Ionicons
-                    name={isExercisesExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={18}
-                    color={colors.primary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              {!isCompleted && (
-                <>
-                  {/* No exercises warning */}
-                  {!hasExercises && (
-                    <View style={[styles.noExercisesWarning, { backgroundColor: colors.borderLight + '40' }]}>
-                      <Ionicons name="alert-circle-outline" size={18} color={colors.secondaryText} />
-                      <Text style={[styles.noExercisesWarningText, { color: colors.secondaryText }]}>
-                        Add exercises to this workout to get started
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Primary CTA: Start/Resume Workout */}
-                  <TouchableOpacity
-                    style={[
-                      styles.startWorkoutButton,
-                      { backgroundColor: colors.primary, shadowColor: colors.primary },
-                      !hasExercises && styles.startWorkoutButtonDisabled
-                    ]}
-                    onPress={() => {
-                      skipAutoResumeRef.current = false;
-                      router.push({
-                        pathname: '/workout/session',
-                        params: {
-                          workoutData: JSON.stringify(todaysWorkout)
-                        }
-                      });
-                    }}
-                    disabled={!hasExercises}
-                    activeOpacity={!hasExercises ? 1 : 0.7}
-                  >
-                    <Text style={[
-                      styles.startWorkoutText,
-                      { color: colors.onPrimary },
-                      !hasExercises && styles.startWorkoutTextDisabled
-                    ]}>
-                      {hasActiveWorkout ? 'Resume Workout' : 'Start Workout'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Secondary Action: Mark Complete */}
-                  <TouchableOpacity
-                    style={[
-                      styles.secondaryActionButton,
-                      { borderColor: colors.borderLight },
-                      isToggling && styles.secondaryActionButtonDisabled
-                    ]}
-                    onPress={handleToggleCompletion}
-                    disabled={isToggling}
-                    activeOpacity={isToggling ? 1 : 0.7}
-                  >
-                    <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Complete Workout</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {isCompleted && (
-                <>
-                  {hasPosted ? (
-                    /* Workout Posted - Show completed state */
-                    <View style={styles.workoutCompletedContainer}>
-                      <View style={styles.workoutCompletedBadge}>
-                        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                        <Text style={[styles.workoutCompletedText, { color: colors.text }]}>Workout Completed</Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <>
-                      {/* Share Button */}
-                      <TouchableOpacity
-                        style={[
-                          styles.postWorkoutButton,
-                          isToggling && styles.postWorkoutButtonDisabled
-                        ]}
-                        onPress={() => {
-                          // Calculate if this workout completes the split
-                          // (last workout day, or only rest days remaining)
-                          let isSplitCompleted = false;
-                          if (activeSplit?.days && todaysWorkout?.dayNumber) {
-                            const currentDayIndex = todaysWorkout.dayNumber - 1;
-                            const totalDays = activeSplit.days.length;
-                            isSplitCompleted = true;
-                            // Check if there are any workout days after this one
-                            for (let i = currentDayIndex + 1; i < totalDays; i++) {
-                              const day = activeSplit.days[i];
-                              if (day && !day.isRest) {
-                                isSplitCompleted = false;
-                                break;
-                              }
-                            }
-                          }
-
-                          router.push({
-                            pathname: '/post/create',
-                            params: {
-                              workoutData: JSON.stringify(todaysWorkout),
-                              workoutSessionId: completedSessionId?.toString() || '',
-                              splitId: activeSplit?.id?.toString() || '',
-                              streak: currentStreak.toString(),
-                              isSplitCompleted: isSplitCompleted.toString(),
-                            },
-                          });
-                        }}
-                        disabled={isToggling}
-                        activeOpacity={isToggling ? 1 : 0.7}
-                      >
-                        <View style={styles.postWorkoutContent}>
-                          <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
-                          <Text style={styles.postWorkoutText}>Post Workout</Text>
-                        </View>
-                      </TouchableOpacity>
-
-                      {/* Un-complete action */}
-                      <TouchableOpacity
-                        style={[
-                          styles.secondaryActionButton,
-                          { borderColor: colors.borderLight },
-                          isToggling && styles.secondaryActionButtonDisabled
-                        ]}
-                        onPress={handleToggleCompletion}
-                        disabled={isToggling}
-                        activeOpacity={isToggling ? 1 : 0.7}
-                      >
-                        <Text style={[styles.secondaryActionText, { color: colors.secondaryText }]}>Un-complete</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </>
-              )}
-            </View>
+        {workoutMode === 'split' ? (
+          <View style={styles.contentContainer}>
+            <SplitWorkoutCard
+              todaysWorkout={todaysWorkout}
+              activeSplit={activeSplit}
+              isCompleted={isCompleted}
+              isToggling={isToggling}
+              hasExercises={todaysWorkout?.exercises?.length > 0}
+              hasActiveWorkout={hasActiveWorkout}
+              hasPosted={hasPosted}
+              currentStreak={currentStreak}
+              completedSessionId={completedSessionId}
+              shouldCollapse={shouldCollapse}
+              maxVisibleExercises={maxVisibleExercises}
+              freeRestDayAvailable={freeRestDayAvailable}
+              onToggleCompletion={handleToggleCompletionWrapper}
+              onChangeDayPress={() => setShowChangeDayModal(true)}
+              onEditWorkoutPress={openReorderModal}
+              onFreeRestDayPress={() => {
+                Alert.alert(
+                  'Take Free Rest Day?',
+                  'This will use your free rest day for the week. Your current workout will be waiting tomorrow.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Take Rest Day',
+                      onPress: async () => {
+                        await markFreeRestDay();
+                        setFreeRestDayAvailable(false);
+                      },
+                    },
+                  ]
+                );
+              }}
+              skipAutoResumeRef={skipAutoResumeRef}
+            />
           </View>
-        </View>
+        ) : (
+          <IndividualWorkoutView
+            individualWorkoutCompleted={individualWorkoutCompleted}
+            completedIndividualWorkout={completedIndividualWorkout}
+            savedWorkouts={savedWorkouts}
+            selectedSavedWorkout={selectedSavedWorkout}
+            onUncomplete={async () => {
+              await markIndividualWorkoutCompleted(null);
+            }}
+            onEditWorkout={(workout) => router.push({
+              pathname: '/workout/make-workout',
+              params: { editWorkoutId: workout.id }
+            })}
+            onSelectWorkout={(workout) => setSelectedSavedWorkout(workout)}
+            onBackFromWorkout={() => setSelectedSavedWorkout(null)}
+            onMarkComplete={async (workout) => {
+              // Create a workout session so the post has exercise data
+              const workoutSessionId = await createCompletedWorkoutSession({
+                workoutName: workout.name,
+                exercises: workout.exercises || [],
+                source: 'saved',
+                savedWorkoutId: workout.id?.toString(),
+              });
+              const workoutData = {
+                source: 'saved',
+                workoutSessionId,
+                workoutName: workout.name,
+                exercises: workout.exercises?.map(ex => ({
+                  name: ex.name,
+                  completedSets: ex.sets || 0,
+                  totalSets: ex.sets || 0,
+                })) || [],
+                completedAt: Date.now(),
+              };
+              await markIndividualWorkoutCompleted(workoutData);
+              setSelectedSavedWorkout(null);
+              setShowCelebration(true);
+            }}
+          />
+        )}
       </ScrollView>
 
       {/* Change Workout Modal */}
@@ -1310,7 +979,7 @@ const WorkoutScreen = () => {
                 <TouchableOpacity
                   key={index}
                   style={[styles.dayPickerCard, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}
-                  onPress={() => handleDaySelected(index)}
+                  onPress={() => handleDaySelectedWrapper(index)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.dayPickerCardContent}>
@@ -1611,7 +1280,6 @@ const WorkoutScreen = () => {
       {/* Celebration Animation */}
       {showCelebration && (
         <CelebrationAnimation
-          key={completedSessionId || Date.now()}
           onAnimationComplete={() => {
             setShowCelebration(false);
             setIsToggling(false);
@@ -2466,5 +2134,129 @@ const styles = StyleSheet.create({
   createFirstButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+
+  // No-Split Freestyle Workout UI
+  noSplitScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  freestyleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.primary + '30',
+  },
+  freestyleIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  freestyleContent: {
+    flex: 1,
+  },
+  freestyleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  freestyleSubtitle: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+  },
+  savedWorkoutsSection: {
+    marginTop: 28,
+  },
+  savedWorkoutsSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  createSplitSection: {
+    marginTop: 36,
+    alignItems: 'center',
+  },
+  dividerWithText: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderLight,
+    marginBottom: 24,
+    position: 'relative',
+    alignItems: 'center',
+  },
+  dividerText: {
+    position: 'absolute',
+    top: -10,
+    paddingHorizontal: 16,
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
+    backgroundColor: Colors.light.background,
+  },
+  createSplitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.light.borderLight,
+  },
+  createSplitText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  createSplitHint: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+
+  // No Split Card styles
+  noSplitCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 32,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  noSplitTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noSplitSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  createSplitButtonPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  createSplitButtonPrimaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

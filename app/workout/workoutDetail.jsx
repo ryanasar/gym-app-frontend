@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { exercises } from '../data/exercises/exerciseDatabase';
 import { muscleGroups } from '../data/exercises/muscleGroups';
-import { createSavedWorkout } from '../api/savedWorkoutsApi';
+import { createSavedWorkout, getSavedWorkouts, deleteSavedWorkout } from '../api/savedWorkoutsApi';
 import { getSplitById } from '../api/splitsApi';
 import { useAuth } from '../auth/auth';
 
@@ -15,7 +15,7 @@ const WorkoutDetailScreen = () => {
   const colors = useThemeColors();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [savedWorkoutId, setSavedWorkoutId] = useState(null);
   const [loadingSplit, setLoadingSplit] = useState(false);
 
   // Parse workout data from params
@@ -25,8 +25,52 @@ const WorkoutDetailScreen = () => {
   // Check if this split is viewable (public and has an ID)
   const canViewFullSplit = splitData?.id && splitData?.isPublic;
 
-  // Save workout to library
-  const handleSaveWorkout = async () => {
+  // Check if this workout is already saved (only runs once on mount)
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkIfSaved = async () => {
+      if (!workoutData) return;
+
+      try {
+        const allSavedWorkouts = await getSavedWorkouts();
+
+        // If this IS a saved workout (has an id), check if it still exists
+        if (workoutData.id && !splitData) {
+          const stillExists = allSavedWorkouts.find(saved => saved.id === workoutData.id);
+          if (isMounted && stillExists) {
+            setSavedWorkoutId(workoutData.id);
+          }
+          return;
+        }
+
+        // Otherwise, find a matching saved workout by name and split reference
+        const workoutName = workoutData.dayName || workoutData.name;
+        const matchingSaved = allSavedWorkouts.find(saved => {
+          const nameMatches = saved.name === workoutName;
+          const fromSameSplit = splitData?.name
+            ? saved.description?.includes(splitData.name)
+            : !saved.description || saved.description === '';
+          return nameMatches && fromSameSplit;
+        });
+
+        if (isMounted && matchingSaved) {
+          setSavedWorkoutId(matchingSaved.id);
+        }
+      } catch (error) {
+        console.error('Failed to check saved workouts:', error);
+      }
+    };
+
+    checkIfSaved();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Only run once on mount
+
+  // Toggle save/unsave workout
+  const handleToggleSaveWorkout = async () => {
     if (!workoutData?.exercises || workoutData.exercises.length === 0) {
       Alert.alert('Error', 'No exercises to save');
       return;
@@ -34,42 +78,46 @@ const WorkoutDetailScreen = () => {
 
     setSaving(true);
     try {
-      // Convert workout session exercises to saved workout format
-      const exercisesToSave = workoutData.exercises.map(exercise => {
-        // If sets is an array (from completed workout), extract the template info
-        if (Array.isArray(exercise.sets) && exercise.sets.length > 0) {
+      if (savedWorkoutId) {
+        // Unsave - delete the saved workout
+        await deleteSavedWorkout(savedWorkoutId);
+        setSavedWorkoutId(null);
+      } else {
+        // Save the workout
+        const exercisesToSave = workoutData.exercises.map(exercise => {
+          if (Array.isArray(exercise.sets) && exercise.sets.length > 0) {
+            return {
+              ...exercise,
+              sets: exercise.sets.length.toString(),
+              reps: exercise.sets[0]?.reps?.toString() || '',
+              weight: exercise.sets[0]?.weight?.toString() || '',
+              restSeconds: '',
+              notes: ''
+            };
+          }
           return {
             ...exercise,
-            sets: exercise.sets.length.toString(),
-            reps: exercise.sets[0]?.reps?.toString() || '',
-            weight: exercise.sets[0]?.weight?.toString() || '',
-            restSeconds: '',
-            notes: ''
+            sets: exercise.sets?.toString() || '',
+            reps: exercise.reps?.toString() || '',
+            weight: exercise.weight?.toString() || '',
+            restSeconds: exercise.restSeconds?.toString() || '',
+            notes: exercise.notes || ''
           };
-        }
-        // Already in template format
-        return {
-          ...exercise,
-          sets: exercise.sets?.toString() || '',
-          reps: exercise.reps?.toString() || '',
-          weight: exercise.weight?.toString() || '',
-          restSeconds: exercise.restSeconds?.toString() || '',
-          notes: exercise.notes || ''
-        };
-      });
+        });
 
-      await createSavedWorkout({
-        name: workoutData.dayName || 'Saved Workout',
-        description: splitData?.name ? `From ${splitData.name}` : '',
-        emoji: splitData?.emoji || '💪',
-        workoutType: '',
-        exercises: exercisesToSave
-      });
+        const savedWorkout = await createSavedWorkout({
+          name: workoutData.dayName || workoutData.name || 'Saved Workout',
+          description: splitData?.name ? `From ${splitData.name}` : '',
+          emoji: splitData?.emoji || '💪',
+          workoutType: '',
+          exercises: exercisesToSave
+        });
 
-      setSaved(true);
+        setSavedWorkoutId(savedWorkout.id);
+      }
     } catch (error) {
-      console.error('Failed to save workout:', error);
-      Alert.alert('Error', 'Failed to save workout');
+      console.error('Failed to save/unsave workout:', error);
+      Alert.alert('Error', 'Failed to update workout');
     } finally {
       setSaving(false);
     }
@@ -182,21 +230,26 @@ const WorkoutDetailScreen = () => {
         <TouchableOpacity
           style={[
             styles.saveButton,
-            { backgroundColor: colors.primary + '15' },
-            saved && { backgroundColor: colors.accent + '15' }
+            { backgroundColor: savedWorkoutId ? colors.accent + '15' : colors.primary + '15' }
           ]}
-          onPress={handleSaveWorkout}
-          disabled={saving || saved}
+          onPress={handleToggleSaveWorkout}
+          disabled={saving}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name={saved ? "checkmark-circle" : "bookmark-outline"}
-            size={18}
-            color={saved ? colors.accent : colors.primary}
-          />
-          <Text style={[styles.saveButtonText, { color: saved ? colors.accent : colors.primary }]}>
-            {saving ? '...' : saved ? 'Saved' : 'Save'}
-          </Text>
+          {saving ? (
+            <ActivityIndicator size="small" color={savedWorkoutId ? colors.accent : colors.primary} />
+          ) : (
+            <>
+              <Ionicons
+                name={savedWorkoutId ? "bookmark" : "bookmark-outline"}
+                size={18}
+                color={savedWorkoutId ? colors.accent : colors.primary}
+              />
+              <Text style={[styles.saveButtonText, { color: savedWorkoutId ? colors.accent : colors.primary }]}>
+                {savedWorkoutId ? 'Saved' : 'Save'}
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -206,7 +259,14 @@ const WorkoutDetailScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Workout Name */}
-        <Text style={[styles.workoutName, { color: colors.text }]}>{workoutData.dayName}</Text>
+        <Text style={[styles.workoutName, { color: colors.text }]}>{workoutData.dayName || workoutData.name}</Text>
+
+        {/* Workout Description (for saved workouts) */}
+        {!splitData?.name && workoutData.description && (
+          <Text style={[styles.workoutDescription, { color: colors.secondaryText }]}>
+            {workoutData.description}
+          </Text>
+        )}
 
         {/* Program Name - Clickable when split is public */}
         {splitData?.name && (
@@ -401,8 +461,12 @@ const styles = StyleSheet.create({
   workoutName: {
     fontSize: 32,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 8,
     lineHeight: 38,
+  },
+  workoutDescription: {
+    fontSize: 15,
+    marginBottom: 16,
   },
 
   // Program Section

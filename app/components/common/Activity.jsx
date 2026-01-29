@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View, Pressable, Modal, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { deletePost, likePost, unlikePost } from '../../api/postsApi';
 import { createLikeNotification, deleteLikeNotification } from '../../api/notificationsApi';
@@ -11,6 +11,8 @@ import Avatar from '../ui/Avatar';
 import Badge from '../ui/Badge';
 import CommentModal from './CommentModal';
 import SocialActions from './SocialActions';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOpenComments = false }) => {
   const colors = useThemeColors();
@@ -210,6 +212,7 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
   const [showMenu, setShowMenu] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [descriptionNeedsTruncation, setDescriptionNeedsTruncation] = useState(false);
+  const [showExpandedImage, setShowExpandedImage] = useState(false);
 
   return (
     <Pressable
@@ -309,13 +312,18 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
 
       {/* Post Image */}
       {imageUrl && (
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.postImage}
-          contentFit="cover"
-          transition={200}
-          cachePolicy="memory-disk"
-        />
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setShowExpandedImage(true)}
+        >
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.postImage}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        </TouchableOpacity>
       )}
 
       {/* Metadata Section */}
@@ -384,6 +392,38 @@ const Activity = ({ post, currentUserId, onPostUpdated, onPostDeleted, initialOp
         commentCount={localCommentCount}
         onCommentCountChange={handleCommentCountChange}
       />
+
+      {/* Expanded Image Modal */}
+      <Modal
+        visible={showExpandedImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowExpandedImage(false)}
+      >
+        <TouchableOpacity
+          style={styles.expandedImageOverlay}
+          activeOpacity={1}
+          onPress={() => setShowExpandedImage(false)}
+        >
+          <View style={styles.expandedImageContainer}>
+            {imageUrl && (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.expandedImage}
+                contentFit="contain"
+                transition={200}
+              />
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.expandedImageCloseButton}
+            onPress={() => setShowExpandedImage(false)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </Pressable>
   );
 };
@@ -546,5 +586,30 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     opacity: 0.7,
     fontStyle: 'italic',
+  },
+  expandedImageOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expandedImageContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH,
+  },
+  expandedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  expandedImageCloseButton: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

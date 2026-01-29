@@ -341,9 +341,11 @@ const CreatePostScreen = () => {
               </View>
 
               <Text style={[styles.workoutName, { color: colors.text }]}>{workoutData.dayName}</Text>
-              <Text style={[styles.workoutDetails, { color: colors.secondaryText }]}>
-                Week {workoutData.weekNumber} • Day {workoutData.dayNumber}
-              </Text>
+              {workoutData.weekNumber && workoutData.dayNumber && (
+                <Text style={[styles.workoutDetails, { color: colors.secondaryText }]}>
+                  Week {workoutData.weekNumber} • Day {workoutData.dayNumber}
+                </Text>
+              )}
 
               <View style={[styles.exercisesSummary, { backgroundColor: colors.cardBackground + '80' }]}>
                 <Text style={[styles.exercisesSummaryTitle, { color: colors.text }]}>

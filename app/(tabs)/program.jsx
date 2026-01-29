@@ -5,7 +5,9 @@ import { deleteSplit, getSplitsByUserId } from '../api/splitsApi';
 import { useAuth } from '../auth/auth';
 import ChangeSplitModal from '../components/program/ChangeSplitModal';
 import SplitCard from '../components/program/SplitCard';
+import SavedWorkoutsTab from '../components/program/SavedWorkoutsTab';
 import ScreenHeader from '../components/ui/ScreenHeader';
+import TabBar from '../components/ui/TabBar';
 import { Colors } from '../constants/colors';
 import { useSync } from '../contexts/SyncContext';
 import { useWorkout } from '../contexts/WorkoutContext';
@@ -24,6 +26,9 @@ const ProgramScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showChangeSplitModal, setShowChangeSplitModal] = useState(false);
   const hasFetchedRef = useRef(false);
+
+  // Tab toggle state: 'splits' or 'saved'
+  const [activeTab, setActiveTab] = useState('splits');
 
   // Fetch splits only on mount
   useEffect(() => {
@@ -297,6 +302,20 @@ const ProgramScreen = () => {
         style={[styles.headerContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}
       />
 
+      {/* Tab Bar */}
+      <TabBar
+        tabs={[
+          { key: 'splits', label: 'Splits' },
+          { key: 'saved', label: 'Saved Workouts' },
+        ]}
+        activeTab={activeTab}
+        onTabPress={setActiveTab}
+        style={{ backgroundColor: colors.cardBackground, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}
+      />
+
+      {activeTab === 'saved' ? (
+        <SavedWorkoutsTab />
+      ) : (
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -395,6 +414,7 @@ const ProgramScreen = () => {
           </View>
         </View>
       </ScrollView>
+      )}
 
       {/* Change Split Modal */}
       <ChangeSplitModal
@@ -586,4 +606,5 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     paddingVertical: 20,
   },
+
 });

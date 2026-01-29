@@ -48,6 +48,12 @@ export const getSavedWorkoutById = async (workoutId) => {
  */
 export const createSavedWorkout = async (workoutData) => {
   try {
+    // Check saved workout limit
+    const existingWorkouts = await storage.getSavedWorkouts();
+    if (existingWorkouts.length >= 10) {
+      throw new Error('You can only have up to 10 saved workouts. Please delete one to create a new one.');
+    }
+
     // Validate exercise limit
     if (workoutData.exercises?.length > 20) {
       throw new Error(`Workout has ${workoutData.exercises.length} exercises. Maximum is 20.`);

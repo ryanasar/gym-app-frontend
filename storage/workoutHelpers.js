@@ -231,6 +231,150 @@ export async function cancelWorkout(workoutId) {
 }
 
 /**
+ * Starts a new freestyle workout session (no split, empty exercises)
+ * @param {string} [workoutName] - Optional custom name for the workout
+ * @returns {Promise<import('../types/storage').WorkoutSession>}
+ */
+export async function startFreestyleWorkout(workoutName = 'Freestyle Workout') {
+  // Check if there's already an active workout
+  const existingWorkout = await storage.getActiveWorkout();
+  if (existingWorkout) {
+    return existingWorkout;
+  }
+
+  const workout = {
+    id: generateWorkoutId(),
+    splitId: null,
+    dayIndex: null,
+    source: 'freestyle',
+    workoutName: workoutName,
+    startedAt: Date.now(),
+    exercises: [],
+    pendingSync: true,
+  };
+
+  // Save to local storage
+  await storage.saveActiveWorkout(workout);
+
+  return workout;
+}
+
+/**
+ * Starts a workout session from a saved workout
+ * @param {string} savedWorkoutId - The ID of the saved workout to start
+ * @returns {Promise<import('../types/storage').WorkoutSession>}
+ */
+export async function startSavedWorkout(savedWorkoutId) {
+  // Check if there's already an active workout
+  const existingWorkout = await storage.getActiveWorkout();
+  if (existingWorkout) {
+    return existingWorkout;
+  }
+
+  // Get the saved workout from storage
+  const savedWorkout = await storage.getSavedWorkout(savedWorkoutId);
+  if (!savedWorkout) {
+    throw new Error('Saved workout not found');
+  }
+
+  // Convert saved workout exercises to session format
+  const exercises = (savedWorkout.exercises || []).map(savedExercise => {
+    const targetSets = parseInt(savedExercise.targetSets) || parseInt(savedExercise.sets) || 3;
+    const targetReps = parseInt(savedExercise.targetReps) || parseInt(savedExercise.reps) || 10;
+    const restSeconds = parseInt(savedExercise.restSeconds) || 0;
+
+    // Ensure exerciseId is a number to match the local database
+    const rawId = savedExercise.exerciseId || savedExercise.id;
+    const exerciseId = parseInt(rawId) || rawId;
+
+    return {
+      exerciseId: exerciseId,
+      restSeconds: restSeconds,
+      sets: Array.from({ length: targetSets }, (_, i) => ({
+        setIndex: i,
+        reps: targetReps,
+        weight: 0,
+        completed: false,
+      })),
+    };
+  });
+
+  const workout = {
+    id: generateWorkoutId(),
+    splitId: null,
+    dayIndex: null,
+    source: 'saved',
+    savedWorkoutId: savedWorkoutId,
+    workoutName: savedWorkout.name || 'Saved Workout',
+    startedAt: Date.now(),
+    exercises: exercises,
+    pendingSync: true,
+  };
+
+  // Save to local storage
+  await storage.saveActiveWorkout(workout);
+
+  return workout;
+}
+
+/**
+ * Creates and immediately completes a workout session from exercise data
+ * Used for "Mark Complete" without going through the workout session screen
+ * @param {Object} options - The workout options
+ * @param {string} options.workoutName - Name of the workout
+ * @param {Array} options.exercises - Array of exercises with name, sets, reps, exerciseId
+ * @param {'saved' | 'freestyle'} options.source - Source of the workout
+ * @param {string} [options.savedWorkoutId] - ID of the saved workout if source is 'saved'
+ * @returns {Promise<string>} - The workout session ID
+ */
+export async function createCompletedWorkoutSession({ workoutName, exercises, source, savedWorkoutId }) {
+  const workoutId = generateWorkoutId();
+
+  // Convert exercises to session format with all sets marked as completed
+  const sessionExercises = (exercises || []).map(exercise => {
+    const targetSets = parseInt(exercise.sets) || parseInt(exercise.targetSets) || 3;
+    const targetReps = parseInt(exercise.reps) || parseInt(exercise.targetReps) || 10;
+    const exerciseId = exercise.exerciseId || exercise.id || exercise.name;
+    // Include exercise name directly for syncing
+    const exerciseName = exercise.name || exercise.exerciseName || exerciseId;
+
+    return {
+      exerciseId: exerciseId,
+      exerciseName: exerciseName, // Include name for sync
+      restSeconds: parseInt(exercise.restSeconds) || 0,
+      sets: Array.from({ length: targetSets }, (_, i) => ({
+        setIndex: i,
+        reps: targetReps,
+        weight: 0,
+        completed: true, // Mark all sets as completed
+      })),
+    };
+  });
+
+  const workout = {
+    id: workoutId,
+    splitId: null,
+    dayIndex: null,
+    source: source || 'saved',
+    savedWorkoutId: savedWorkoutId || null,
+    workoutName: workoutName || 'Workout',
+    dayName: workoutName || 'Workout', // Include dayName for sync compatibility
+    startedAt: Date.now(),
+    completedAt: Date.now(),
+    exercises: sessionExercises,
+    pendingSync: true,
+  };
+
+  // Add directly to pending workouts for sync (skip active workout step)
+  await storage.addToPendingWorkouts(workout);
+
+  // Add to completed history
+  await storage.addToCompletedHistory(workout);
+
+  return workoutId;
+}
+
+/**
  * Calculates current workout streak from local calendar storage
  * Rest days preserve the streak but don't increase it
  * Only workout days increase the streak count

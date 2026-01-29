@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -14,6 +14,7 @@ import { Colors } from '../constants/colors';
 import { useThemeColors } from '../hooks/useThemeColors';
 import EmptyState from '../components/common/EmptyState';
 import { createSplit } from '../api/splitsApi';
+import { createSavedWorkout, getSavedWorkouts, deleteSavedWorkout } from '../api/savedWorkoutsApi';
 import { useAuth } from '../auth/auth';
 import { copyCustomExercises } from '../api/customExercisesApi';
 import { checkNetworkStatus } from '../../services/networkService';
@@ -31,6 +32,51 @@ const ViewSplitScreen = () => {
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savingWorkout, setSavingWorkout] = useState(null); // Track which workout index is being saved
+  const [savedWorkoutIds, setSavedWorkoutIds] = useState({}); // Track saved workout IDs { index: savedWorkoutId }
+
+  // Check for existing saved workouts on mount (only runs once)
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkExistingSavedWorkouts = async () => {
+      if (!splitData?.workoutDays) return;
+
+      try {
+        const allSavedWorkouts = await getSavedWorkouts();
+        const matchedIds = {};
+
+        // For each workout day, check if there's a saved workout with matching name
+        splitData.workoutDays.forEach((day, index) => {
+          if (!day.exercises || day.exercises.length === 0) return;
+
+          const workoutName = day.name || day.workoutName || `Day ${index + 1}`;
+          // Find a saved workout that matches by name and has the same split reference in description
+          const matchingSaved = allSavedWorkouts.find(saved => {
+            const nameMatches = saved.name === workoutName;
+            const fromSameSplit = saved.description?.includes(splitData.name);
+            return nameMatches && fromSameSplit;
+          });
+
+          if (matchingSaved) {
+            matchedIds[index] = matchingSaved.id;
+          }
+        });
+
+        if (isMounted && Object.keys(matchedIds).length > 0) {
+          setSavedWorkoutIds(matchedIds);
+        }
+      } catch (error) {
+        console.error('Failed to check existing saved workouts:', error);
+      }
+    };
+
+    checkExistingSavedWorkouts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Only run once on mount
 
   // Handle saving the split to user's own splits
   const handleSaveSplit = async () => {
@@ -132,6 +178,63 @@ const ViewSplitScreen = () => {
     }
   };
 
+  // Handle saving/unsaving an individual workout
+  const handleToggleSaveWorkout = async (day, index) => {
+    if (!day.exercises || day.exercises.length === 0) {
+      Alert.alert('Cannot Save', 'This workout has no exercises to save.');
+      return;
+    }
+
+    setSavingWorkout(index);
+    try {
+      const existingSavedId = savedWorkoutIds[index];
+
+      if (existingSavedId) {
+        // Unsave - delete the saved workout
+        await deleteSavedWorkout(existingSavedId);
+        setSavedWorkoutIds(prev => {
+          const updated = { ...prev };
+          delete updated[index];
+          return updated;
+        });
+      } else {
+        // Save the workout
+        const exercisesToSave = day.exercises.map(ex => ({
+          id: ex.id,
+          name: ex.name,
+          sets: ex.sets?.toString() || '3',
+          reps: ex.reps?.toString() || '10',
+          weight: '',
+          restSeconds: ex.restTime || ex.restSeconds || '',
+          notes: ex.notes || '',
+          ...(ex.isCustom && {
+            isCustom: true,
+            category: ex.category,
+            primaryMuscles: ex.primaryMuscles,
+            secondaryMuscles: ex.secondaryMuscles,
+            equipment: ex.equipment,
+            difficulty: ex.difficulty,
+          }),
+        }));
+
+        const savedWorkout = await createSavedWorkout({
+          name: day.name || day.workoutName || `Day ${index + 1}`,
+          description: splitData?.name ? `From ${splitData.name}` : '',
+          emoji: day.emoji || splitData?.emoji || '💪',
+          workoutType: day.type || day.workoutType || '',
+          exercises: exercisesToSave,
+        });
+
+        setSavedWorkoutIds(prev => ({ ...prev, [index]: savedWorkout.id }));
+      }
+    } catch (error) {
+      console.error('Failed to save/unsave workout:', error);
+      Alert.alert('Error', 'Failed to update workout. Please try again.');
+    } finally {
+      setSavingWorkout(null);
+    }
+  };
+
   if (!splitData) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -229,6 +332,33 @@ const ViewSplitScreen = () => {
                         ? 'Rest Day'
                         : day.name || day.workoutName || 'Workout'}
                     </Text>
+                    {/* Save Workout Button - only show for workouts with exercises */}
+                    {day.exercises && day.exercises.length > 0 && (
+                      <TouchableOpacity
+                        style={[
+                          styles.saveWorkoutButton,
+                          { backgroundColor: savedWorkoutIds[index] ? colors.accent + '15' : colors.primary + '15' }
+                        ]}
+                        onPress={() => handleToggleSaveWorkout(day, index)}
+                        disabled={savingWorkout === index}
+                        activeOpacity={0.7}
+                      >
+                        {savingWorkout === index ? (
+                          <ActivityIndicator size="small" color={savedWorkoutIds[index] ? colors.accent : colors.primary} />
+                        ) : (
+                          <>
+                            <Ionicons
+                              name={savedWorkoutIds[index] ? "bookmark" : "bookmark-outline"}
+                              size={14}
+                              color={savedWorkoutIds[index] ? colors.accent : colors.primary}
+                            />
+                            <Text style={[styles.saveWorkoutButtonText, { color: savedWorkoutIds[index] ? colors.accent : colors.primary }]}>
+                              {savedWorkoutIds[index] ? 'Saved' : 'Save'}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* Exercises List */}
@@ -448,6 +578,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
     flex: 1,
+  },
+  saveWorkoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  saveWorkoutButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   exercisesList: {
     marginTop: 4,

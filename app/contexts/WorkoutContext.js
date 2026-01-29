@@ -31,6 +31,10 @@ export const WorkoutProvider = ({ children }) => {
   const [completedSessionId, setCompletedSessionId] = useState(null);
   const [exerciseDatabase, setExerciseDatabase] = useState({});
 
+  // Individual workout completion state (freestyle/saved workouts)
+  const [individualWorkoutCompleted, setIndividualWorkoutCompleted] = useState(false);
+  const [completedIndividualWorkout, setCompletedIndividualWorkout] = useState(null);
+
   // Helper function to validate and fix exerciseIds in split
   const validateAndFixSplitExercises = (split, exerciseMap) => {
     // Create a name-to-id map for fallback matching
@@ -291,6 +295,21 @@ export const WorkoutProvider = ({ children }) => {
           }
 
           await AsyncStorage.setItem('lastCheckDate', today);
+        }
+
+        // Restore individual workout completion state if completed today
+        const individualDate = await AsyncStorage.getItem('individualWorkoutDate');
+        const todayForIndividual = getLocalDateString();
+        if (individualDate === todayForIndividual) {
+          const individualCompleted = await AsyncStorage.getItem('individualWorkoutCompleted');
+          const individualWorkoutData = await AsyncStorage.getItem('completedIndividualWorkout');
+          if (individualCompleted === 'true' && individualWorkoutData) {
+            setIndividualWorkoutCompleted(true);
+            setCompletedIndividualWorkout(JSON.parse(individualWorkoutData));
+          }
+        } else if (individualDate && individualDate < todayForIndividual) {
+          // Clear stale individual workout data from previous day
+          await AsyncStorage.multiRemove(['individualWorkoutCompleted', 'completedIndividualWorkout', 'individualWorkoutDate']);
         }
 
         setIsInitialized(true);
@@ -683,6 +702,35 @@ export const WorkoutProvider = ({ children }) => {
     }
   };
 
+  // Mark individual workout (freestyle/saved) as completed or clear it
+  const markIndividualWorkoutCompleted = async (workoutData) => {
+    const today = getLocalDateString();
+    try {
+      if (workoutData) {
+        setIndividualWorkoutCompleted(true);
+        setCompletedIndividualWorkout(workoutData);
+        await AsyncStorage.setItem('individualWorkoutCompleted', 'true');
+        await AsyncStorage.setItem('completedIndividualWorkout', JSON.stringify(workoutData));
+        await AsyncStorage.setItem('individualWorkoutDate', today);
+
+        // Mark today as completed in calendar
+        const { markTodayCompleted } = await import('../../storage/calendarStorage.js');
+        await markTodayCompleted(false);
+      } else {
+        // Clear state
+        setIndividualWorkoutCompleted(false);
+        setCompletedIndividualWorkout(null);
+        await AsyncStorage.multiRemove(['individualWorkoutCompleted', 'completedIndividualWorkout', 'individualWorkoutDate']);
+
+        // Unmark today in calendar (uncomplete)
+        const { unmarkTodayCompleted } = await import('../../storage/calendarStorage.js');
+        await unmarkTodayCompleted();
+      }
+    } catch (error) {
+      console.error('[WorkoutContext] Failed to mark individual workout completed:', error);
+    }
+  };
+
   // Check today's workout status
   const checkTodaysWorkoutStatus = async (userId) => {
     if (!userId) return;
@@ -779,6 +827,10 @@ export const WorkoutProvider = ({ children }) => {
     refreshExerciseDatabase,
     exerciseDatabase,
     isInitialized,
+    // Individual workout completion
+    individualWorkoutCompleted,
+    completedIndividualWorkout,
+    markIndividualWorkoutCompleted,
   };
 
   return (

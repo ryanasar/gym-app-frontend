@@ -246,6 +246,15 @@ const CommentModal = ({
                   <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                 </View>
                 <View style={styles.commentActions}>
+                  {(comment.userId === currentUserId || comment.author?.id === currentUserId) && (
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDelete(comment)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={styles.likeButton}
                     onPress={() => handleCommentLike(comment)}
@@ -262,15 +271,6 @@ const CommentModal = ({
                       </Text>
                     )}
                   </TouchableOpacity>
-                  {(comment.userId === currentUserId || comment.author?.id === currentUserId) && (
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDelete(comment)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={colors.error} />
-                    </TouchableOpacity>
-                  )}
                 </View>
               </View>
             )}
@@ -379,8 +379,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   commentActions: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginLeft: 4,
     gap: 8,
     paddingTop: 2,

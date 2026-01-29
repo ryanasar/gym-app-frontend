@@ -134,16 +134,31 @@ const CelebrationAnimation = ({ onAnimationComplete }) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }, 1100);
 
-    sequence.start(({ finished }) => {
-      if (finished && onAnimationComplete) {
+    // Track if callback has been called to prevent double-firing
+    let callbackFired = false;
+    const fireCallback = () => {
+      if (!callbackFired && onAnimationComplete) {
+        callbackFired = true;
         onAnimationComplete();
       }
+    };
+
+    sequence.start(({ finished }) => {
+      if (finished) {
+        fireCallback();
+      }
     });
+
+    // Fallback timeout in case animation is interrupted
+    const fallbackTimer = setTimeout(() => {
+      fireCallback();
+    }, 3500); // Total animation duration is ~3.2s, add buffer
 
     // Cleanup
     return () => {
       sequence.stop();
       clearTimeout(checkmarkHapticTimer);
+      clearTimeout(fallbackTimer);
     };
   }, []);
 

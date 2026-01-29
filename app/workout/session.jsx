@@ -10,7 +10,8 @@ import { useThemeColors } from '../hooks/useThemeColors';
 import { useWorkout } from '../contexts/WorkoutContext';
 import ExerciseCard from '../components/exercises/ExerciseCard';
 import { useSync } from '../contexts/SyncContext';
-import { startWorkout, updateWorkoutSet, completeWorkout, cancelWorkout, getActiveWorkout, calculateStreakFromLocal, storage } from '../../storage';
+import { startWorkout, startFreestyleWorkout, startSavedWorkout, updateWorkoutSet, completeWorkout, cancelWorkout, getActiveWorkout, calculateStreakFromLocal, storage } from '../../storage';
+import { createSavedWorkout } from '../api/savedWorkoutsApi';
 import LiveActivity from '../modules/LiveActivity';
 import { getCustomExercises } from '../api/customExercisesApi';
 
@@ -24,12 +25,22 @@ const WorkoutSessionScreen = () => {
   // Parse workout data from params
   const workoutData = params.workoutData ? JSON.parse(params.workoutData) : null;
 
+  // New params for freestyle/saved workout modes
+  const workoutSource = params.source || 'split'; // 'split', 'freestyle', or 'saved'
+  const savedWorkoutId = params.savedWorkoutId || null;
+
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [currentSetIndex, setCurrentSetIndex] = useState(0);
   const [exercises, setExercises] = useState([]);
   const [workoutSessionId, setWorkoutSessionId] = useState(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [exerciseDatabase, setExerciseDatabase] = useState([]);
+
+  // Freestyle/saved workout state
+  const [workoutName, setWorkoutName] = useState(workoutData?.dayName || 'Workout');
+  const [currentSource, setCurrentSource] = useState(workoutSource);
+  const [showSaveWorkoutModal, setShowSaveWorkoutModal] = useState(false);
+  const [saveWorkoutName, setSaveWorkoutName] = useState('');
 
   // Add Exercise Modal state
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
@@ -86,6 +97,22 @@ const WorkoutSessionScreen = () => {
   // Animation lock refs - synchronous guards against rapid tapping
   const isAnimatingRef = useRef(false);
   const isCompletingRef = useRef(false);
+
+  // Reset animations on unmount to prevent stuck states
+  useEffect(() => {
+    // Reset to neutral position on mount
+    slideXAnim.setValue(0);
+    slideYAnim.setValue(0);
+    fadeAnim.setValue(1);
+    isAnimatingRef.current = false;
+
+    return () => {
+      slideXAnim.stopAnimation();
+      slideYAnim.stopAnimation();
+      fadeAnim.stopAnimation();
+      isAnimatingRef.current = false;
+    };
+  }, [slideXAnim, slideYAnim, fadeAnim]);
 
   // Input refs
   const weightInputRef = useRef(null);
@@ -154,6 +181,18 @@ const WorkoutSessionScreen = () => {
           } else {
             // Restore the workout state from storage
             setWorkoutSessionId(activeWorkout.id);
+
+            // Restore source and workout name from the active workout
+            setCurrentSource(activeWorkout.source || 'split');
+            setWorkoutName(activeWorkout.workoutName || workoutData?.dayName || 'Workout');
+
+            // Handle empty freestyle workout restoration
+            if ((activeWorkout.source === 'freestyle' || activeWorkout.exercises.length === 0) && activeWorkout.exercises.length === 0) {
+              setExercises([]);
+              LiveActivity.startWorkout(activeWorkout.workoutName || 'Freestyle Workout', 'Add exercises', '', 0, 0);
+              liveActivityStartedRef.current = true;
+              return;
+            }
 
             // Load exercise database to get exercise names (bundled + custom)
             const bundledExercises = await storage.getExercises();
@@ -240,13 +279,82 @@ const WorkoutSessionScreen = () => {
           }
         }
 
-        // No active workout, start new one
+        // No active workout, start new one based on source
+        let newWorkout;
+
+        if (workoutSource === 'freestyle') {
+          // Start freestyle workout (empty exercises)
+          newWorkout = await startFreestyleWorkout();
+          setWorkoutSessionId(newWorkout.id);
+          setWorkoutName(newWorkout.workoutName);
+          setCurrentSource('freestyle');
+          setExercises([]);
+
+          // Start Live Activity for freestyle workout
+          LiveActivity.startWorkout(newWorkout.workoutName, 'Add exercises', '', 0, 0);
+          liveActivityStartedRef.current = true;
+          return;
+        }
+
+        if (workoutSource === 'saved' && savedWorkoutId) {
+          // Start from saved workout
+          newWorkout = await startSavedWorkout(savedWorkoutId);
+          setWorkoutSessionId(newWorkout.id);
+          setWorkoutName(newWorkout.workoutName);
+          setCurrentSource('saved');
+
+          // Load exercise database to get exercise names
+          const bundledEx = await storage.getExercises();
+          const customEx = await getCustomExercises();
+          const exerciseMap = {};
+          bundledEx.forEach(ex => {
+            exerciseMap[ex.id] = ex;
+            exerciseMap[String(ex.id)] = ex;
+          });
+          customEx.forEach(ex => {
+            exerciseMap[ex.id] = { ...ex, isCustom: true };
+            exerciseMap[String(ex.id)] = { ...ex, isCustom: true };
+          });
+
+          const initializedExercises = newWorkout.exercises.map((exercise) => {
+            const exerciseData = exerciseMap[exercise.exerciseId] || exerciseMap[String(exercise.exerciseId)];
+
+            return {
+              name: exerciseData?.name || `Exercise ${exercise.exerciseId}`,
+              id: exercise.exerciseId,
+              completedSets: 0,
+              totalSets: exercise.sets.length,
+              restSeconds: exercise.restSeconds || 0,
+              sessionSets: exercise.sets.map((set) => ({
+                setNumber: set.setIndex + 1,
+                weight: set.weight?.toString() || '0',
+                reps: set.reps?.toString() || '0',
+                completed: false
+              }))
+            };
+          });
+
+          setExercises(initializedExercises);
+
+          // Start Live Activity for saved workout
+          if (initializedExercises.length > 0) {
+            updateLiveActivity(initializedExercises, 0, 0, true);
+          } else {
+            LiveActivity.startWorkout(newWorkout.workoutName, 'Add exercises', '', 0, 0);
+            liveActivityStartedRef.current = true;
+          }
+          return;
+        }
+
+        // Default: Start from split (existing behavior)
         if (workoutData && workoutData.exercises) {
           const splitId = workoutData.splitId || 'unknown';
           const dayIndex = (workoutData.dayNumber || 1) - 1;
 
-          const newWorkout = await startWorkout(splitId, dayIndex);
+          newWorkout = await startWorkout(splitId, dayIndex);
           setWorkoutSessionId(newWorkout.id);
+          setWorkoutName(workoutData.dayName || 'Workout');
+          setCurrentSource('split');
 
           // Load exercise database to get exercise names (bundled + custom)
           const bundledEx = await storage.getExercises();
@@ -296,7 +404,7 @@ const WorkoutSessionScreen = () => {
     };
 
     checkForActiveWorkout();
-  }, [updateLiveActivity]);
+  }, [updateLiveActivity, workoutSource, savedWorkoutId]);
 
   // Rest timer countdown effect
   useEffect(() => {
@@ -438,7 +546,9 @@ const WorkoutSessionScreen = () => {
     }
   }, [exercises, currentExerciseIndex, workoutSessionId]);
 
-  if (!workoutData || !exercises.length) {
+  // For split workouts, require workoutData. For freestyle/saved, workoutSessionId is sufficient.
+  const isFreestyleOrSaved = currentSource === 'freestyle' || currentSource === 'saved' || workoutSource === 'freestyle' || workoutSource === 'saved';
+  if (!isFreestyleOrSaved && !workoutData) {
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
@@ -450,6 +560,28 @@ const WorkoutSessionScreen = () => {
       </View>
     );
   }
+
+  // Loading state - waiting for workout session to initialize
+  // For freestyle/saved: show loading while workoutSessionId is not set
+  // For split: if no exercises and no workout data, something is wrong
+  if (!exercises.length && !workoutSessionId) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerLeft}>
+            <Text style={[styles.exitButton, { color: colors.error }]}>Exit</Text>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {isFreestyleOrSaved ? 'Starting...' : 'Loading...'}
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
+      </View>
+    );
+  }
+
+  // Track if we should show empty exercises UI (freestyle/saved with no exercises added yet)
+  const showEmptyExercisesUI = !exercises.length && workoutSessionId;
 
   const currentExercise = exercises[currentExerciseIndex];
   const currentSet = currentExercise?.sessionSets[currentSetIndex];
@@ -833,7 +965,22 @@ const WorkoutSessionScreen = () => {
     }
   };
 
+  // Helper to stop any running animations and reset values
+  const resetAnimations = () => {
+    slideXAnim.stopAnimation();
+    slideYAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+    slideXAnim.setValue(0);
+    slideYAnim.setValue(0);
+    fadeAnim.setValue(1);
+  };
+
   const animateToNextSet = () => {
+    // Stop any in-progress animations first
+    slideXAnim.stopAnimation();
+    slideYAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+
     // Start horizontal slide animation (to the left)
     Animated.parallel([
       Animated.timing(slideXAnim, {
@@ -896,6 +1043,11 @@ const WorkoutSessionScreen = () => {
   };
 
   const animateToNextExercise = () => {
+    // Stop any in-progress animations first
+    slideXAnim.stopAnimation();
+    slideYAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+
     // Start vertical slide animation (down)
     Animated.parallel([
       Animated.timing(slideYAnim, {
@@ -952,6 +1104,11 @@ const WorkoutSessionScreen = () => {
     if (isAnimatingRef.current) return;
     if (currentExerciseIndex > 0) {
       isAnimatingRef.current = true;
+      // Stop any in-progress animations first
+      slideXAnim.stopAnimation();
+      slideYAnim.stopAnimation();
+      fadeAnim.stopAnimation();
+
       // Animate to previous exercise (vertical - up)
       Animated.parallel([
         Animated.timing(slideYAnim, {
@@ -992,6 +1149,11 @@ const WorkoutSessionScreen = () => {
   const goBackOneStep = async () => {
     if (isAnimatingRef.current) return;
     isAnimatingRef.current = true;
+
+    // Stop any in-progress animations first
+    slideXAnim.stopAnimation();
+    slideYAnim.stopAnimation();
+    fadeAnim.stopAnimation();
 
     if (currentSetIndex > 0) {
       // Go back to previous set with horizontal animation (to the right)
@@ -1141,8 +1303,10 @@ const WorkoutSessionScreen = () => {
       try {
         await completeWorkout(workoutSessionId);
 
-        // Trigger progress update in context
-        markWorkoutCompleted(workoutSessionId);
+        // Only mark split workouts as completed in context (affects day progression)
+        if (currentSource === 'split') {
+          markWorkoutCompleted(workoutSessionId);
+        }
 
         // Update pending count for sync
         await updatePendingCount();
@@ -1151,10 +1315,294 @@ const WorkoutSessionScreen = () => {
       }
     }
 
+    // For freestyle workouts with exercises, offer to save
+    if (currentSource === 'freestyle' && exercises.length > 0) {
+      setIsCompleting(false);
+      isCompletingRef.current = false;
+      setShowSaveWorkoutModal(true);
+      return;
+    }
+
+    // Collect workout data for individual workouts
+    const completedWorkoutData = {
+      source: currentSource,
+      workoutSessionId,
+      workoutName,
+      exercises: exercises.map(ex => ({
+        name: ex.name,
+        completedSets: ex.completedSets,
+        totalSets: ex.totalSets,
+      })),
+      completedAt: Date.now(),
+    };
+
     // Navigate back to workout tab - animation will play there
     router.replace({
       pathname: '/(tabs)/workout',
-      params: { completed: 'true', sessionId: workoutSessionId }
+      params: {
+        completed: 'true',
+        sessionId: workoutSessionId,
+        source: currentSource,
+        workoutData: JSON.stringify(completedWorkoutData),
+      }
+    });
+  };
+
+  // Render Add Exercise Modal - extracted for reuse in empty state
+  const renderAddExerciseModal = () => (
+    <Modal
+      visible={showAddExerciseModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowAddExerciseModal(false)}
+    >
+      <KeyboardAvoidingView
+        style={[styles.fullScreenModal, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={[styles.fullScreenModalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+          <TouchableOpacity onPress={() => setShowAddExerciseModal(false)}>
+            <Text style={[styles.modalCancelText, { color: colors.secondaryText }]}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={[styles.fullScreenModalTitle, { color: colors.text }]}>Add Exercise</Text>
+          <TouchableOpacity onPress={handleAddExercise}>
+            <Text style={[styles.modalSaveText, { color: colors.primary }, !selectedNewExercise && styles.modalSaveTextDisabled]}>
+              Add
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.searchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
+          <Ionicons name="search" size={20} color={colors.secondaryText} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search exercises..."
+            placeholderTextColor={colors.secondaryText}
+            value={addExerciseSearch}
+            onChangeText={setAddExerciseSearch}
+            autoCapitalize="none"
+          />
+          {addExerciseSearch.length > 0 && (
+            <TouchableOpacity onPress={() => setAddExerciseSearch('')}>
+              <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Muscle Group Filter Pills */}
+        <View style={styles.filterSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScrollView}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            {muscleGroups.map((muscle) => (
+              <TouchableOpacity
+                key={muscle.id}
+                style={[
+                  styles.filterPill,
+                  { backgroundColor: colors.borderLight + '80' },
+                  addExerciseMuscleFilter === muscle.id && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary, shadowColor: colors.primary }]
+                ]}
+                onPress={() => {
+                  setAddExerciseMuscleFilter(muscle.id);
+                  if (muscle.id !== 'all' && addExerciseSearch.trim()) {
+                    setAddExerciseSearch('');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  styles.filterPillText,
+                  { color: colors.text },
+                  addExerciseMuscleFilter === muscle.id && [styles.filterPillTextActive, { color: colors.onPrimary }]
+                ]}>
+                  {muscle.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {selectedNewExercise && (
+          <View style={[styles.selectedExerciseConfig, { backgroundColor: colors.cardBackground, borderColor: colors.primary + '40' }]}>
+            <View style={styles.selectedExerciseBadge}>
+              <Text style={[styles.selectedExerciseName, { color: colors.text }]}>{selectedNewExercise.name}</Text>
+              <TouchableOpacity onPress={() => setSelectedNewExercise(null)}>
+                <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.exerciseConfigRow}>
+              <View style={styles.configInputGroup}>
+                <Text style={[styles.configLabel, { color: colors.secondaryText }]}>Sets</Text>
+                <TextInput
+                  style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
+                  value={newExerciseSets}
+                  onChangeText={setNewExerciseSets}
+                  keyboardType="numeric"
+                  placeholder="3"
+                  placeholderTextColor={colors.secondaryText}
+                />
+              </View>
+              <View style={styles.configInputGroup}>
+                <Text style={[styles.configLabel, { color: colors.secondaryText }]}>Reps</Text>
+                <TextInput
+                  style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
+                  value={newExerciseReps}
+                  onChangeText={setNewExerciseReps}
+                  keyboardType="numeric"
+                  placeholder="10"
+                  placeholderTextColor={colors.secondaryText}
+                />
+              </View>
+              <View style={styles.configInputGroup}>
+                <Text style={[styles.configLabel, { color: colors.secondaryText }]}>Weight (opt)</Text>
+                <TextInput
+                  style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
+                  value={newExerciseWeight}
+                  onChangeText={setNewExerciseWeight}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={colors.secondaryText}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
+        <ScrollView style={styles.exerciseList} contentContainerStyle={styles.exerciseListContent}>
+          {filteredExercisesForAdd.map(exercise => (
+            <View key={exercise.id} style={selectedNewExercise?.id === exercise.id ? [styles.selectedExerciseWrapper, { borderColor: colors.primary }] : undefined}>
+              <ExerciseCard
+                exercise={exercise}
+                onPress={() => setSelectedNewExercise(exercise)}
+                compact={true}
+                showMuscles={false}
+                showCategory={false}
+              />
+              {selectedNewExercise?.id === exercise.id && (
+                <View style={[styles.selectedCheckmark, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="checkmark" size={16} color={colors.onPrimary} />
+                </View>
+              )}
+            </View>
+          ))}
+          {filteredExercisesForAdd.length === 0 && (
+            <Text style={[styles.noExercisesText, { color: colors.secondaryText }]}>No exercises found</Text>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
+  // Render Save Workout Modal for freestyle completion
+  const renderSaveWorkoutModal = () => (
+    <Modal
+      visible={showSaveWorkoutModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowSaveWorkoutModal(false)}
+    >
+      <KeyboardAvoidingView
+        style={[styles.fullScreenModal, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={[styles.fullScreenModalHeader, { backgroundColor: colors.cardBackground, borderBottomColor: colors.borderLight }]}>
+          <TouchableOpacity onPress={() => {
+            setShowSaveWorkoutModal(false);
+            finishWorkoutCompletion();
+          }}>
+            <Text style={[styles.modalCancelText, { color: colors.secondaryText }]}>Skip</Text>
+          </TouchableOpacity>
+          <Text style={[styles.fullScreenModalTitle, { color: colors.text }]}>Save Workout?</Text>
+          <TouchableOpacity onPress={async () => {
+            if (saveWorkoutName.trim()) {
+              try {
+                await createSavedWorkout({
+                  name: saveWorkoutName.trim(),
+                  emoji: '💪',
+                  exercises: exercises.map(ex => ({
+                    exerciseId: ex.id,
+                    name: ex.name,
+                    targetSets: ex.totalSets,
+                    targetReps: parseInt(ex.sessionSets[0]?.reps) || 10,
+                  })),
+                });
+              } catch (error) {
+                console.error('[Session] Error saving workout:', error);
+              }
+            }
+            setShowSaveWorkoutModal(false);
+            finishWorkoutCompletion();
+          }}>
+            <Text style={[styles.modalSaveText, { color: colors.primary }]}>
+              {saveWorkoutName.trim() ? 'Save' : 'Done'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.saveWorkoutContent}>
+          <Text style={[styles.saveWorkoutSubtitle, { color: colors.secondaryText }]}>
+            Save this workout to use it again later
+          </Text>
+
+          <View style={[styles.saveWorkoutInputContainer, { backgroundColor: colors.cardBackground, borderColor: colors.borderLight }]}>
+            <Text style={[styles.saveWorkoutInputLabel, { color: colors.secondaryText }]}>Workout Name</Text>
+            <TextInput
+              style={[styles.saveWorkoutInput, { color: colors.text }]}
+              placeholder="e.g., Push Day, Leg Workout"
+              placeholderTextColor={colors.secondaryText}
+              value={saveWorkoutName}
+              onChangeText={setSaveWorkoutName}
+              autoFocus
+            />
+          </View>
+
+          <View style={[styles.saveWorkoutExerciseList, { backgroundColor: colors.borderLight + '40' }]}>
+            <Text style={[styles.saveWorkoutExerciseListTitle, { color: colors.text }]}>
+              {exercises.length} Exercises
+            </Text>
+            {exercises.slice(0, 3).map((ex, idx) => (
+              <Text key={idx} style={[styles.saveWorkoutExerciseItem, { color: colors.secondaryText }]}>
+                • {ex.name}
+              </Text>
+            ))}
+            {exercises.length > 3 && (
+              <Text style={[styles.saveWorkoutExerciseItem, { color: colors.secondaryText }]}>
+                + {exercises.length - 3} more
+              </Text>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
+  // Helper to complete the finish flow
+  const finishWorkoutCompletion = () => {
+    // Collect workout data for individual workouts
+    const completedWorkoutData = {
+      source: currentSource,
+      workoutSessionId,
+      workoutName,
+      exercises: exercises.map(ex => ({
+        name: ex.name,
+        completedSets: ex.completedSets,
+        totalSets: ex.totalSets,
+      })),
+      completedAt: Date.now(),
+    };
+
+    router.replace({
+      pathname: '/(tabs)/workout',
+      params: {
+        completed: 'true',
+        sessionId: workoutSessionId,
+        source: currentSource,
+        workoutData: JSON.stringify(completedWorkoutData),
+      }
     });
   };
 
@@ -1218,15 +1666,43 @@ const WorkoutSessionScreen = () => {
         <TouchableOpacity onPress={exitWorkout} style={styles.headerLeft} disabled={isCompleting}>
           <Text style={[styles.exitButton, { color: colors.error }, isCompleting && styles.disabledText]}>Exit</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>{workoutData.dayName}</Text>
-        <TouchableOpacity onPress={handleWorkoutComplete} style={styles.headerRight} disabled={isCompleting}>
-          <Text style={[styles.completeButton, isCompleting && styles.disabledText]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{workoutName}</Text>
+        <TouchableOpacity
+          onPress={handleWorkoutComplete}
+          style={styles.headerRight}
+          disabled={isCompleting || (currentSource === 'freestyle' && exercises.length === 0)}
+        >
+          <Text style={[styles.completeButton, (isCompleting || (currentSource === 'freestyle' && exercises.length === 0)) && styles.disabledText]}>
             {isCompleting ? 'Finishing...' : 'Finish'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Progress Bar */}
+      {showEmptyExercisesUI ? (
+        /* Empty state for freestyle/saved workout with no exercises yet */
+        <View style={styles.emptyExercisesContainer}>
+          <View style={[styles.emptyExercisesContent, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.emptyExercisesIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Ionicons name="barbell-outline" size={48} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyExercisesTitle, { color: colors.text }]}>
+              No Exercises Yet
+            </Text>
+            <Text style={[styles.emptyExercisesSubtitle, { color: colors.secondaryText }]}>
+              Add exercises to start your workout
+            </Text>
+            <TouchableOpacity
+              style={[styles.addFirstExerciseButton, { backgroundColor: colors.primary }]}
+              onPress={() => setShowAddExerciseModal(true)}
+            >
+              <Ionicons name="add" size={22} color="#fff" />
+              <Text style={styles.addFirstExerciseText}>Add Your First Exercise</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <>
+          {/* Progress Bar */}
       <View style={[styles.progressContainer, { backgroundColor: colors.cardBackground, shadowColor: colors.shadow }]}>
         <View style={styles.progressHeader}>
           <Text style={[styles.progressTitle, { color: colors.text }]}>Workout Progress</Text>
@@ -1402,22 +1878,45 @@ const WorkoutSessionScreen = () => {
 
           {/* Set Completion Button or Skip Button */}
           <View style={styles.primaryActionContainer}>
-            <TouchableOpacity
-              style={[
-                styles.completeSetButton,
-                { backgroundColor: colors.primary, shadowColor: colors.primary },
-                isLastSet && isLastExercise && !showRestTimer && styles.finishWorkoutButton,
-                showRestTimer && [styles.skipRestButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]
-              ]}
-              onPress={showRestTimer ? skipRestTimer : completeCurrentSet}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.completeSetText, { color: colors.onPrimary }, showRestTimer && { color: colors.secondaryText }]}>
-                {showRestTimer
-                  ? 'Skip Rest'
-                  : (isLastSet && isLastExercise ? '🎉 Finish Workout' : '✓ Complete Set')}
-              </Text>
-            </TouchableOpacity>
+            {showRestTimer ? (
+              <TouchableOpacity
+                style={[
+                  styles.completeSetButton,
+                  styles.skipRestButton,
+                  { backgroundColor: colors.cardBackground, borderColor: colors.border }
+                ]}
+                onPress={skipRestTimer}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.completeSetText, { color: colors.secondaryText }]}>Skip Rest</Text>
+              </TouchableOpacity>
+            ) : isLastSet && isLastExercise && currentSource === 'freestyle' ? (
+              /* Add Exercise button for freestyle on last set of last exercise */
+              <TouchableOpacity
+                style={[
+                  styles.completeSetButton,
+                  { backgroundColor: colors.primary, shadowColor: colors.primary }
+                ]}
+                onPress={() => setShowAddExerciseModal(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.completeSetText, { color: colors.onPrimary }]}>+ Add Exercise</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.completeSetButton,
+                  { backgroundColor: colors.primary, shadowColor: colors.primary },
+                  isLastSet && isLastExercise && styles.finishWorkoutButton
+                ]}
+                onPress={completeCurrentSet}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.completeSetText, { color: colors.onPrimary }]}>
+                  {isLastSet && isLastExercise ? '🎉 Finish Workout' : '✓ Complete Set'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Animated.View>
 
@@ -1477,6 +1976,8 @@ const WorkoutSessionScreen = () => {
           </TouchableOpacity>
         )}
       </ScrollView>
+      </>
+      )}
 
       {/* Options Menu Modal */}
       <Modal
@@ -1546,6 +2047,22 @@ const WorkoutSessionScreen = () => {
               >
                 <Ionicons name="trash-outline" size={24} color={colors.error} />
                 <Text style={[styles.modalOptionText, { color: colors.error }]}>Delete Exercise</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.modalDivider, { backgroundColor: colors.borderLight }]} />
+
+              <TouchableOpacity
+                style={[styles.modalOption, exercises.length === 0 && styles.modalOptionDisabled]}
+                onPress={() => {
+                  if (exercises.length === 0) return;
+                  setShowOptionsMenu(false);
+                  handleWorkoutComplete();
+                }}
+                activeOpacity={exercises.length === 0 ? 1 : 0.7}
+                disabled={exercises.length === 0}
+              >
+                <Ionicons name="checkmark-circle-outline" size={24} color={exercises.length === 0 ? colors.secondaryText + '50' : '#4CAF50'} />
+                <Text style={[styles.modalOptionText, { color: exercises.length === 0 ? colors.secondaryText + '50' : '#4CAF50' }]}>Finish Workout</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1839,6 +2356,9 @@ const WorkoutSessionScreen = () => {
         </GestureHandlerRootView>
       </Modal>
 
+      {/* Save Workout Modal (for freestyle completion) */}
+      {renderSaveWorkoutModal()}
+
     </View>
   );
 };
@@ -2077,6 +2597,21 @@ const styles = StyleSheet.create({
     shadowColor: '#4CAF50',
     shadowOpacity: 0.4,
   },
+  addExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginTop: 12,
+  },
+  addExerciseButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
   completeSetText: {
     color: Colors.light.onPrimary,
     fontSize: 20,
@@ -2231,6 +2766,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     gap: 12,
+  },
+  modalOptionDisabled: {
+    opacity: 0.5,
   },
   modalOptionText: {
     fontSize: 16,
@@ -2605,5 +3143,159 @@ const styles = StyleSheet.create({
   },
   skipRestText: {
     color: Colors.light.secondaryText,
+  },
+
+  // Empty Exercises State (Freestyle)
+  emptyExercisesContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  emptyExercisesContent: {
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 24,
+    padding: 40,
+    alignItems: 'center',
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    width: '100%',
+    maxWidth: 320,
+  },
+  emptyExercisesTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  emptyExercisesSubtitle: {
+    fontSize: 15,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 22,
+  },
+  addFirstExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addFirstExerciseText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.onPrimary,
+  },
+
+  // Save Workout Modal Content
+  saveWorkoutContent: {
+    flex: 1,
+    padding: 24,
+  },
+  saveWorkoutSubtitle: {
+    fontSize: 15,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  saveWorkoutInputContainer: {
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    padding: 16,
+    marginBottom: 24,
+  },
+  saveWorkoutInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  saveWorkoutInput: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  saveWorkoutExerciseList: {
+    borderRadius: 12,
+    padding: 16,
+  },
+  saveWorkoutExerciseListTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 12,
+  },
+  saveWorkoutExerciseItem: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 4,
+  },
+
+  // Empty Exercises UI (freestyle/saved with no exercises)
+  emptyExercisesContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  emptyExercisesContent: {
+    alignItems: 'center',
+    padding: 32,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 340,
+  },
+  emptyExercisesIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyExercisesTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyExercisesSubtitle: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  addFirstExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    width: '100%',
+  },
+  addFirstExerciseText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
